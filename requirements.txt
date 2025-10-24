@@ -1,0 +1,6 @@
+flask
+requests
+Pillow
+gunicorn
+huggingface-hub
+google-cloud-storage
