@@ -176,11 +176,8 @@ def hf_text2image(prompt: str) -> bytes:
 def fetch_weather(city: Optional[str] = None, lat: Optional[float] = None, lon: Optional[float] = None, units: str="metric"):
     if not _weather_api_key:
         raise RuntimeError("WEATHER_API_KEY/OWM_API_KEY not set")
-    cache_key = f"{city or lat},{lon}|{units}"
-    now = time.time()
-    if cache_key in _cache_weather and now - _cache_weather[cache_key]["ts"] < WEATHER_TTL:
-        return _cache_weather[cache_key]["data"]
 
+    # Geocode if city provided
     if city and (lat is None or lon is None):
         geo_url = "https://api.openweathermap.org/geo/1.0/direct"
         gr = requests.get(geo_url, params={"q": city, "limit": 1, "appid": _weather_api_key}, timeout=10)
@@ -189,27 +186,75 @@ def fetch_weather(city: Optional[str] = None, lat: Optional[float] = None, lon: 
         if not arr:
             raise RuntimeError(f"City not found: {city}")
         lat, lon = arr[0]["lat"], arr[0]["lon"]
+
     if lat is None or lon is None:
         raise RuntimeError("Provide city or lat/lon")
-    for base in ["https://api.openweathermap.org/data/3.0/onecall", "https://api.openweathermap.org/data/2.5/onecall"]:
-        try:
-            wr = requests.get(base, params={
-                "lat": lat, "lon": lon, "units": units,
-                "exclude": "minutely,hourly,alerts", "appid": _weather_api_key
-            }, timeout=10)
-            if wr.status_code == 200:
-                data = wr.json()
-                current = data.get("current", {})
-                daily = (data.get("daily") or [{}])[0]
-                desc = (current.get("weather") or daily.get("weather") or [{}])[0].get("description", "n/a").title()
-                temp = current.get("temp")
-                tmin = daily.get("temp", {}).get("min", temp)
-                tmax = daily.get("temp", {}).get("max", temp)
-                out = {"lat": lat, "lon": lon, "units": units, "description": desc, "temp": temp, "tmin": tmin, "tmax": tmax}
-                _cache_weather[cache_key] = {"ts": now, "data": out}
-                return out
-        except Exception:
-            continue
+
+    # 1) Try One Call 3.0
+    try:
+        r = requests.get(
+            "https://api.openweathermap.org/data/3.0/onecall",
+            params={"lat": lat, "lon": lon, "units": units, "exclude": "minutely,hourly,alerts", "appid": _weather_api_key},
+            timeout=10
+        )
+        if r.status_code == 200:
+            data = r.json()
+            current = data.get("current", {})
+            daily = (data.get("daily") or [{}])[0]
+            desc = (current.get("weather") or daily.get("weather") or [{}])[0].get("description", "n/a").title()
+            temp = current.get("temp")
+            tmin = daily.get("temp", {}).get("min", temp)
+            tmax = daily.get("temp", {}).get("max", temp)
+            return {"lat": lat, "lon": lon, "units": units, "description": desc, "temp": temp, "tmin": tmin, "tmax": tmax}
+    except Exception:
+        pass  # fall through
+
+    # 2) Try One Call 2.5
+    try:
+        r = requests.get(
+            "https://api.openweathermap.org/data/2.5/onecall",
+            params={"lat": lat, "lon": lon, "units": units, "exclude": "minutely,hourly,alerts", "appid": _weather_api_key},
+            timeout=10
+        )
+        if r.status_code == 200:
+            data = r.json()
+            current = data.get("current", {})
+            daily = (data.get("daily") or [{}])[0]
+            desc = (current.get("weather") or daily.get("weather") or [{}])[0].get("description", "n/a").title()
+            temp = current.get("temp")
+            tmin = daily.get("temp", {}).get("min", temp)
+            tmax = daily.get("temp", {}).get("max", temp)
+            return {"lat": lat, "lon": lon, "units": units, "description": desc, "temp": temp, "tmin": tmin, "tmax": tmax}
+    except Exception:
+        pass  # fall through
+
+    # 3) Last-resort: /weather (current) + /forecast (3h) → compute min/max next ~24h
+    try:
+        wr = requests.get(
+            "https://api.openweathermap.org/data/2.5/weather",
+            params={"lat": lat, "lon": lon, "units": units, "appid": _weather_api_key},
+            timeout=10
+        )
+        fr = requests.get(
+            "https://api.openweathermap.org/data/2.5/forecast",
+            params={"lat": lat, "lon": lon, "units": units, "appid": _weather_api_key},
+            timeout=10
+        )
+        if wr.status_code == 200:
+            wj = wr.json()
+            desc = (wj.get("weather") or [{}])[0].get("description", "n/a").title()
+            temp = (wj.get("main") or {}).get("temp")
+            tmin, tmax = temp, temp
+            if fr.status_code == 200:
+                fj = fr.json()
+                temps = [item.get("main", {}).get("temp") for item in (fj.get("list") or []) if item.get("main")]
+                temps = [t for t in temps if isinstance(t, (int, float))]
+                if temps:
+                    tmin, tmax = min(temps), max(temps)
+            return {"lat": lat, "lon": lon, "units": units, "description": desc, "temp": temp, "tmin": tmin, "tmax": tmax}
+    except Exception:
+        pass
+
     raise RuntimeError("OpenWeatherMap request failed")
 
 # --- Dad joke with timeout + one retry + fallback list + caching ---
