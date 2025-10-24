@@ -1,6 +1,7 @@
-flask
-requests
+fastapi
+uvicorn
 Pillow
-gunicorn
+requests
 huggingface-hub
 google-cloud-storage
+python-dotenv
