@@ -18,7 +18,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the application code and the fonts
-# Note: The 'backend/' prefix here is crucial for the file paths in app.py
+# Copies backend/app.py, backend/generator.py, and backend/fonts/
 COPY backend /app/backend
 
 # Set the PORT environment variable for the composer service
