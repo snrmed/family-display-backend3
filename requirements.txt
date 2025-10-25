@@ -1,5 +1,9 @@
-fastapi
-uvicorn
-requests
-Pillow
-google-cloud-storage
+flask==3.0.0
+gunicorn==21.2.0
+Pillow==10.3.0
+google-cloud-storage==2.14.0
+requests==2.31.0
+python-dateutil==2.9.0.post0
+
+# Optional: if you later add CORS or schedules
+# flask-cors==4.0.0
