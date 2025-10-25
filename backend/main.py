@@ -1,4 +1,3 @@
-
 import os
 import io
 import random
@@ -17,6 +16,9 @@ try:
 except Exception:
     storage = None
 
+# ----------------------------
+# Config / Globals
+# ----------------------------
 EINK_PALETTE = [
     (255, 255, 255),  # white
     (0, 0, 0),        # black
@@ -28,35 +30,34 @@ EINK_PALETTE = [
 
 app = FastAPI()
 
+# Env
 _bucket = None
 _bucket_name = os.getenv("GCS_BUCKET_NAME")
+
+# Generation providers
+_provider = os.getenv("GEN_PROVIDER", "deepai").lower()
+
+# DeepAI
+_DEEPAI_KEY = os.getenv("DEEPAI_API_KEY")
+_DEEPAI_URL = "https://api.deepai.org/api/text2img"
+
+# Hugging Face (optional fallback)
 _hf_token = os.getenv("HUGGING_FACE_TOKEN") or os.getenv("HF_TOKEN")
-_hf_model = os.getenv("HF_MODEL", "stabilityai/sdxl-turbo")
+_hf_model = os.getenv("HF_MODEL", "stabilityai/sd-turbo")
+
+# Weather
 _weather_api_key = os.getenv("WEATHER_API_KEY") or os.getenv("OWM_API_KEY")
+
+# Dad joke
 _joke_api_url = os.getenv("JOKE_API_URL", "https://icanhazdadjoke.com/")
 
-# --- Fonts ---
-FONT_DIR = os.path.join(os.path.dirname(__file__), "fonts")
-def load_font(fname: str, size: int):
-    path = os.path.join(FONT_DIR, fname)
-    try:
-        return ImageFont.truetype(path, size)
-    except Exception:
-        return ImageFont.load_default()
-
-FONT_REG = load_font("Roboto-Regular.ttf", 26)
-FONT_BOLD = load_font("Roboto-Bold.ttf", 32)
-FONT_LIGHT = load_font("Roboto-Light.ttf", 24)
-FONT_DATE = load_font("Roboto-Bold.ttf", 24)
-
-# --- Simple in-memory caches to reduce network calls (battery-friendly for clients via fewer image changes) ---
-_cache_weather: Dict[str, Dict[str, Any]] = {}     # key: f"{city}|{units}" -> {"ts": epoch_s, "data": {...}}
-_cache_joke: Dict[str, Any] = {"ts": 0, "joke": None}  # single shared dad-joke cache
-
+# Caches
+_cache_weather: Dict[str, Dict[str, Any]] = {}     # key -> {"ts": epoch, "data": {...}}
+_cache_joke: Dict[str, Any] = {"ts": 0, "joke": None}
 WEATHER_TTL = int(os.getenv("WEATHER_TTL_SECONDS", "900"))  # 15 min
 JOKE_TTL = int(os.getenv("JOKE_TTL_SECONDS", "900"))        # 15 min
 
-# --- Fallback jokes (hardcoded) ---
+# Fallback jokes
 FALLBACK_JOKES = [
     "Why did the picture go to jail? Because it was framed.",
     "I used to play piano by ear, but now I use my hands.",
@@ -70,6 +71,23 @@ FALLBACK_JOKES = [
     "Why did the scarecrow win an award? He was outstanding in his field."
 ]
 
+# Fonts
+FONT_DIR = os.path.join(os.path.dirname(__file__), "fonts")
+def load_font(fname: str, size: int):
+    path = os.path.join(FONT_DIR, fname)
+    try:
+        return ImageFont.truetype(path, size)
+    except Exception:
+        return ImageFont.load_default()
+
+FONT_REG = load_font("Roboto-Regular.ttf", 26)
+FONT_BOLD = load_font("Roboto-Bold.ttf", 32)
+FONT_LIGHT = load_font("Roboto-Light.ttf", 24)
+FONT_DATE = load_font("Roboto-Bold.ttf", 24)
+
+# ----------------------------
+# Infra helpers
+# ----------------------------
 def get_bucket():
     global _bucket
     if _bucket is not None:
@@ -85,45 +103,6 @@ def get_bucket():
         _bucket = None
     return _bucket
 
-@app.get("/healthz", response_class=PlainTextResponse)
-def healthz():
-    flags = [
-        "ok",
-        f"gcs={'on' if get_bucket() else 'off'}",
-        f"hf={'on' if _hf_token else 'off'}",
-        f"weather={'on' if _weather_api_key else 'off'}",
-        f"fonts={'on' if isinstance(FONT_REG, ImageFont.FreeTypeFont) else 'off'}"
-    ]
-    return " ".join(flags)
-
-def _seed_image_bytes(w=800, h=480, label="fallback"):
-    img = Image.new("RGB", (w, h), EINK_PALETTE[0])
-    draw = ImageDraw.Draw(img)
-    bar_w = w // len(EINK_PALETTE)
-    for i, color in enumerate(EINK_PALETTE):
-        draw.rectangle([i*bar_w, 0, (i+1)*bar_w-1, h//3], fill=color)
-    draw.text((20, h//2 - 10), f"Family Display - {label}", fill=(0,0,0), font=FONT_REG)
-    b = io.BytesIO()
-    img.save(b, format="PNG")
-    return b.getvalue()
-
-def fetch_from_gcs(day_idx:int, var_idx:int):
-    bucket = get_bucket()
-    if not bucket:
-        return None
-    keys = [
-        f"weekly/{day_idx}_{var_idx}.png",
-        f"stale/{day_idx}_{var_idx}.png"
-    ]
-    for k in keys:
-        try:
-            blob = bucket.blob(k)
-            if blob.exists():
-                return blob.download_as_bytes()
-        except Exception as e:
-            print(f"GCS fetch error for {k}: {e}")
-    return None
-
 def put_to_gcs(key: str, data: bytes, content_type: str = "image/png") -> bool:
     bucket = get_bucket()
     if not bucket:
@@ -136,17 +115,42 @@ def put_to_gcs(key: str, data: bytes, content_type: str = "image/png") -> bool:
         print(f"GCS upload failed for {key}: {e}")
         return False
 
-def local_fallback(day_idx:int, var_idx:int) -> bytes:
+def fetch_from_gcs(day_idx:int, var_idx:int):
+    bucket = get_bucket()
+    if not bucket:
+        return None, None
+    keys = [f"weekly/{day_idx}_{var_idx}.png", f"stale/{day_idx}_{var_idx}.png"]
+    for k in keys:
+        try:
+            blob = bucket.blob(k)
+            if blob.exists():
+                return blob.download_as_bytes(), k
+        except Exception as e:
+            print(f"GCS fetch error for {k}: {e}")
+    return None, None
+
+def local_fallback(day_idx:int, var_idx:int):
     base = os.path.join(os.path.dirname(__file__), "fallback_art")
     p1 = os.path.join(base, f"fallback_{var_idx}.png")
     if os.path.exists(p1):
         with open(p1, "rb") as f:
-            return f.read()
+            return f.read(), f"fallback_{var_idx}.png"
     p2 = os.path.join(base, f"{day_idx}_{var_idx}.png")
     if os.path.exists(p2):
         with open(p2, "rb") as f:
-            return f.read()
-    return _seed_image_bytes(label=f"seed {day_idx}_{var_idx}")
+            return f.read(), f"{day_idx}_{var_idx}.png"
+    return _seed_image_bytes(label=f"seed {day_idx}_{var_idx}"), "seed"
+
+def _seed_image_bytes(w=800, h=480, label="fallback"):
+    img = Image.new("RGB", (w, h), EINK_PALETTE[0])
+    draw = ImageDraw.Draw(img)
+    bar_w = w // len(EINK_PALETTE)
+    for i, color in enumerate(EINK_PALETTE):
+        draw.rectangle([i*bar_w, 0, (i+1)*bar_w-1, h//3], fill=color)
+    draw.text((20, h//2 - 10), f"Family Display - {label}", fill=(0,0,0), font=FONT_REG)
+    b = io.BytesIO()
+    img.save(b, format="PNG")
+    return b.getvalue()
 
 def cover_resize_to(img: Image.Image, w=800, h=480) -> Image.Image:
     src_w, src_h = img.size
@@ -157,25 +161,72 @@ def cover_resize_to(img: Image.Image, w=800, h=480) -> Image.Image:
     top = (new_h - h)//2
     return img.crop((left, top, left+w, top+h))
 
+# ----------------------------
+# Generators: DeepAI (primary), HF (optional fallback)
+# ----------------------------
+def deepai_text2image(prompt: str) -> bytes:
+    if not _DEEPAI_KEY:
+        raise RuntimeError("DEEPAI_API_KEY not set")
+    r = requests.post(
+        _DEEPAI_URL,
+        headers={"api-key": _DEEPAI_KEY},
+        data={"text": prompt},
+        timeout=60,
+    )
+    if r.status_code != 200:
+        raise RuntimeError(f"DeepAI error: {r.status_code} {r.text[:200]}")
+    j = r.json()
+    out_url = j.get("output_url")
+    if not out_url:
+        raise RuntimeError(f"DeepAI: no output_url in response: {j}")
+    ir = requests.get(out_url, timeout=60)
+    ir.raise_for_status()
+    return ir.content
+
 def hf_text2image(prompt: str) -> bytes:
     if not _hf_token:
         raise RuntimeError("HUGGING_FACE_TOKEN not set")
     url = f"https://api-inference.huggingface.co/models/{_hf_model}"
-    headers = {
-        "Authorization": f"Bearer {_hf_token}",
-        "Accept": "image/png",
-        "Content-Type": "application/json",
-    }
+    headers = {"Authorization": f"Bearer {_hf_token}", "Accept": "image/png", "Content-Type": "application/json"}
     payload = {"inputs": prompt}
     r = requests.post(url, headers=headers, json=payload, timeout=120)
     if r.status_code >= 400:
         raise RuntimeError(f"HF error: {r.status_code} {r.text[:200]}")
     return r.content
 
-# --- Weather with simple caching ---
+def generate_image_bytes(prompt: str) -> bytes:
+    # Try selected provider first
+    if _provider == "deepai":
+        try:
+            return deepai_text2image(prompt)
+        except Exception as e:
+            # Fallback to HF if configured
+            if _hf_token:
+                print(f"[WARN] DeepAI failed: {e}. Trying Hugging Face...")
+                return hf_text2image(prompt)
+            raise
+    # If provider != deepai, try HF first
+    if _hf_token:
+        try:
+            return hf_text2image(prompt)
+        except Exception as e:
+            if _DEEPAI_KEY:
+                print(f"[WARN] HF failed: {e}. Trying DeepAI...")
+                return deepai_text2image(prompt)
+            raise
+    # If no providers configured
+    raise RuntimeError("No generation provider configured")
+
+# ----------------------------
+# Weather (robust + caching)
+# ----------------------------
 def fetch_weather(city: Optional[str] = None, lat: Optional[float] = None, lon: Optional[float] = None, units: str="metric"):
     if not _weather_api_key:
         raise RuntimeError("WEATHER_API_KEY/OWM_API_KEY not set")
+    cache_key = f"{city or lat},{lon}|{units}"
+    now = time.time()
+    if cache_key in _cache_weather and now - _cache_weather[cache_key]["ts"] < WEATHER_TTL:
+        return _cache_weather[cache_key]["data"]
 
     # Geocode if city provided
     if city and (lat is None or lon is None):
@@ -190,7 +241,7 @@ def fetch_weather(city: Optional[str] = None, lat: Optional[float] = None, lon: 
     if lat is None or lon is None:
         raise RuntimeError("Provide city or lat/lon")
 
-    # 1) Try One Call 3.0
+    # Try One Call 3.0
     try:
         r = requests.get(
             "https://api.openweathermap.org/data/3.0/onecall",
@@ -205,11 +256,13 @@ def fetch_weather(city: Optional[str] = None, lat: Optional[float] = None, lon: 
             temp = current.get("temp")
             tmin = daily.get("temp", {}).get("min", temp)
             tmax = daily.get("temp", {}).get("max", temp)
-            return {"lat": lat, "lon": lon, "units": units, "description": desc, "temp": temp, "tmin": tmin, "tmax": tmax}
+            out = {"lat": lat, "lon": lon, "units": units, "description": desc, "temp": temp, "tmin": tmin, "tmax": tmax}
+            _cache_weather[cache_key] = {"ts": now, "data": out}
+            return out
     except Exception:
-        pass  # fall through
+        pass
 
-    # 2) Try One Call 2.5
+    # Try One Call 2.5
     try:
         r = requests.get(
             "https://api.openweathermap.org/data/2.5/onecall",
@@ -224,22 +277,20 @@ def fetch_weather(city: Optional[str] = None, lat: Optional[float] = None, lon: 
             temp = current.get("temp")
             tmin = daily.get("temp", {}).get("min", temp)
             tmax = daily.get("temp", {}).get("max", temp)
-            return {"lat": lat, "lon": lon, "units": units, "description": desc, "temp": temp, "tmin": tmin, "tmax": tmax}
+            out = {"lat": lat, "lon": lon, "units": units, "description": desc, "temp": temp, "tmin": tmin, "tmax": tmax}
+            _cache_weather[cache_key] = {"ts": now, "data": out}
+            return out
     except Exception:
-        pass  # fall through
+        pass
 
-    # 3) Last-resort: /weather (current) + /forecast (3h) → compute min/max next ~24h
+    # Fallback: /weather + /forecast (derive min/max)
     try:
-        wr = requests.get(
-            "https://api.openweathermap.org/data/2.5/weather",
-            params={"lat": lat, "lon": lon, "units": units, "appid": _weather_api_key},
-            timeout=10
-        )
-        fr = requests.get(
-            "https://api.openweathermap.org/data/2.5/forecast",
-            params={"lat": lat, "lon": lon, "units": units, "appid": _weather_api_key},
-            timeout=10
-        )
+        wr = requests.get("https://api.openweathermap.org/data/2.5/weather",
+                          params={"lat": lat, "lon": lon, "units": units, "appid": _weather_api_key},
+                          timeout=10)
+        fr = requests.get("https://api.openweathermap.org/data/2.5/forecast",
+                          params={"lat": lat, "lon": lon, "units": units, "appid": _weather_api_key},
+                          timeout=10)
         if wr.status_code == 200:
             wj = wr.json()
             desc = (wj.get("weather") or [{}])[0].get("description", "n/a").title()
@@ -251,29 +302,17 @@ def fetch_weather(city: Optional[str] = None, lat: Optional[float] = None, lon: 
                 temps = [t for t in temps if isinstance(t, (int, float))]
                 if temps:
                     tmin, tmax = min(temps), max(temps)
-            return {"lat": lat, "lon": lon, "units": units, "description": desc, "temp": temp, "tmin": tmin, "tmax": tmax}
+            out = {"lat": lat, "lon": lon, "units": units, "description": desc, "temp": temp, "tmin": tmin, "tmax": tmax}
+            _cache_weather[cache_key] = {"ts": now, "data": out}
+            return out
     except Exception:
         pass
 
     raise RuntimeError("OpenWeatherMap request failed")
 
-# --- Dad joke with timeout + one retry + fallback list + caching ---
-def fetch_dad_joke() -> str:
-    now = time.time()
-    if _cache_joke["joke"] and now - _cache_joke["ts"] < JOKE_TTL:
-        return _cache_joke["joke"]
-    # Try once
-    joke = _fetch_dad_joke_once()
-    if joke is None:
-        time.sleep(0.5)
-        joke = _fetch_dad_joke_once()
-    if joke is None:
-        joke = random.choice(FALLBACK_JOKES)
-        print(f"[WARN] Dad joke fetch failed, using fallback: {joke}")
-    _cache_joke["joke"] = joke
-    _cache_joke["ts"] = now
-    return joke
-
+# ----------------------------
+# Dad jokes (timeout + retry + cache + fallbacks)
+# ----------------------------
 def _fetch_dad_joke_once() -> Optional[str]:
     try:
         headers = {"Accept": "application/json", "User-Agent": "family-display/1.0"}
@@ -288,6 +327,24 @@ def _fetch_dad_joke_once() -> Optional[str]:
         return None
     return None
 
+def fetch_dad_joke() -> str:
+    now = time.time()
+    if _cache_joke["joke"] and now - _cache_joke["ts"] < JOKE_TTL:
+        return _cache_joke["joke"]
+    joke = _fetch_dad_joke_once()
+    if joke is None:
+        time.sleep(0.5)
+        joke = _fetch_dad_joke_once()
+    if joke is None:
+        joke = random.choice(FALLBACK_JOKES)
+        print(f"[WARN] Dad joke fetch failed, using fallback: {joke}")
+    _cache_joke["joke"] = joke
+    _cache_joke["ts"] = now
+    return joke
+
+# ----------------------------
+# Drawing helpers / layouts
+# ----------------------------
 def draw_wrapped_text(draw: ImageDraw.ImageDraw, text: str, box, font: ImageFont.ImageFont, fill=(0,0,0), line_spacing=6):
     x0, y0, x1, y1 = box
     max_width = x1 - x0
@@ -313,7 +370,6 @@ def draw_wrapped_text(draw: ImageDraw.ImageDraw, text: str, box, font: ImageFont
         draw.text((x0, y), line, fill=fill, font=font)
         y += h + line_spacing
 
-# ---------- Layout helpers (glass/card/outline/minimal) ----------
 def rounded_rectangle(draw: ImageDraw.ImageDraw, box: Tuple[int,int,int,int], radius: int, fill, outline=None, width: int=1):
     draw.rounded_rectangle(box, radius=radius, fill=fill, outline=outline, width=width)
 
@@ -335,21 +391,6 @@ def outline_panel(img: Image.Image, box: Tuple[int,int,int,int], radius=14):
     draw = ImageDraw.Draw(img)
     rounded_rectangle(draw, box, radius=radius, fill=None, outline=(0,0,0), width=2)
 
-def add_date_label(img: Image.Image, layout: str):
-    draw = ImageDraw.Draw(img)
-    date_str = datetime.now().strftime("%a %d %b %Y")
-    padding = 10
-    text_w = int(draw.textlength(date_str, font=FONT_DATE))
-    text_h = draw.textbbox((0,0), date_str, font=FONT_DATE)[3] - draw.textbbox((0,0), date_str, font=FONT_DATE)[1]
-    box = (img.width - text_w - padding*2 - 12, 12, img.width - 12, 12 + text_h + padding*2)
-    if layout == "glass":
-        glass_panel(img, box, blur_radius=4, opacity=220, radius=12)
-    elif layout == "card":
-        card_panel(img, box, radius=12)
-    elif layout == "outline":
-        outline_panel(img, box, radius=12)
-    draw.text((box[0]+padding, box[1]+padding), date_str, fill=(0,0,0), font=FONT_DATE)
-
 def add_text_panel(img: Image.Image, box: Tuple[int,int,int,int], layout: str):
     if layout == "glass":
         glass_panel(img, box, blur_radius=6, opacity=220, radius=14)
@@ -358,12 +399,22 @@ def add_text_panel(img: Image.Image, box: Tuple[int,int,int,int], layout: str):
     elif layout == "outline":
         outline_panel(img, box, radius=14)
 
+def add_date_label(img: Image.Image, layout: str):
+    draw = ImageDraw.Draw(img)
+    date_str = datetime.now().strftime("%a %d %b %Y")
+    padding = 10
+    text_w = int(draw.textlength(date_str, font=FONT_DATE))
+    text_h = draw.textbbox((0,0), date_str, font=FONT_DATE)[3] - draw.textbbox((0,0), date_str, font=FONT_DATE)[1]
+    box = (img.width - text_w - padding*2 - 12, 12, img.width - 12, 12 + text_h + padding*2)
+    if layout in ("glass", "card", "outline"):
+        add_text_panel(img, box, layout)
+    draw.text((box[0]+padding, box[1]+padding), date_str, fill=(0,0,0), font=FONT_DATE)
+
 def overlay_weather_layout(img: Image.Image, city: Optional[str], units: str, layout: str) -> Image.Image:
     try:
         wx = fetch_weather(city=city, units=units)
     except Exception:
         return img
-
     draw = ImageDraw.Draw(img)
     strip_h = 64
     box = (12, img.height - strip_h - 12, img.width - 12, img.height - 12)
@@ -390,6 +441,21 @@ def _img_to_bytes(img: Image.Image) -> bytes:
     img.save(b, format="PNG")
     return b.getvalue()
 
+# ----------------------------
+# Routes
+# ----------------------------
+@app.get("/healthz", response_class=PlainTextResponse)
+def healthz():
+    flags = [
+        "ok",
+        f"gcs={'on' if get_bucket() else 'off'}",
+        f"gen={'deepai' if _DEEPAI_KEY else ('hf' if _hf_token else 'none')}",
+        f"weather={'on' if _weather_api_key else 'off'}",
+        f"fonts={'on' if isinstance(FONT_REG, ImageFont.FreeTypeFont) else 'off'}",
+        f"default_layout=glass",
+    ]
+    return " ".join(flags)
+
 @app.get("/v1/frame")
 def v1_frame(
     request: Request,
@@ -404,9 +470,10 @@ def v1_frame(
     day_idx = day if day is not None else datetime.utcnow().weekday()
     var_idx = variant if variant is not None else random.randint(0, 3)
 
-    img_bytes = fetch_from_gcs(day_idx, var_idx)
+    img_bytes, key = fetch_from_gcs(day_idx, var_idx)
+    source = "gcs" if img_bytes else "fallback"
     if img_bytes is None:
-        img_bytes = local_fallback(day_idx, var_idx)
+        img_bytes, key = local_fallback(day_idx, var_idx)
 
     img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
 
@@ -424,12 +491,16 @@ def v1_frame(
     img.save(out, format="PNG")
     content = out.getvalue()
 
-    # Simple ETag to help clients avoid re-downloading unchanged frames
     etag = hashlib.sha1(content).hexdigest()
     inm = request.headers.get("if-none-match")
     if inm and inm == etag:
         return Response(status_code=304)
-    headers = {"ETag": etag, "Cache-Control": "public, max-age=300"}
+    headers = {
+        "ETag": etag,
+        "Cache-Control": "public, max-age=300",
+        "X-Image-Source": source,
+        "X-Image-Key": key or "",
+    }
     return Response(content=content, media_type="image/png", headers=headers)
 
 @app.get("/v1/weather")
@@ -447,8 +518,6 @@ def admin_generate(
     variants: int = Body(default=4),
     store: str = Body(default="weekly")
 ):
-    if not _hf_token:
-        raise HTTPException(status_code=400, detail="HUGGING_FACE_TOKEN not set")
     if variants < 1 or variants > 8:
         variants = max(1, min(variants, 8))
     day_idx = day if day is not None else datetime.utcnow().weekday()
@@ -456,7 +525,7 @@ def admin_generate(
     results: List[Dict[str, Any]] = []
     for i in range(variants):
         try:
-            raw = hf_text2image(prompt)
+            raw = generate_image_bytes(prompt)
             img = Image.open(io.BytesIO(raw)).convert("RGB")
             img = cover_resize_to(img, 800, 480)
             out_b = io.BytesIO()
@@ -470,17 +539,18 @@ def admin_generate(
                 os.makedirs(local_dir, exist_ok=True)
                 with open(os.path.join(local_dir, f"{day_idx}_{i}.png"), "wb") as f:
                     f.write(out_bytes)
-            results.append({"variant": i, "key": key, "saved_to_gcs": saved})
+            results.append({"variant": i, "key": key, "saved_to_gcs": saved, "provider": _provider})
         except Exception as e:
-            results.append({"variant": i, "error": str(e)})
+            results.append({"variant": i, "error": str(e), "provider": _provider})
     return {"day": day_idx, "variants": results}
 
 @app.get("/")
 def root():
     return {
         "status": "ok",
-        "version": "hf-weather-fallbacks-fonts-layouts-jokes-2025-10-24",
+        "version": "deepai-layouts-jokes-2025-10-24",
         "gcs": bool(get_bucket()),
+        "gen_provider": "deepai" if _DEEPAI_KEY else ("hf" if _hf_token else "none"),
         "hf_model": _hf_model if _hf_token else None,
         "weather": bool(_weather_api_key),
         "default_layout": "glass"
