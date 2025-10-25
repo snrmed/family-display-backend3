@@ -4,7 +4,7 @@ from typing import Optional, List, Dict, Any, Tuple
 
 import requests
 from fastapi import FastAPI, Body, Query, Request, HTTPException
-from fastapi.responses import PlainTextResponse, JSONResponse, Response, HTMLResponse
+from fastapi.responses import PlainTextResponse, Response, HTMLResponse
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
 try:
@@ -28,8 +28,9 @@ JOKE_URL    = os.getenv("JOKE_URL","https://icanhazdadjoke.com/")
 DEEPAI_URL  = "https://api.deepai.org/api/text2img"
 
 DEFAULT_ALPHA = int(os.getenv("OVERLAY_ALPHA", "160"))  # glass panel transparency
+DEFAULT_MODE  = (os.getenv("DEFAULT_MODE", "art")).lower()  # art | graphic
 
-# Caches
+# Light caches
 CACHE_JOKE = {"ts":0, "joke":None}
 JOKE_TTL   = int(os.getenv("JOKE_TTL_SECONDS","900"))
 
@@ -46,7 +47,7 @@ FONT_REG  = _font("Roboto-Regular.ttf", 26)
 FONT_BOLD = _font("Roboto-Bold.ttf",    32)
 FONT_DATE = _font("Roboto-Bold.ttf",    24)
 
-# Dynamic font cache (so we can size precisely)
+# Dynamic font cache (precise sizing)
 _font_cache = {}
 def font_px(px: int, weight: str = "Regular"):
     key = (px, weight)
@@ -61,8 +62,10 @@ def font_px(px: int, weight: str = "Regular"):
     _font_cache[key] = f
     return f
 
-# Themes for weekly backgrounds
-THEMES = [
+# ─────────────────────────────────────────────────────────────────────
+# Prompt pools (both styles) + chooser
+# ─────────────────────────────────────────────────────────────────────
+THEMES_GRAPHIC = [
     "Colorful geometric poster art with soft gradients and organic shapes, abstract paper-collage style. Modern minimalist design, bright clean palette.",
     "Abstract nature illustration with stylized sun, hills and sky. Bright flat colors, mid-century modern poster style.",
     "Blue-themed abstract poster with waves and circles, geometric sea and sun, vivid modern palette.",
@@ -73,14 +76,23 @@ THEMES = [
     "Memphis design inspired abstract: bold shapes, dots, squiggles, high-contrast flat colors, graphic poster."
 ]
 
-FALLBACK_JOKES = [
-    "Why did the picture go to jail? Because it was framed.",
-    "I told my wife she should embrace her mistakes... she gave me a hug.",
-    "Parallel lines have so much in common. It’s a shame they’ll never meet.",
-    "Did you hear about the claustrophobic astronaut? He just needed a little space.",
-    "Why don’t skeletons fight each other? They don’t have the guts.",
-    "I used to be addicted to soap, but I’m clean now.",
+THEMES_ART = [
+    "Large impasto oil painting on canvas, bold palette-knife strokes, warm earth tones and vermilion accents, dramatic lighting, contemporary abstract expressionism, gallery wall",
+    "Impasto oil on canvas with heavy texture, cool teal and ultramarine palette, palette-knife ridges catching light, modern abstract landscape",
+    "Abstract expressionist painting, explosive color fields, gestural brushwork, splatters and drips, raw canvas edges, museum lighting",
+    "Large watercolor on cold-press paper, soft bleeding washes, granulation texture, limited muted palette, minimalist abstract",
+    "Gouache poster art, matte paint, paper grain visible, mid-century modern composition with clean geometry and painterly edges",
+    "Mixed media painting, oil and graphite, layered glazes, scumbled textures, subdued palette with single bright accent",
+    "Palette-knife seascape, thick impasto waves, cobalt and phthalo blues, heavy texture, dramatic contrast",
+    "Color field painting, luminous layered glazes, soft rectangular fields of color, subtle edge bleeding, meditative atmosphere",
+    "Sumie-inspired ink and watercolor wash, gestural brush strokes, negative space, tranquil composition",
+    "Abstract botanical painting, sweeping organic shapes, impasto stems and leaves, modern color palette, canvas texture"
 ]
+
+def choose_prompt(mode: str) -> str:
+    m = (mode or DEFAULT_MODE).lower()
+    pool = THEMES_ART if m == "art" else THEMES_GRAPHIC
+    return random.choice(pool)
 
 # ─────────────────────────────────────────────────────────────────────
 # GCS helpers
@@ -268,7 +280,7 @@ def fetch_weather(city="Darwin", units="metric"):
         if kind == "sunny": return "Clear and bright"
         return "Mostly cloudy"
 
-    # --- OpenWeather path (if key present) ---
+    # OpenWeather if key present
     if WEATHER_KEY:
         try:
             g = requests.get(
@@ -284,7 +296,6 @@ def fetch_weather(city="Darwin", units="metric"):
             desc = cur["weather"][0]["description"].title()
             temp = float(cur["main"]["temp"])
 
-            # derive min/max from short-term forecast (next ~24–36h)
             fc = requests.get(
                 "https://api.openweathermap.org/data/2.5/forecast",
                 params={"lat": lat, "lon": lon, "units": units, "appid": WEATHER_KEY}, timeout=8
@@ -297,9 +308,9 @@ def fetch_weather(city="Darwin", units="metric"):
             return {"description": desc, "temp": temp, "tmin": tmin, "tmax": tmax,
                     "kind": kind, "note": note_for(kind, tmin, tmax, units)}
         except Exception:
-            pass  # fall through to Open-Meteo
+            pass  # fall through
 
-    # --- Open-Meteo (no key) ---
+    # Open-Meteo fallback (no key)
     try:
         g = requests.get("https://geocoding-api.open-meteo.com/v1/search",
                          params={"name": city, "count": 1}, timeout=8).json()
@@ -344,22 +355,22 @@ def fetch_joke() -> str:
         r = requests.get(JOKE_URL, headers={"Accept":"application/json", "User-Agent":"family-display/1.0"}, timeout=3)
         if r.status_code == 200:
             j = r.json()
-            joke = j.get("joke") or j.get("setup") or random.choice(FALLBACK_JOKES)
+            joke = j.get("joke") or j.get("setup") or "Why did the picture go to jail? Because it was framed."
             CACHE_JOKE.update({"joke":joke,"ts":now})
             return joke
     except Exception:
         pass
-    joke = random.choice(FALLBACK_JOKES)
+    joke = "Why did the picture go to jail? Because it was framed."
     CACHE_JOKE.update({"joke":joke,"ts":now})
     return joke
 
 # ─────────────────────────────────────────────────────────────────────
-# Overlay composer (DYNAMIC): side-by-side bottom panels (~30% height)
+# Dynamic overlays (bottom split: Weather | Dad joke)
 # ─────────────────────────────────────────────────────────────────────
 def add_dynamic_overlays(img: Image.Image, city: Optional[str], units: str, show_joke: bool, layout: str="glass") -> Image.Image:
     draw = ImageDraw.Draw(img)
 
-    # Top-right date label
+    # Date (top-right)
     date = datetime.now().strftime("%a %d %b %Y")
     pad = 10
     tw = int(draw.textlength(date, font=FONT_DATE))
@@ -368,31 +379,28 @@ def add_dynamic_overlays(img: Image.Image, city: Optional[str], units: str, show
     glass_panel(img, dbox, alpha=DEFAULT_ALPHA)
     draw.text((dbox[0]+pad, dbox[1]+pad), date, fill=(0,0,0), font=FONT_DATE)
 
-    # Reserve bottom 30% for two side-by-side panels
-    total_h = int(img.height * 0.30)                 # ≈144px on 480px height
+    # Bottom 30% split in two panels
+    total_h = int(img.height * 0.30)            # ≈144px at 480
     gap = 12
     y0 = img.height - gap - total_h
     y1 = img.height - gap
     mid = img.width // 2
-    left_box  = (gap, y0, mid - gap//2, y1)              # Weather
-    right_box = (mid + gap//2, y0, img.width - gap, y1)  # Dad joke
+    left_box  = (gap, y0, mid - gap//2, y1)             # Weather
+    right_box = (mid + gap//2, y0, img.width - gap, y1) # Dad joke
 
-    # Fetch live info
     wx = fetch_weather(city or "Darwin", units=units)
     joke_text = fetch_joke() if show_joke else ""
 
-    # ---- Weather panel (left) ----
+    # Weather panel
     glass_panel(img, left_box, alpha=DEFAULT_ALPHA)
-    lp = 14  # inner padding
+    lp = 14
     icon_box = (left_box[0]+lp, left_box[1]+lp, left_box[0]+lp+60, left_box[1]+lp+52)
     draw_weather_icon(draw, wx.get("kind","sunny"), icon_box)
 
-    # Typography sizes
-    city_font   = font_px(32, "Bold")                 # current font size
-    minmax_font = font_px(int(32*0.8), "Regular")     # 20% smaller
-    note_font   = font_px(int(32*0.8*0.8), "Regular") # 20% smaller than min/max
+    city_font   = font_px(32, "Bold")
+    minmax_font = font_px(int(32*0.8), "Regular")
+    note_font   = font_px(int(32*0.8*0.8), "Regular")
 
-    # Text blocks
     text_x = icon_box[2] + 10
     text_y = left_box[1] + lp
 
@@ -404,15 +412,14 @@ def add_dynamic_overlays(img: Image.Image, city: Optional[str], units: str, show
               fill=(0,0,0), font=minmax_font)
     text_y += minmax_font.size + 6
 
-    # Note line — wrap if needed
     note_box = (text_x, text_y, left_box[2]-lp, left_box[3]-lp)
     draw_wrapped(draw, wx.get("note",""), note_box, note_font, line_gap=4)
 
-    # ---- Dad joke panel (right) ----
+    # Dad joke panel
     if show_joke:
         glass_panel(img, right_box, alpha=DEFAULT_ALPHA)
         rp = 14
-        joke_font = minmax_font  # same size as min/max
+        joke_font = minmax_font
         draw_wrapped(draw, joke_text, (right_box[0]+rp, right_box[1]+rp, right_box[2]-rp, right_box[3]-rp),
                      joke_font, line_gap=6)
 
@@ -429,11 +436,12 @@ def healthz():
 def root():
     return {
         "status":"ok",
-        "version":"deepai-weekpack-dynamic-overlays-2025-10-25",
+        "version":"deepai-weekpack-dynamic-overlays-art-default-2025-10-25",
         "gcs":bool(gcs_bucket()),
         "provider":"deepai",
         "dynamic_overlays":True,
-        "default_layout":"glass"
+        "default_layout":"glass",
+        "default_mode": DEFAULT_MODE
     }
 
 @app.post("/admin/generate")
@@ -441,10 +449,15 @@ def admin_generate(
     days: int = Body(default=7),
     variants: int = Body(default=4),
     week: Optional[str] = Body(default=None, description="ISO week like 2025W43"),
+    prompt: Optional[str] = Body(default=None, description="Force a single prompt for all images"),
+    mode: str = Body(default=DEFAULT_MODE, description="art | graphic (ignored if 'prompt' is provided)")
 ):
     """
-    Generate BACKGROUNDS ONLY for the given (or current) ISO week:
+    Generate BACKGROUNDS ONLY for the given (or current) ISO week.
     Saves to: weekly/<WEEK>/<day>_<variant>.png
+
+    If 'prompt' is provided, uses it for every image.
+    Otherwise randomly selects from the chosen pool ('art' default).
     """
     if variants < 1 or variants > 8: variants = max(1, min(variants, 8))
     if days < 1 or days > 7: days = max(1, min(days, 7))
@@ -454,17 +467,17 @@ def admin_generate(
 
     for d in range(days):
         for v in range(variants):
-            theme = random.choice(THEMES)
+            used_prompt = prompt or choose_prompt(mode)
             try:
-                raw = deepai_generate(theme)
+                raw = deepai_generate(used_prompt)
                 img = Image.open(io.BytesIO(raw)).convert("RGB")
                 img = cover_resize(img, 800, 480)
                 buf = io.BytesIO(); img.save(buf, format="PNG")
                 key = f"{prefix}/{d}_{v}.png"
                 ok = gcs_put(key, buf.getvalue())
-                out.append({"day":d,"variant":v,"key":key,"saved":ok,"theme":theme[:80]})
+                out.append({"day":d,"variant":v,"key":key,"saved":ok,"prompt":used_prompt[:120]})
             except Exception as e:
-                out.append({"day":d,"variant":v,"error":str(e)})
+                out.append({"day":d,"variant":v,"error":str(e),"prompt":used_prompt[:120]})
     return {"week":week_id, "count":len(out), "prefix":prefix, "results":out}
 
 @app.get("/v1/frame")
@@ -484,20 +497,19 @@ def v1_frame(
     v  = variant if variant is not None else random.randint(0, 3)
     key = f"weekly/{wk}/{d}_{v}.png"
 
-    # 1) Get background from GCS, else fallback
+    # Get background
     bg_bytes = gcs_get(key)
     if not bg_bytes:
-        # fallback placeholder
         img = Image.new("RGB", (800,480), EINK_PALETTE[0])
         draw = ImageDraw.Draw(img)
         draw.text((20,20), f"Missing background: {wk}/{d}_{v}.png", fill=(0,0,0), font=FONT_BOLD)
     else:
         img = Image.open(io.BytesIO(bg_bytes)).convert("RGB")
 
-    # 2) Compose dynamic overlays
+    # Compose overlays
     img = add_dynamic_overlays(img, city=city, units=units, show_joke=joke, layout=layout)
 
-    # 3) ETag for battery/network savings
+    # ETag caching
     out = io.BytesIO(); img.save(out, format="PNG")
     content = out.getvalue()
     etag = hashlib.sha1(content).hexdigest()
@@ -508,15 +520,14 @@ def v1_frame(
                     headers={"ETag": etag, "Cache-Control":"public, max-age=300",
                              "X-Background-Key": key})
 
-# Simple browser preview of all day/variant combos
+# Simple preview page for 7 × N variants with live overlays
 @app.get("/preview", response_class=HTMLResponse)
 def preview_page(variants: int = 2, city: str = "Darwin"):
-    base = ""
     html = ["<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>",
             "<title>Family Display Preview</title>",
-            "<style>body{font-family:system-ui,sans-serif;background:#f2f2f2;margin:0}h1{background:#222;color:#fff;margin:0;padding:12px;text-align:center}"+
-            ".grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:20px;padding:20px;max-width:1300px;margin:0 auto}"+
-            ".card{background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.15);border-radius:8px;overflow:hidden;text-align:center;padding-bottom:8px}"+
+            "<style>body{font-family:system-ui,sans-serif;background:#f2f2f2;margin:0}h1{background:#222;color:#fff;margin:0;padding:12px;text-align:center}",
+            ".grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:20px;padding:20px;max-width:1300px;margin:0 auto}",
+            ".card{background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.15);border-radius:8px;overflow:hidden;text-align:center;padding-bottom:8px}",
             "img{width:100%;display:block}.label{font-size:.9rem;color:#444;margin-top:6px}</style></head><body>",
             "<h1>Weekly Preview</h1><div class='grid'>"]
     for d in range(7):
