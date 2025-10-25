@@ -1,10 +1,27 @@
+# ── Dockerfile (at repo root) ────────────────────────────────────────────────
 FROM python:3.11-slim
 
+# System deps (Pillow works best with JPEG/zlib present)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      libjpeg62-turbo-dev zlib1g-dev \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
-COPY requirements.txt ./
+
+# Install Python deps first (better layer caching)
+COPY backend/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+# Copy only the backend app (includes web/designer when you add it)
+COPY backend/ ./backend/
 
-# Cloud Run will provide $PORT
-CMD ["/bin/sh", "-c", "exec uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8080}"]
+# Runtime env
+ENV PORT=8080 \
+    PYTHONUNBUFFERED=1
+
+# Expose if you run locally (Cloud Run doesn’t require EXPOSE)
+EXPOSE 8080
+
+# Use gunicorn to serve Flask app
+WORKDIR /app/backend
+CMD ["gunicorn", "-b", "0.0.0.0:8080", "main:app"]
