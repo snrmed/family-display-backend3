@@ -4,7 +4,7 @@ from typing import Optional, List, Dict, Any, Tuple
 
 import requests
 from fastapi import FastAPI, Body, Query, Request, HTTPException
-from fastapi.responses import PlainTextResponse, JSONResponse, Response
+from fastapi.responses import PlainTextResponse, JSONResponse, Response, HTMLResponse
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
 try:
@@ -27,20 +27,39 @@ WEATHER_KEY = os.getenv("WEATHER_API_KEY") or os.getenv("OWM_API_KEY")
 JOKE_URL    = os.getenv("JOKE_URL","https://icanhazdadjoke.com/")
 DEEPAI_URL  = "https://api.deepai.org/api/text2img"
 
+DEFAULT_ALPHA = int(os.getenv("OVERLAY_ALPHA", "160"))  # glass panel transparency
+
 # Caches
 CACHE_JOKE = {"ts":0, "joke":None}
 JOKE_TTL   = int(os.getenv("JOKE_TTL_SECONDS","900"))
 
 # Fonts (Roboto in ./fonts)
 FONT_DIR = os.path.join(os.path.dirname(__file__), "fonts")
+
 def _font(name, size):
     try:
         return ImageFont.truetype(os.path.join(FONT_DIR, name), size)
     except Exception:
         return ImageFont.load_default()
+
 FONT_REG  = _font("Roboto-Regular.ttf", 26)
 FONT_BOLD = _font("Roboto-Bold.ttf",    32)
 FONT_DATE = _font("Roboto-Bold.ttf",    24)
+
+# Dynamic font cache (so we can size precisely)
+_font_cache = {}
+def font_px(px: int, weight: str = "Regular"):
+    key = (px, weight)
+    if key in _font_cache:
+        return _font_cache[key]
+    fname = f"Roboto-{weight}.ttf"
+    path = os.path.join(FONT_DIR, fname)
+    try:
+        f = ImageFont.truetype(path, px)
+    except Exception:
+        f = ImageFont.load_default()
+    _font_cache[key] = f
+    return f
 
 # Themes for weekly backgrounds
 THEMES = [
@@ -112,7 +131,7 @@ def cover_resize(img: Image.Image, w=800, h=480) -> Image.Image:
     img = img.resize((nw,nh), Image.LANCZOS)
     return img.crop(((nw-w)//2,(nh-h)//2,(nw-w)//2+w,(nh-h)//2+h))
 
-def glass_panel(img: Image.Image, box: Tuple[int,int,int,int], blur=6, alpha=220, radius=14):
+def glass_panel(img: Image.Image, box: Tuple[int,int,int,int], blur=6, alpha=DEFAULT_ALPHA, radius=14):
     x0,y0,x1,y1 = box
     region = img.crop(box).filter(ImageFilter.GaussianBlur(blur))
     overlay = Image.new("RGBA", (x1-x0, y1-y0), (255,255,255,alpha))
@@ -213,6 +232,18 @@ def deepai_generate(prompt: str) -> bytes:
     return ir.content
 
 def fetch_weather(city="Darwin", units="metric"):
+    """
+    Returns:
+      {
+        "description": "Few Clouds",
+        "temp": 33.2,
+        "tmin": 26.0,
+        "tmax": 34.8,
+        "kind": "partly",
+        "note": "Humid heat — stay hydrated"
+      }
+    Prefers OpenWeather (if WEATHER_KEY). Falls back to Open-Meteo (no key).
+    """
     def classify(desc: str) -> str:
         s = desc.lower()
         if any(k in s for k in ["thunder","storm"]): return "storm"
@@ -223,22 +254,87 @@ def fetch_weather(city="Darwin", units="metric"):
             return "partly" if any(k in s for k in ["few","scattered","broken","partly"]) else "cloudy"
         if any(k in s for k in ["clear","sunny"]): return "sunny"
         return "cloudy"
-    if not WEATHER_KEY:
-        return {"description":"Sunny","temp":33,"kind":"sunny"}
+
+    def note_for(kind: str, tmin: float, tmax: float, units: str) -> str:
+        hot = (tmax >= (32 if units=="metric" else 90))
+        cold = (tmin <= (5 if units=="metric" else 41))
+        if kind == "storm": return "Thunderstorms possible"
+        if kind == "rain":  return "Carry an umbrella"
+        if kind == "snow":  return "Snow likely — take care"
+        if kind == "fog":   return "Low visibility"
+        if hot:             return "Humid heat — stay hydrated"
+        if cold:            return "Chilly — layer up"
+        if kind == "partly":return "Intervals of cloud and sun"
+        if kind == "sunny": return "Clear and bright"
+        return "Mostly cloudy"
+
+    # --- OpenWeather path (if key present) ---
+    if WEATHER_KEY:
+        try:
+            g = requests.get(
+                "https://api.openweathermap.org/geo/1.0/direct",
+                params={"q": city, "limit": 1, "appid": WEATHER_KEY}, timeout=8
+            ).json()
+            lat, lon = g[0]["lat"], g[0]["lon"]
+
+            cur = requests.get(
+                "https://api.openweathermap.org/data/2.5/weather",
+                params={"lat": lat, "lon": lon, "units": units, "appid": WEATHER_KEY}, timeout=8
+            ).json()
+            desc = cur["weather"][0]["description"].title()
+            temp = float(cur["main"]["temp"])
+
+            # derive min/max from short-term forecast (next ~24–36h)
+            fc = requests.get(
+                "https://api.openweathermap.org/data/2.5/forecast",
+                params={"lat": lat, "lon": lon, "units": units, "appid": WEATHER_KEY}, timeout=8
+            ).json()
+            temps = [float(it["main"]["temp"]) for it in (fc.get("list") or [])[:12] if it.get("main")]
+            tmin = min(temps) if temps else temp
+            tmax = max(temps) if temps else temp
+
+            kind = classify(desc)
+            return {"description": desc, "temp": temp, "tmin": tmin, "tmax": tmax,
+                    "kind": kind, "note": note_for(kind, tmin, tmax, units)}
+        except Exception:
+            pass  # fall through to Open-Meteo
+
+    # --- Open-Meteo (no key) ---
     try:
-        geor = requests.get("https://api.openweathermap.org/geo/1.0/direct",
-                            params={"q":city,"limit":1,"appid":WEATHER_KEY}, timeout=8)
-        geor.raise_for_status()
-        lat, lon = geor.json()[0]["lat"], geor.json()[0]["lon"]
-        wr = requests.get("https://api.openweathermap.org/data/2.5/weather",
-                          params={"lat":lat,"lon":lon,"units":units,"appid":WEATHER_KEY}, timeout=8)
-        wr.raise_for_status()
-        data = wr.json()
-        desc = data["weather"][0]["description"].title()
-        temp = data["main"]["temp"]
-        return {"description":desc, "temp":temp, "kind":classify(desc)}
+        g = requests.get("https://geocoding-api.open-meteo.com/v1/search",
+                         params={"name": city, "count": 1}, timeout=8).json()
+        lat, lon = g["results"][0]["latitude"], g["results"][0]["longitude"]
+        params = {
+            "latitude": lat, "longitude": lon,
+            "current": "temperature_2m,weather_code",
+            "daily": "temperature_2m_min,temperature_2m_max",
+            "timezone": "auto",
+        }
+        if units == "imperial":
+            params["temperature_unit"] = "fahrenheit"
+        r = requests.get("https://api.open-meteo.com/v1/forecast", params=params, timeout=8).json()
+        cur = r.get("current", {})
+        daily = r.get("daily", {})
+        code = int(cur.get("weather_code", 3))
+        temp = float(cur.get("temperature_2m", 20))
+        tmin = float(daily.get("temperature_2m_min", [temp])[0])
+        tmax = float(daily.get("temperature_2m_max", [temp])[0])
+
+        if   code == 0: kind, desc = "sunny", "Sunny"
+        elif code in (1,2,3): kind, desc = "partly", "Partly Cloudy"
+        elif code in (45,48): kind, desc = "fog", "Fog"
+        elif code in (51,53,55,56,57,61,63,65,66,67,80,81,82): kind, desc = "rain", "Rain"
+        elif code in (71,73,75,77,85,86): kind, desc = "snow", "Snow"
+        elif code in (95,96,99): kind, desc = "storm", "Thunderstorm"
+        else: kind, desc = "cloudy", "Cloudy"
+
+        return {"description": desc, "temp": temp, "tmin": tmin, "tmax": tmax,
+                "kind": kind, "note": note_for(kind, tmin, tmax, units)}
     except Exception:
-        return {"description":"Sunny","temp":33,"kind":"sunny"}
+        return {"description":"Sunny","temp":33 if units=="metric" else 92,
+                "tmin":30 if units=="metric" else 86,
+                "tmax":34 if units=="metric" else 93,
+                "kind":"sunny","note":"Clear and bright"}
 
 def fetch_joke() -> str:
     now = time.time()
@@ -258,36 +354,68 @@ def fetch_joke() -> str:
     return joke
 
 # ─────────────────────────────────────────────────────────────────────
-# Overlay composer (DYNAMIC)
+# Overlay composer (DYNAMIC): side-by-side bottom panels (~30% height)
 # ─────────────────────────────────────────────────────────────────────
 def add_dynamic_overlays(img: Image.Image, city: Optional[str], units: str, show_joke: bool, layout: str="glass") -> Image.Image:
     draw = ImageDraw.Draw(img)
 
-    # Date (top-right)
+    # Top-right date label
     date = datetime.now().strftime("%a %d %b %Y")
     pad = 10
-    text_w = int(draw.textlength(date, font=FONT_DATE))
-    text_h = draw.textbbox((0,0), date, font=FONT_DATE)[3]
-    box = (img.width - text_w - pad*2 - 12, 12, img.width - 12, 12 + text_h + pad*2)
-    glass_panel(img, box); draw.text((box[0]+pad, box[1]+pad), date, fill=(0,0,0), font=FONT_DATE)
+    tw = int(draw.textlength(date, font=FONT_DATE))
+    th = draw.textbbox((0,0), date, font=FONT_DATE)[3]
+    dbox = (img.width - tw - pad*2 - 12, 12, img.width - 12, 12 + th + pad*2)
+    glass_panel(img, dbox, alpha=DEFAULT_ALPHA)
+    draw.text((dbox[0]+pad, dbox[1]+pad), date, fill=(0,0,0), font=FONT_DATE)
 
-    # Weather strip
+    # Reserve bottom 30% for two side-by-side panels
+    total_h = int(img.height * 0.30)                 # ≈144px on 480px height
+    gap = 12
+    y0 = img.height - gap - total_h
+    y1 = img.height - gap
+    mid = img.width // 2
+    left_box  = (gap, y0, mid - gap//2, y1)              # Weather
+    right_box = (mid + gap//2, y0, img.width - gap, y1)  # Dad joke
+
+    # Fetch live info
     wx = fetch_weather(city or "Darwin", units=units)
-    strip_h = 64
-    box_w = (12, img.height - strip_h - 12 - (48 if show_joke else 0), img.width - 12, img.height - 12 - (48 if show_joke else 0))
-    glass_panel(img, box_w)
+    joke_text = fetch_joke() if show_joke else ""
 
-    icon_box = (box_w[0]+10, box_w[1]+8, box_w[0]+10+60, box_w[1]+8+48)
+    # ---- Weather panel (left) ----
+    glass_panel(img, left_box, alpha=DEFAULT_ALPHA)
+    lp = 14  # inner padding
+    icon_box = (left_box[0]+lp, left_box[1]+lp, left_box[0]+lp+60, left_box[1]+lp+52)
     draw_weather_icon(draw, wx.get("kind","sunny"), icon_box)
-    title = f"{city or 'Weather'}: {wx['description']} {round(wx['temp'])}°{'C' if units=='metric' else 'F'}"
-    draw.text((icon_box[2]+10, box_w[1]+10), title, fill=(0,0,0), font=FONT_BOLD)
 
-    # Dad joke
+    # Typography sizes
+    city_font   = font_px(32, "Bold")                 # current font size
+    minmax_font = font_px(int(32*0.8), "Regular")     # 20% smaller
+    note_font   = font_px(int(32*0.8*0.8), "Regular") # 20% smaller than min/max
+
+    # Text blocks
+    text_x = icon_box[2] + 10
+    text_y = left_box[1] + lp
+
+    draw.text((text_x, text_y), f"{city or 'Weather'}", fill=(0,0,0), font=city_font)
+    text_y += city_font.size + 6
+
+    u = "°C" if units=="metric" else "°F"
+    draw.text((text_x, text_y), f"Min {round(wx['tmin'])}{u}  •  Max {round(wx['tmax'])}{u}",
+              fill=(0,0,0), font=minmax_font)
+    text_y += minmax_font.size + 6
+
+    # Note line — wrap if needed
+    note_box = (text_x, text_y, left_box[2]-lp, left_box[3]-lp)
+    draw_wrapped(draw, wx.get("note",""), note_box, note_font, line_gap=4)
+
+    # ---- Dad joke panel (right) ----
     if show_joke:
-        joke = fetch_joke()
-        box_j = (12, img.height - 48, img.width - 12, img.height - 12)
-        glass_panel(img, box_j)
-        draw_wrapped(draw, joke, (box_j[0]+14, box_j[1]+10, box_j[2]-14, box_j[3]-10), FONT_REG)
+        glass_panel(img, right_box, alpha=DEFAULT_ALPHA)
+        rp = 14
+        joke_font = minmax_font  # same size as min/max
+        draw_wrapped(draw, joke_text, (right_box[0]+rp, right_box[1]+rp, right_box[2]-rp, right_box[3]-rp),
+                     joke_font, line_gap=6)
+
     return img
 
 # ─────────────────────────────────────────────────────────────────────
@@ -344,7 +472,7 @@ def v1_frame(
     request: Request,
     week: Optional[str] = Query(default=None, description="ISO week like 2025W43 (defaults to current)"),
     day: Optional[int] = Query(default=None, ge=0, le=6),
-    variant: Optional[int] = Query(default=None, ge=0, le=3),
+    variant: Optional[int] = Query(default=None, ge=0, le=7),
     city: Optional[str] = Query(default=None),
     units: str = Query(default="metric", regex="^(metric|imperial)$"),
     joke: bool = Query(default=True),
@@ -379,3 +507,21 @@ def v1_frame(
     return Response(content=content, media_type="image/png",
                     headers={"ETag": etag, "Cache-Control":"public, max-age=300",
                              "X-Background-Key": key})
+
+# Simple browser preview of all day/variant combos
+@app.get("/preview", response_class=HTMLResponse)
+def preview_page(variants: int = 2, city: str = "Darwin"):
+    base = ""
+    html = ["<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>",
+            "<title>Family Display Preview</title>",
+            "<style>body{font-family:system-ui,sans-serif;background:#f2f2f2;margin:0}h1{background:#222;color:#fff;margin:0;padding:12px;text-align:center}"+
+            ".grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:20px;padding:20px;max-width:1300px;margin:0 auto}"+
+            ".card{background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.15);border-radius:8px;overflow:hidden;text-align:center;padding-bottom:8px}"+
+            "img{width:100%;display:block}.label{font-size:.9rem;color:#444;margin-top:6px}</style></head><body>",
+            "<h1>Weekly Preview</h1><div class='grid'>"]
+    for d in range(7):
+        for v in range(variants):
+            url = f"/v1/frame?day={d}&variant={v}&city={city}&joke=true&units=metric"
+            html.append(f"<div class='card'><img src='{url}'/><div class='label'>Day {d} • Variant {v}</div></div>")
+    html.append("</div></body></html>")
+    return "".join(html)
