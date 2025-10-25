@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any, Tuple
 
 import requests
-from fastapi import FastAPI, Body, Query, Request
+from fastapi import FastAPI, Body, Query, Request, HTTPException
 from fastapi.responses import PlainTextResponse, Response, HTMLResponse
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
@@ -27,7 +27,7 @@ WEATHER_KEY = os.getenv("WEATHER_API_KEY") or os.getenv("OWM_API_KEY")
 JOKE_URL    = os.getenv("JOKE_URL","https://icanhazdadjoke.com/")
 DEEPAI_URL  = "https://api.deepai.org/api/text2img"
 
-DEFAULT_ALPHA = int(os.getenv("OVERLAY_ALPHA", "160"))  # glass transparency
+DEFAULT_ALPHA = int(os.getenv("OVERLAY_ALPHA", "160"))  # glass panel transparency
 DEFAULT_MODE  = (os.getenv("DEFAULT_MODE", "art")).lower()  # art | graphic
 
 # Light caches
@@ -47,7 +47,7 @@ FONT_REG  = _font("Roboto-Regular.ttf", 26)
 FONT_BOLD = _font("Roboto-Bold.ttf",    32)
 FONT_DATE = _font("Roboto-Bold.ttf",    24)
 
-# Dynamic font cache
+# Dynamic font cache (precise sizing)
 _font_cache = {}
 def font_px(px: int, weight: str = "Regular"):
     key = (px, weight)
@@ -94,31 +94,36 @@ def choose_prompt(mode: str) -> str:
     pool = THEMES_ART if m == "art" else THEMES_GRAPHIC
     return random.choice(pool)
 
-# ── Randomized augmentor to avoid repeat images ──────────────────────
+# ── Randomized augmentor to break caching & add variety ──────────────
 PALETTES = [
-    "cerulean and vermilion","teal and saffron","ultramarine and ochre",
-    "magenta and cyan","indigo and coral","forest green and rust",
-    "rose and charcoal","turquoise and mustard","amber and petrol blue",
-    "crimson and slate","violet and sand","emerald and copper"
+    "cerulean and vermilion", "teal and saffron", "ultramarine and ochre",
+    "magenta and cyan", "indigo and coral", "forest green and rust",
+    "rose and charcoal", "turquoise and mustard", "violet and amber",
+    "prussian blue and cadmium orange"
 ]
 COMPOSITIONS = [
-    "central burst","diagonal sweep","asymmetric balance","triptych feel",
-    "off-center horizon","spiral rhythm","layered rectangles","organic clustering"
+    "central burst", "diagonal sweep", "asymmetric balance",
+    "triptych feel", "off-center horizon", "spiral rhythm",
+    "layered rectangles", "organic clustering", "vertical bands",
+    "floating color fields"
 ]
 TEXTURES = [
-    "heavy impasto","feathered brushwork","scumbled layers","dry-brush edges",
-    "glazing and washes","palette-knife ridges","paper grain visible","canvas weave visible"
+    "heavy impasto", "feathered brushwork", "scumbled layers",
+    "dry-brush edges", "glazing and washes", "palette-knife ridges",
+    "paper grain visible", "canvas weave visible", "granulation texture"
 ]
 MOODS = [
-    "energetic","serene","melancholic","playful","dramatic","contemplative","vivid","muted"
+    "energetic", "serene", "melancholic", "playful",
+    "dramatic", "contemplative", "vivid", "muted", "uplifting", "moody"
 ]
 
 def build_prompt(base: str) -> str:
+    """Augment a base prompt with randomized, semantically useful tokens."""
     p = random.choice(PALETTES)
     c = random.choice(COMPOSITIONS)
     t = random.choice(TEXTURES)
     m = random.choice(MOODS)
-    tag = hex(random.getrandbits(24))[2:]  # defeats API/CDN prompt caching
+    tag = hex(random.getrandbits(24))[2:]  # small variant token to defeat caching
     return (f"{base}. Palette: {p}. Composition: {c}. Texture: {t}. Mood: {m}. "
             f"painting, on canvas, visible brush strokes. [v:{tag}]")
 
@@ -272,6 +277,18 @@ def deepai_generate(prompt: str) -> bytes:
     return ir.content
 
 def fetch_weather(city="Darwin", units="metric"):
+    """
+    Returns:
+      {
+        "description": "Few Clouds",
+        "temp": 33.2,
+        "tmin": 26.0,
+        "tmax": 34.8,
+        "kind": "partly",
+        "note": "Humid heat — stay hydrated"
+      }
+    Prefers OpenWeather (if WEATHER_KEY). Falls back to Open-Meteo (no key).
+    """
     def classify(desc: str) -> str:
         s = desc.lower()
         if any(k in s for k in ["thunder","storm"]): return "storm"
@@ -296,7 +313,7 @@ def fetch_weather(city="Darwin", units="metric"):
         if kind == "sunny": return "Clear and bright"
         return "Mostly cloudy"
 
-    # OpenWeather path
+    # OpenWeather if key present
     if WEATHER_KEY:
         try:
             g = requests.get(
@@ -324,9 +341,9 @@ def fetch_weather(city="Darwin", units="metric"):
             return {"description": desc, "temp": temp, "tmin": tmin, "tmax": tmax,
                     "kind": kind, "note": note_for(kind, tmin, tmax, units)}
         except Exception:
-            pass
+            pass  # fall through
 
-    # Open-Meteo fallback
+    # Open-Meteo fallback (no key)
     try:
         g = requests.get("https://geocoding-api.open-meteo.com/v1/search",
                          params={"name": city, "count": 1}, timeout=8).json()
@@ -396,7 +413,7 @@ def add_dynamic_overlays(img: Image.Image, city: Optional[str], units: str, show
     draw.text((dbox[0]+pad, dbox[1]+pad), date, fill=(0,0,0), font=FONT_DATE)
 
     # Bottom 30% split in two panels
-    total_h = int(img.height * 0.30)
+    total_h = int(img.height * 0.30)            # ≈144px at 480
     gap = 12
     y0 = img.height - gap - total_h
     y1 = img.height - gap
@@ -446,13 +463,13 @@ def add_dynamic_overlays(img: Image.Image, city: Optional[str], units: str, show
 # ─────────────────────────────────────────────────────────────────────
 @app.get("/healthz", response_class=PlainTextResponse)
 def healthz():
-    return "ok dynamic-overlays + randomized prompts"
+    return "ok dynamic-overlays + randomized-prompts"
 
 @app.get("/")
 def root():
     return {
         "status":"ok",
-        "version":"deepai-weekpack-dynamic-overlays-rand-2025-10-25",
+        "version":"deepai-weekpack-dynamic-overlays-art-default-random-2025-10-25",
         "gcs":bool(gcs_bucket()),
         "provider":"deepai",
         "dynamic_overlays":True,
@@ -465,19 +482,20 @@ def admin_generate(
     days: int = Body(default=7),
     variants: int = Body(default=4),
     week: Optional[str] = Body(default=None, description="ISO week like 2025W43"),
-    prompt: Optional[str] = Body(default=None, description="Force a single base prompt for all images"),
+    prompt: Optional[str] = Body(default=None, description="Force a single prompt for all images"),
     mode: str = Body(default=DEFAULT_MODE, description="art | graphic (ignored if 'prompt' is provided)")
 ):
     """
     Generate BACKGROUNDS ONLY for the given (or current) ISO week.
     Saves to: weekly/<WEEK>/<day>_<variant>.png
 
-    If 'prompt' is provided, uses it as the BASE and augments each call.
-    Otherwise selects a base from the chosen pool ('art' default) and augments.
+    If 'prompt' is provided, uses it for every image.
+    Otherwise randomly selects from the chosen pool ('art' default).
+    Each image is further randomized by build_prompt(...) to avoid duplicates.
     """
     if variants < 1 or variants > 8: variants = max(1, min(variants, 8))
     if days < 1 or days > 7: days = max(1, min(days, 7))
-    week_id = week or datetime.utcnow().strftime("%G%V")
+    week_id = week or datetime.utcnow().strftime("%G%V")  # e.g., 2025W43
     prefix = f"weekly/{week_id}"
     out: List[Dict[str,Any]] = []
 
@@ -492,9 +510,9 @@ def admin_generate(
                 buf = io.BytesIO(); img.save(buf, format="PNG")
                 key = f"{prefix}/{d}_{v}.png"
                 ok = gcs_put(key, buf.getvalue())
-                out.append({"day":d,"variant":v,"key":key,"saved":ok,"prompt":used_prompt[:160]})
+                out.append({"day":d,"variant":v,"key":key,"saved":ok,"prompt":used_prompt[:200]})
             except Exception as e:
-                out.append({"day":d,"variant":v,"error":str(e),"prompt":used_prompt[:160]})
+                out.append({"day":d,"variant":v,"error":str(e),"prompt":used_prompt[:200]})
     return {"week":week_id, "count":len(out), "prefix":prefix, "results":out}
 
 @app.get("/v1/frame")
@@ -514,6 +532,7 @@ def v1_frame(
     v  = variant if variant is not None else random.randint(0, 3)
     key = f"weekly/{wk}/{d}_{v}.png"
 
+    # Get background
     bg_bytes = gcs_get(key)
     if not bg_bytes:
         img = Image.new("RGB", (800,480), EINK_PALETTE[0])
@@ -522,8 +541,10 @@ def v1_frame(
     else:
         img = Image.open(io.BytesIO(bg_bytes)).convert("RGB")
 
+    # Compose overlays
     img = add_dynamic_overlays(img, city=city, units=units, show_joke=joke, layout=layout)
 
+    # ETag caching
     out = io.BytesIO(); img.save(out, format="PNG")
     content = out.getvalue()
     etag = hashlib.sha1(content).hexdigest()
@@ -534,7 +555,7 @@ def v1_frame(
                     headers={"ETag": etag, "Cache-Control":"public, max-age=300",
                              "X-Background-Key": key})
 
-# Simple preview page (7 × N variants with live overlays)
+# Simple preview page for 7 × N variants with live overlays
 @app.get("/preview", response_class=HTMLResponse)
 def preview_page(variants: int = 2, city: str = "Darwin"):
     html = ["<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>",
