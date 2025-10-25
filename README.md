@@ -45,7 +45,7 @@ family-display-backend3/
 | `GCS_BUCKET` | `family-display-packs` | Storage bucket for layouts & images |
 | `ADMIN_TOKEN` | `super-secret` | Protects `/admin/*` endpoints |
 | `PEXELS_API_KEY` | `px-xxxxxxxxxx` | Fetch weekly curated art |
-| `OPENWEATHER_API_KEY` | `6b6381ded340...` | Weather overlay |
+| `OPENWEATHER_API_KEY` | `xxxxxxxxx...` | Weather overlay |
 | `DEFAULT_LAYOUT_DEVICE` | `familydisplay` | Default device ID |
 | `DEFAULT_RENDER_MODE` | `sticker_parade` | Overlay style |
 | `DESIGNER_KEY` *(optional)* | `open-sesame` | Gate `/designer/?key=` access |
