@@ -1,7 +1,5 @@
 fastapi
 uvicorn
-Pillow
 requests
-huggingface-hub
+Pillow
 google-cloud-storage
-python-dotenv
