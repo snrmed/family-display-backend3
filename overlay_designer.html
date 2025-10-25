@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Family Display Overlay Designer</title>
+<style>
+  html, body {
+    margin:0; padding:0;
+    height:100%; overflow:hidden;
+    font-family:Arial, sans-serif;
+  }
+  #container {
+    display:flex; height:100%;
+  }
+  #previewArea {
+    flex:1; position:relative;
+    background:#333;
+    display:flex; justify-content:center; align-items:center;
+    overflow:hidden;
+  }
+  #canvas {
+    position:relative;
+    width:800px; height:480px;
+    background-color:#222;
+    overflow:hidden;
+    border:1px solid #555;
+    transform-origin:top left;
+  }
+  #canvas img#bg {
+    position:absolute;
+    width:100%; height:100%;
+    object-fit:cover;
+    top:0; left:0;
+    z-index:0;
+  }
+  .overlay {
+    position:absolute;
+    min-width:40px; min-height:30px;
+    background:rgba(255,255,255,0.15);
+    border:1px dashed #fff;
+    color:#fff;
+    padding:4px;
+    cursor:move;
+    resize:both;
+    overflow:auto;
+    box-sizing:border-box;
+    z-index:5;
+    line-height:1.15;
+  }
+  .selected { outline:2px solid #00ffcc; }
+  #sidebar {
+    width:320px;
+    background:#1a1a1a;
+    color:#ddd;
+    padding:8px;
+    box-sizing:border-box;
+    overflow-y:auto;
+  }
+  button, select, input {
+    font-size:14px;
+    margin:3px 0;
+  }
+  .tiny { font-size:13px; padding:3px 6px; }
+  #controls { position:sticky; top:0; background:#1a1a1a; padding-bottom:4px; }
+  label { display:block; margin-top:6px; }
+  .note { font-size:12px; opacity:0.7; }
+</style>
+</head>
+<body>
+<div id="container">
+  <div id="previewArea">
+    <div id="canvas">
+      <img id="bg" alt="background">
+    </div>
+  </div>
+  <div id="sidebar">
+    <div id="controls">
+      <h3>Overlay Designer</h3>
+      <button id="btnAddBox">Add Box</button>
+      <button id="btnAddText">Add Text</button>
+      <button id="btnAddIcon">Add Icon</button>
+      <button id="btnDelete">Delete Selected</button>
+      <br>
+      <label>Zoom
+        <input type="range" id="zoomSlider" min="25" max="150" value="100">
+        <span id="zoomLabel">100%</span>
+      </label>
+      <hr>
+      <!-- Theme controls -->
+      <label>Theme
+        <select id="themeSelect">
+          <option value="abstract">Abstract</option>
+          <option value="soft">Soft</option>
+          <option value="kids">Kids</option>
+          <option value="nature">Nature</option>
+          <option value="paper">Paper</option>
+          <option value="retro">Retro</option>
+          <option value="minimal">Minimal</option>
+          <option value="texture">Texture</option>
+          <option value="city">City</option>
+          <option value="flora">Flora</option>
+        </select>
+      </label>
+      <input id="serviceUrl" placeholder="https://your-service-url" style="width:280px">
+      <button id="btnLoadRandom" class="tiny">Load Random From Backend</button>
+      <hr>
+      <button id="btnExport">Export JSON</button>
+      <input type="file" id="importFile" accept=".json" style="display:none">
+      <button id="btnImport">Import JSON</button>
+      <button id="btnRefresh">Refresh Styles</button>
+      <hr>
+      <button id="btnDownloadPNG">Download PNG</button>
+      <div class="note">Tip: if your background is from another domain without CORS, browsers may block exports.</div>
+    </div>
+    <div style="margin-top:10px" class="note">
+      Drag boxes, text, or icons onto the canvas.  
+      Resize corners. Use Delete to remove.  
+      Zoom with the slider. Export to save your layout.
+    </div>
+  </div>
+</div>
+
+<!-- Hidden canvas used for PNG export -->
+<canvas id="exportCanvas" width="800" height="480" style="display:none"></canvas>
+
+<script>
+// ===== Generic gradient background =====
+const GENERIC_BG_DATAURL = (() => {
+  const svg = `
+  <svg xmlns="http://www.w3.org/2000/svg" width="800" height="480">
+    <defs>
+      <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#2d2f55"/>
+        <stop offset="50%" stop-color="#4a99a7"/>
+        <stop offset="100%" stop-color="#9ad1c8"/>
+      </linearGradient>
+      <radialGradient id="g2" cx="75%" cy="25%" r="60%">
+        <stop offset="0%" stop-color="#ffd082" stop-opacity="0.9"/>
+        <stop offset="100%" stop-color="#ffd082" stop-opacity="0"/>
+      </radialGradient>
+    </defs>
+    <rect width="100%" height="100%" fill="url(#g1)"/>
+    <circle cx="620" cy="120" r="220" fill="url(#g2)"/>
+    <circle cx="160" cy="380" r="180" fill="rgba(255,255,255,0.12)"/>
+  </svg>`;
+  return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg.trim());
+})();
+const bgEl = document.getElementById("bg");
+bgEl.src = GENERIC_BG_DATAURL;
+
+// ===== Basic designer logic =====
+const canvas = document.getElementById("canvas");
+let selected = null;
+
+function addElement(type) {
+  const el = document.createElement("div");
+  el.className = "overlay";
+  el.style.left = "20px";
+  el.style.top = "20px";
+  el.style.width = "180px";
+  el.style.height = "70px";
+  if (type === "text") {
+    el.textContent = "Sample Text";
+    el.style.fontSize = "20px";
+  }
+  if (type === "icon") {
+    el.textContent = "😀";
+    el.style.fontSize = "48px";
+  }
+  el.dataset.type = type;
+  canvas.appendChild(el);
+  makeDraggable(el);
+  selectElement(el);
+}
+
+function selectElement(el) {
+  if (selected) selected.classList.remove("selected");
+  selected = el;
+  if (el) el.classList.add("selected");
+}
+
+function makeDraggable(el) {
+  let offsetX, offsetY;
+  el.addEventListener("mousedown", (e) => {
+    if (e.target !== el) return;
+    selectElement(el);
+    offsetX = e.clientX - el.offsetLeft;
+    offsetY = e.clientY - el.offsetTop;
+    function onMove(ev) {
+      el.style.left = ev.clientX - offsetX + "px";
+      el.style.top = ev.clientY - offsetY + "px";
+    }
+    function onUp() {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    }
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  });
+  el.addEventListener("click", ()=>selectElement(el));
+}
+
+document.getElementById("btnAddBox").onclick = ()=>addElement("box");
+document.getElementById("btnAddText").onclick = ()=>addElement("text");
+document.getElementById("btnAddIcon").onclick = ()=>addElement("icon");
+document.getElementById("btnDelete").onclick = ()=>{
+  if (selected) { selected.remove(); selected=null; }
+};
+
+// Zoom
+const zoomSlider = document.getElementById("zoomSlider");
+const zoomLabel = document.getElementById("zoomLabel");
+zoomSlider.addEventListener("input", ()=>{
+  const z = zoomSlider.value;
+  canvas.style.transform = `scale(${z/100})`;
+  zoomLabel.textContent = `${z}%`;
+});
+
+// Export / Import JSON
+document.getElementById("btnExport").onclick = ()=>{
+  const data = [];
+  canvas.querySelectorAll(".overlay").forEach(el=>{
+    data.push({
+      type: el.dataset.type,
+      text: el.textContent,
+      style: {
+        left: el.style.left, top: el.style.top,
+        width: el.style.width, height: el.style.height,
+        fontSize: el.style.fontSize || "",
+        color: getComputedStyle(el).color,
+        background: getComputedStyle(el).backgroundColor,
+        borderColor: getComputedStyle(el).borderColor,
+        borderWidth: getComputedStyle(el).borderWidth,
+      }
+    });
+  });
+  const blob = new Blob([JSON.stringify(data,null,2)], {type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "layout.json";
+  a.click();
+};
+
+document.getElementById("btnImport").onclick = ()=>document.getElementById("importFile").click();
+document.getElementById("importFile").addEventListener("change", (ev)=>{
+  const file = ev.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    const arr = JSON.parse(reader.result);
+    canvas.querySelectorAll(".overlay").forEach(x=>x.remove());
+    arr.forEach(o=>{
+      const el = document.createElement("div");
+      el.className = "overlay";
+      el.dataset.type = o.type;
+      el.textContent = o.text;
+      Object.assign(el.style, o.style);
+      if (o.style?.color) el.style.color = o.style.color;
+      if (o.style?.background) el.style.background = o.style.background;
+      if (o.style?.borderColor) el.style.borderColor = o.style.borderColor;
+      if (o.style?.borderWidth) el.style.borderWidth = o.style.borderWidth;
+      canvas.appendChild(el);
+      makeDraggable(el);
+    });
+  };
+  reader.readAsText(file);
+});
+
+// Refresh
+document.getElementById("btnRefresh").onclick = ()=>{ location.reload(); };
+
+// ===== Theme selection + random backend loader =====
+let currentTheme = document.getElementById("themeSelect").value;
+document.getElementById("themeSelect").addEventListener("change",(e)=>{
+  currentTheme = e.target.value;
+});
+
+async function loadRandomFromBackend(){
+  const service = (document.getElementById("serviceUrl").value||"").trim();
+  if (!service) { alert("Enter your service URL first"); return; }
+  const idx = Math.floor(Math.random()*8);
+  const url = `${service.replace(/\/+$/,'')}/image?theme=${encodeURIComponent(currentTheme)}&index=${idx}`;
+  // Note: if the URL lacks CORS headers, PNG export may be blocked later
+  bgEl.src = url;
+}
+document.getElementById("btnLoadRandom").addEventListener("click",loadRandomFromBackend);
+
+// ===== Download PNG (render into canvas) =====
+const exportCanvas = document.getElementById("exportCanvas");
+const ctx = exportCanvas.getContext("2d");
+
+function parseRGBA(str, fallback = "rgba(255,255,255,0.15)") {
+  try {
+    if (!str) str = fallback;
+    // supports rgb(...) or rgba(...)
+    const m = str.match(/rgba?\(([^)]+)\)/i);
+    if (!m) return {r:255,g:255,b:255,a:0.15};
+    const parts = m[1].split(",").map(s=>s.trim());
+    const r = parseInt(parts[0],10);
+    const g = parseInt(parts[1],10);
+    const b = parseInt(parts[2],10);
+    const a = parts[3] !== undefined ? parseFloat(parts[3]) : 1;
+    return {r,g,b,a};
+  } catch {
+    return {r:255,g:255,b:255,a:0.15};
+  }
+}
+
+function parsePx(v, fallback=0){
+  if(!v) return fallback;
+  const n = parseFloat(v.toString().replace("px",""));
+  return isNaN(n)?fallback:n;
+}
+
+function roundRectPath(ctx, x, y, w, h, r=8){
+  const rr = Math.min(r, w/2, h/2);
+  ctx.beginPath();
+  ctx.moveTo(x+rr, y);
+  ctx.arcTo(x+w, y, x+w, y+h, rr);
+  ctx.arcTo(x+w, y+h, x, y+h, rr);
+  ctx.arcTo(x, y+h, x, y, rr);
+  ctx.arcTo(x, y, x+w, y, rr);
+  ctx.closePath();
+}
+
+function wrapText(ctx, text, x, y, maxWidth, lineHeight){
+  const words = (text||"").split(/\s+/);
+  let line = "";
+  const lines = [];
+  for (let n=0; n<words.length; n++){
+    const testLine = line + (line? " ":"") + words[n];
+    const metrics = ctx.measureText(testLine);
+    if (metrics.width > maxWidth && line){
+      lines.push(line);
+      line = words[n];
+    }else{
+      line = testLine;
+    }
+  }
+  if (line) lines.push(line);
+  lines.forEach((ln,i)=>ctx.fillText(ln, x, y + i*lineHeight));
+}
+
+async function downloadPNG(){
+  // draw background
+  ctx.clearRect(0,0,exportCanvas.width,exportCanvas.height);
+
+  // Try to load bg with CORS-friendly image element
+  const img = new Image();
+  img.crossOrigin = "anonymous";
+  const bgSrc = bgEl.src || GENERIC_BG_DATAURL;
+  const loadBg = new Promise((resolve)=>{
+    img.onload = ()=>{ resolve(true); };
+    img.onerror = ()=>{ resolve(false); };
+  });
+  img.src = bgSrc;
+  await loadBg;
+
+  // If loaded fine, draw it; else fill a gradient as fallback
+  if (img.complete && img.naturalWidth){
+    ctx.drawImage(img, 0, 0, 800, 480);
+  } else {
+    const g = ctx.createLinearGradient(0,0,800,480);
+    g.addColorStop(0,"#2d2f55"); g.addColorStop(0.5,"#4a99a7"); g.addColorStop(1,"#9ad1c8");
+    ctx.fillStyle = g; ctx.fillRect(0,0,800,480);
+  }
+
+  // draw overlays
+  const overlays = Array.from(canvas.querySelectorAll(".overlay"));
+  overlays.forEach(el=>{
+    const cs = getComputedStyle(el);
+    const x = parsePx(el.style.left);
+    const y = parsePx(el.style.top);
+    const w = parsePx(el.style.width, el.offsetWidth);
+    const h = parsePx(el.style.height, el.offsetHeight);
+
+    // background
+    const bg = parseRGBA(cs.backgroundColor, "rgba(255,255,255,0.15)");
+    ctx.save();
+    roundRectPath(ctx, x, y, w, h, 8);
+    ctx.fillStyle = `rgba(${bg.r},${bg.g},${bg.b},${bg.a})`;
+    ctx.fill();
+
+    // border
+    const bw = parsePx(cs.borderWidth, 0);
+    if (bw > 0){
+      ctx.lineWidth = bw;
+      ctx.strokeStyle = cs.borderColor || "rgba(255,255,255,0.6)";
+      ctx.stroke();
+    }
+
+    // text (icons included)
+    const text = el.textContent || "";
+    if (text.trim()){
+      const fs = parsePx(cs.fontSize, 20);
+      ctx.fillStyle = cs.color || "#ffffff";
+      ctx.font = `${fs}px Arial, sans-serif`;
+      ctx.textBaseline = "top";
+
+      const padding = 6;
+      const maxWidth = Math.max(10, w - padding*2);
+      const lineHeight = Math.max(10, Math.round(fs*1.15));
+      wrapText(ctx, text, x + padding, y + padding, maxWidth, lineHeight);
+    }
+    ctx.restore();
+  });
+
+  // download
+  const dataURL = exportCanvas.toDataURL("image/png");
+  const a = document.createElement("a");
+  a.href = dataURL;
+  a.download = "overlay_preview.png";
+  a.click();
+}
+
+document.getElementById("btnDownloadPNG").addEventListener("click", downloadPNG);
+</script>
+</body>
+</html>
