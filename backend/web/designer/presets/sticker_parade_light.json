@@ -1,0 +1,16 @@
+{
+  "name": "Sticker Parade (Light)",
+  "elements": [
+    {"kind":"box","x":16,"y":360,"w":360,"h":96,"role":"CARD_WEATHER"},
+    {"kind":"box","x":400,"y":360,"w":384,"h":96,"role":"CARD_JOKE"},
+    {"kind":"box","x":620,"y":16,"w":164,"h":48,"role":"CARD_GENERIC"},
+
+    {"kind":"icon","x":28,"y":372,"w":36,"h":36,"type":"WEATHER_ICON"},
+    {"kind":"text","x":80,"y":372,"w":260,"h":46,"type":"WEATHER_CITY","weight":"700","color":"#000000"},
+    {"kind":"text","x":80,"y":412,"w":260,"h":32,"type":"WEATHER_MINMAX","color":"#000000"},
+    {"kind":"text","x":80,"y":444,"w":260,"h":24,"type":"WEATHER_NOTE","color":"#000000"},
+
+    {"kind":"text","x":412,"y":376,"w":360,"h":80,"type":"JOKE","color":"#000000"},
+    {"kind":"text","x":632,"y":28,"w":140,"h":28,"type":"DATE","weight":"700","color":"#000000"}
+  ]
+}
