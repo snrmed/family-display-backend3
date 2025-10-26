@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Family Display — Overlay Designer v3 (Hosted)</title>
+<title>Family Display — Overlay Designer v3</title>
 
 <!-- Local Roboto Fonts -->
 <style>
@@ -13,32 +13,97 @@
 </style>
 
 <style>
-:root{--panel:#111;--panel2:#1a1a1a;--text:#eee;--muted:#9aa0a6;--accent:#0ff;--brand:#00e7c1}
+:root{
+  --panel:#111;
+  --panel2:#1a1a1a;
+  --text:#eee;
+  --muted:#9aa0a6;
+  --accent:#0ff;
+  --brand:#00e7c1;
+}
 *{box-sizing:border-box}
 html,body{height:100%}
-body{margin:0;background:#222;color:var(--text);font-family:system-ui,'Segoe UI','Roboto',Arial,sans-serif;overflow:hidden}
-.app{display:grid;grid-template-columns:1fr 360px;grid-template-rows:auto 1fr;gap:8px;height:100vh}
-header{grid-column:1/3;background:#101010;border-bottom:1px solid #2b2b2b;padding:8px 12px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+body{
+  margin:0;
+  background:#222;
+  color:var(--text);
+  font-family:system-ui,'Segoe UI','Roboto',Arial,sans-serif;
+  overflow:hidden;
+}
+.app{
+  display:grid;
+  grid-template-columns:1fr 360px;
+  grid-template-rows:auto 1fr;
+  gap:8px;
+  height:100vh;
+}
+header{
+  grid-column:1/3;
+  background:#101010;
+  border-bottom:1px solid #2b2b2b;
+  padding:8px 12px;
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  align-items:center;
+}
 header .muted{color:var(--muted);font-size:12px}
-.stage-wrap{grid-row:2;grid-column:1;display:flex;justify-content:center;align-items:flex-start;overflow:auto;padding:10px}
+.stage-wrap{
+  grid-row:2;
+  grid-column:1;
+  display:flex;
+  justify-content:center;
+  align-items:flex-start;
+  overflow:auto;
+  padding:10px;
+}
 #zoomStage{transform-origin:top left;display:inline-block}
-#canvas{position:relative;width:800px;height:480px;border:1px solid #555;border-radius:8px;overflow:hidden;background:#111}
-#bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0}
+#canvas{
+  position:relative;
+  width:800px;
+  height:480px;
+  border:1px solid #555;
+  border-radius:8px;
+  overflow:hidden;
+  background:#111;
+}
+#bg{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  z-index:0;
+}
 .el{position:absolute;user-select:none;z-index:5;cursor:move}
 .box{background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.45);border-radius:12px;padding:10px}
-.text,.icon{background:transparent;border:none;padding:0;line-height:1.15;color:#000;white-space:pre-wrap}
+.text,.icon{
+  background:transparent;border:none;padding:0;line-height:1.15;color:#000;white-space:pre-wrap;
+}
 .selected{outline:2px solid #00ffcc;outline-offset:1px}
-.sidebar{grid-row:2;grid-column:2;background:var(--panel);border-left:1px solid #2b2b2b;display:flex;flex-direction:column;overflow:auto}
-.panel{padding:10px;border-bottom:1px solid #2b2b2b;background:var(--panel2)}
+.handle{
+  position:absolute;right:-6px;bottom:-6px;width:14px;height:14px;border-radius:50%;
+  background:#00ffcc;border:2px solid #003f39;cursor:nwse-resize;z-index:10;
+}
+.sidebar{
+  grid-row:2;grid-column:2;background:var(--panel);border-left:1px solid #2b2b2b;display:flex;flex-direction:column;overflow:auto;
+}
+.panel{
+  padding:10px;border-bottom:1px solid #2b2b2b;background:var(--panel2);
+}
 .panel h3{margin:0 0 8px 0;font-size:14px}
 .row{display:flex;gap:8px;align-items:center;margin:6px 0;flex-wrap:wrap}
 label{color:var(--muted);font-size:12px}
-button,input,select{background:#2b2b2b;color:#eee;border:1px solid #444;border-radius:6px;padding:6px 8px;font-size:14px}
+button,input,select{
+  background:#2b2b2b;color:#eee;border:1px solid #444;border-radius:6px;padding:6px 8px;font-size:14px;
+}
 button:hover{background:#343434}
 .tiny{font-size:12px;padding:4px 8px}
 .emoji-grid{display:grid;grid-template-columns:repeat(10,30px);gap:6px}
 .emoji-grid button{width:30px;height:30px;font-size:20px;border-radius:6px}
-#output{white-space:pre;background:#0b0b0b;border:1px solid #222;border-radius:8px;padding:8px;max-height:160px;overflow:auto}
+#output{
+  white-space:pre;background:#0b0b0b;border:1px solid #222;border-radius:8px;padding:8px;max-height:160px;overflow:auto;
+}
 .value-pill{background:#222;border:1px solid #333;border-radius:6px;padding:2px 6px;font-size:12px;color:#c8c8c8}
 .swatches{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .swatch{width:22px;height:22px;border-radius:6px;border:1px solid #444;cursor:pointer;position:relative}
@@ -46,15 +111,22 @@ button:hover{background:#343434}
 
 /* Template Gallery Overlay */
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:9999}
-.gallery{background:#0f0f11;border:1px solid #2a2a2a;border-radius:14px;padding:16px;max-width:1100px;width:92vw;max-height:88vh;overflow:auto;box-shadow:0 24px 60px rgba(0,0,0,.6)}
+.gallery{
+  background:#0f0f11;border:1px solid #2a2a2a;border-radius:14px;padding:16px;max-width:1100px;width:92vw;max-height:88vh;overflow:auto;
+  box-shadow:0 24px 60px rgba(0,0,0,.6);
+}
 .gallery h2{margin:0 0 4px 0}
-.grid{display:grid;grid-template-columns:repeat(3, 1fr);gap:14px;margin-top:10px}
+.grid{display:grid;grid-template-columns:repeat(3, 1fr);gap:10px;margin-top:8px}
 .card{background:#141416;border:1px solid #2a2a2a;border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:8px}
-.thumb{width:100%;height:160px;background:#0b0b0b;border:1px solid #242424;border-radius:8px;display:flex;align-items:center;justify-content:center}
+.thumb{
+  width:100%;height:110px;background:#0b0b0b;border:1px solid #242424;border-radius:8px;display:flex;align-items:center;justify-content:center;
+  transform:scale(.8);transform-origin:center;
+}
 .thumb canvas{border-radius:6px}
 .title{font-weight:600}
 .disabled-note{font-size:12px;color:#aab0b6}
 .toolbar{display:flex;gap:10px;align-items:center;justify-content:space-between;margin-top:8px}
+.brand{color:var(--brand);font-weight:600}
 .right{display:flex;gap:8px;align-items:center}
 </style>
 </head>
@@ -70,7 +142,9 @@ button:hover{background:#343434}
     <button id="fitBtn" class="tiny">Fit</button>
 
     <div class="right">
-      <label>Template <select id="templateSelect"></select></label>
+      <label>Template
+        <select id="templateSelect"></select>
+      </label>
       <label>Text theme
         <select id="textTheme">
           <option value="dark" selected>Dark text (black)</option>
@@ -91,8 +165,9 @@ button:hover{background:#343434}
     </div>
   </div>
 
-  <!-- Sidebar -->
+  <!-- Sidebar panels -->
   <div class="sidebar" id="sidebar">
+    <!-- Add elements -->
     <div class="panel">
       <h3>Add Elements</h3>
       <div class="row">
@@ -107,23 +182,6 @@ button:hover{background:#343434}
         <label><input type="checkbox" id="nestIntoSelected"> Drop into selected box</label>
         <button id="deleteBtn" class="tiny">Delete Selected</button>
       </div>
-    </div>
-
-    <!-- Backend sync for GitHub-hosted editor -->
-    <div class="panel">
-      <h3>Backend Sync (CORS)</h3>
-      <div class="row">
-        <label>Backend URL <input id="beUrl" type="text" placeholder="https://<cloud-run>.run.app" style="width:260px"></label>
-      </div>
-      <div class="row">
-        <label>Device ID <input id="beDevice" type="text" value="familydisplay" style="width:160px"></label>
-        <label>Admin Token <input id="beToken" type="password" placeholder="••••••••" style="width:160px"></label>
-      </div>
-      <div class="row">
-        <button id="btnLoadServer" class="tiny">⬇️ Load from server</button>
-        <button id="btnSaveServer" class="tiny">⬆️ Save to server</button>
-      </div>
-      <div class="muted">If hosting this page on GitHub Pages, enable CORS on your backend for <code>/layouts/*</code> and <code>/admin/layouts/*</code>.</div>
     </div>
 
     <!-- Inspector -->
@@ -284,9 +342,8 @@ button:hover{background:#343434}
 </div>
 
 <canvas id="exportCanvas" width="800" height="480" style="display:none"></canvas>
-
 <script>
-// ====== INIT ======
+// === DOM refs ===
 const canvas = document.getElementById('canvas');
 const bg = document.getElementById('bg');
 const zoomSlider = document.getElementById('zoomSlider');
@@ -299,44 +356,86 @@ const galleryOverlay = document.getElementById('galleryOverlay');
 const galleryTextTheme = document.getElementById('galleryTextTheme');
 const templateGrid = document.getElementById('templateGrid');
 const advancedBtn = document.getElementById('advancedBtn');
-let advancedUnlocked=false, selected=null;
+let advancedUnlocked = false;
+let selected = null;
 
-// Backend sync fields
-const beUrl=document.getElementById('beUrl');
-const beDevice=document.getElementById('beDevice');
-const beToken=document.getElementById('beToken');
-
-// Background gradient
-(function drawGradient(){
-  const c=document.createElement('canvas'); c.width=800; c.height=480;
+// === Background gradient for preview ===
+function drawGradient(){
+  const c = document.createElement('canvas');
+  c.width=800; c.height=480;
   const ctx=c.getContext('2d');
   const g=ctx.createLinearGradient(0,0,800,480);
-  g.addColorStop(0,'#2d2f55'); g.addColorStop(.5,'#4a99a7'); g.addColorStop(1,'#9ad1c8');
-  ctx.fillStyle=g; ctx.fillRect(0,0,800,480);
+  g.addColorStop(0,'#2d2f55');
+  g.addColorStop(.5,'#4a99a7');
+  g.addColorStop(1,'#9ad1c8');
+  ctx.fillStyle=g;
+  ctx.fillRect(0,0,800,480);
   bg.src=c.toDataURL();
-})();
+}
+drawGradient();
 
-// Zoom
-zoomSlider.addEventListener('input',()=>{ const z=zoomSlider.value/100; zoomStage.style.transform=`scale(${z})`; zoomLabel.textContent=zoomSlider.value+'%'; });
+// === Zoom ===
+zoomSlider.addEventListener('input',()=>{
+  const z = zoomSlider.value/100;
+  zoomStage.style.transform=`scale(${z})`;
+  zoomLabel.textContent=zoomSlider.value+'%';
+});
 fitBtn.onclick=()=>{
-  const zw=(window.innerWidth-380)/800, zh=(window.innerHeight-100)/480;
-  const fit=Math.min(zw,zh)*100; zoomSlider.value=Math.round(fit); zoomSlider.dispatchEvent(new Event('input'));
+  const zw = (window.innerWidth-380)/800;
+  const zh = (window.innerHeight-100)/480;
+  const fit = Math.min(zw,zh)*100;
+  zoomSlider.value=Math.round(fit);
+  zoomSlider.dispatchEvent(new Event('input'));
 };
 
-// Helpers
-function makeEl(cls,x=50,y=50,w=160,h=80){ const el=document.createElement('div'); el.className='el '+cls; el.style.left=x+'px'; el.style.top=y+'px'; el.style.width=w+'px'; el.style.height=h+'px'; el.draggable=false; canvas.appendChild(el); return el; }
+// === Helpers ===
+function makeEl(cls,x=50,y=50,w=160,h=80){
+  const el=document.createElement('div');
+  el.className='el '+cls;
+  el.style.left=x+'px';
+  el.style.top=y+'px';
+  el.style.width=w+'px';
+  el.style.height=h+'px';
+  el.draggable=false;
+  canvas.appendChild(el);
+  return el;
+}
 function parsePx(v){return parseFloat(v.replace('px',''))||0;}
-function selectEl(el){ if(selected) selected.classList.remove('selected'); selected=el; if(selected){selected.classList.add('selected'); updateInspector();} else hideInspector(); }
-function hideInspector(){ document.getElementById('inspect').style.display='none'; document.getElementById('textCtrl').style.display='none'; document.getElementById('boxCtrl').style.display='none'; }
-function updateInspector(){ const insp=document.getElementById('inspect'); const info=document.getElementById('inspectInfo'); if(!selected){insp.style.display='none';return;} insp.style.display='block'; info.textContent=selected.className; document.getElementById('textCtrl').style.display=(selected.classList.contains('text')||selected.classList.contains('icon'))?'block':'none'; document.getElementById('boxCtrl').style.display=(selected.classList.contains('box'))?'block':'none'; }
+function selectEl(el){
+  if(selected) selected.classList.remove('selected');
+  selected = el;
+  if(selected){selected.classList.add('selected');updateInspector();}
+  else hideInspector();
+}
+function hideInspector(){
+  document.getElementById('inspect').style.display='none';
+  document.getElementById('textCtrl').style.display='none';
+  document.getElementById('boxCtrl').style.display='none';
+}
+function updateInspector(){
+  const insp=document.getElementById('inspect');
+  const info=document.getElementById('inspectInfo');
+  if(!selected){insp.style.display='none';return;}
+  insp.style.display='block';
+  info.textContent=selected.className;
+  if(selected.classList.contains('text')||selected.classList.contains('icon'))
+    document.getElementById('textCtrl').style.display='block';
+  else document.getElementById('textCtrl').style.display='none';
+  if(selected.classList.contains('box'))
+    document.getElementById('boxCtrl').style.display='block';
+  else document.getElementById('boxCtrl').style.display='none';
+}
 
-// Drag to move
+// === Drag/Move ===
 let dragData=null;
 canvas.addEventListener('mousedown',e=>{
-  if(!advancedUnlocked)return;
   const t=e.target.closest('.el');
-  if(t){ selectEl(t); const r=t.getBoundingClientRect(); dragData={el:t,dx:e.clientX-r.left,dy:e.clientY-r.top}; }
-  else selectEl(null);
+  if(!advancedUnlocked)return;
+  if(t){
+    selectEl(t);
+    const rect=t.getBoundingClientRect();
+    dragData={el:t,dx:e.clientX-rect.left,dy:e.clientY-rect.top};
+  }else selectEl(null);
 });
 window.addEventListener('mousemove',e=>{
   if(dragData){
@@ -347,176 +446,253 @@ window.addEventListener('mousemove',e=>{
     el.style.top=Math.max(0,Math.min(ny,canvas.clientHeight-el.offsetHeight))+'px';
   }
 });
-window.addEventListener('mouseup',()=>dragData=null);
-canvas.addEventListener('dblclick',e=>{ if(!advancedUnlocked)return; const t=e.target.closest('.el'); if(t)selectEl(t); });
+window.addEventListener('mouseup',()=>{dragData=null;});
+canvas.addEventListener('dblclick',e=>{
+  if(!advancedUnlocked)return;
+  const t=e.target.closest('.el');
+  if(t)selectEl(t);
+});
 
-// Add elements
-function addBox(){ selectEl(makeEl('box',100,100,300,120)); }
-function addText(){ const el=makeEl('text',140,130,180,44); el.textContent='Text'; selectEl(el); }
-function addIcon(){ const el=makeEl('icon',200,200,60,60); el.textContent='☀️'; selectEl(el); }
-function addWeather(){ const el=makeEl('text',100,380,260,44); el.textContent='City • 32° / 26°'; selectEl(el); }
-function addJoke(){ const el=makeEl('text',420,380,340,70); el.textContent='I used to play piano by ear… now I use my hands.'; selectEl(el); }
-function addDate(){ const el=makeEl('text',540,40,200,40); el.textContent='Saturday, 25 Oct'; selectEl(el); }
+// === Add Elements ===
+function addBox(){const el=makeEl('box',100,100,300,120);selectEl(el);}
+function addText(){const el=makeEl('text',140,130,180,40);el.textContent='Text';selectEl(el);}
+function addIcon(){const el=makeEl('icon',200,200,60,60);el.textContent='☀️';selectEl(el);}
+function addWeather(){const el=makeEl('text',100,380,240,40);el.textContent='Darwin • 32°/26°';selectEl(el);}
+function addJoke(){const el=makeEl('text',420,380,340,60);el.textContent='I used to play piano by ear... now I use my hands.';selectEl(el);}
+function addDate(){const el=makeEl('text',540,40,200,40);el.textContent='Sunday, 26 Oct';selectEl(el);}
+
 document.getElementById('addBox').onclick=addBox;
 document.getElementById('addText').onclick=addText;
 document.getElementById('addIcon').onclick=addIcon;
 document.getElementById('addWeather').onclick=addWeather;
 document.getElementById('addJoke').onclick=addJoke;
 document.getElementById('addDate').onclick=addDate;
-document.getElementById('deleteBtn').onclick=()=>{ if(selected){selected.remove(); selected=null; hideInspector(); }};
+document.getElementById('deleteBtn').onclick=()=>{
+  if(selected){selected.remove();selected=null;hideInspector();}
+};
 
-// Advanced toggle
-advancedBtn.onclick=()=>{ advancedUnlocked=!advancedUnlocked; advancedBtn.textContent=advancedUnlocked?'🔒 Lock Advanced':'🔓 Advanced (unlock editing)'; };
+// === Advanced toggle ===
+advancedBtn.onclick=()=>{
+  advancedUnlocked=!advancedUnlocked;
+  advancedBtn.textContent=advancedUnlocked?'🔒 Lock Advanced':'🔓 Advanced (unlock editing)';
+};
 
-// Templates
+// === Presets — add Blank Canvas & Sticker Parade ===
 const PRESET_NAMES=[
-  {key:'coastal_split', name:'Coastal Split'},
+  {key:'blank_canvas',   name:'Blank Canvas'},
+  {key:'sticker_parade', name:'Sticker Parade (3 cards)'},
+  {key:'coastal_split',  name:'Coastal Split'},
   {key:'minimal_column', name:'Minimal Column'},
   {key:'top_bar_breeze', name:'Top Bar Breeze'},
-  {key:'left_rail_clear', name:'Left Rail Clear'},
-  {key:'center_float', name:'Center Float'}
+  {key:'left_rail_clear',name:'Left Rail Clear'},
+  {key:'center_float',   name:'Center Float'}
 ];
-PRESET_NAMES.forEach(p=>{ const o=document.createElement('option'); o.value=p.key; o.textContent=p.name; templateSelect.appendChild(o); });
-
-function clearCanvas(){ [...canvas.children].forEach(n=>{ if(n!==bg) n.remove(); }); }
-function renderLayout(data){ (data.elements||[]).forEach(el=>{ const div=makeEl(el.kind?.includes('box')?'box':(el.kind?.includes('icon')?'icon':'text'),el.x||0,el.y||0,el.w||150,el.h||50); if(el.text) div.textContent=el.text; if(el.color) div.style.color=el.color; }); }
-async function loadPreset(key, theme){ const suffix=theme==='light'?'_light':'_dark'; try{ const r=await fetch(`presets/${key}${suffix}.json`,{cache:'no-store'}); return r.ok?await r.json():{elements:[]}; }catch{ return {elements:[]}; } }
-
 let currentTemplateKey=null;
+const galleryThumbMap=new Map();
+
+async function loadPreset(key, theme){
+  const suffix = theme==='light' ? '_light' : '_dark';
+  try{
+    const res = await fetch(`presets/${key}${suffix}.json`);
+    if(!res.ok) throw new Error(res.status);
+    return await res.json();
+  }catch(e){
+    console.warn('Failed to load preset', key, e);
+    return {elements:[]};
+  }
+}
+
+function clearCanvas(){
+  while(canvas.firstChild && canvas.firstChild!==bg) canvas.removeChild(canvas.lastChild);
+}
+
+function renderLayout(data){
+  (data.elements||[]).forEach(el=>{
+    const div=makeEl(el.kind||'box',el.x||0,el.y||0,el.w||150,el.h||50);
+    if(el.text) div.textContent=el.text;
+    if(el.color) div.style.color=el.color;
+  });
+}
+
+function getCurrentLayoutJSON(){
+  const els=[...canvas.querySelectorAll('.el')].filter(x=>x!==bg).map(el=>({
+    kind: el.className.replace('el ',''),
+    x: parsePx(el.style.left), y: parsePx(el.style.top),
+    w: el.offsetWidth, h: el.offsetHeight,
+    text: el.textContent.trim(),
+    color: getComputedStyle(el).color
+  }));
+  return {elements:els};
+}
+
 function tplKey(key,theme){return `fd_template_${key}_${theme}`;}
 function tplIsSaved(key,theme){return !!localStorage.getItem(tplKey(key,theme));}
 function tplSave(key,theme,json){localStorage.setItem(tplKey(key,theme),JSON.stringify(json));}
-function tplLoad(key,theme){try{const raw=localStorage.getItem(tplKey(key,theme));return raw?JSON.parse(raw):null;}catch{return null;}}
+function tplLoad(key,theme){const raw=localStorage.getItem(tplKey(key,theme));try{return raw?JSON.parse(raw):null;}catch{return null;}}
 function tplReset(key,theme){localStorage.removeItem(tplKey(key,theme));}
-function markTemplateEditedUI(){ const theme=textThemeSelect.value; [...templateSelect.options].forEach(opt=>{ const base=PRESET_NAMES.find(p=>p.key===opt.value)?.name||opt.textContent.replace(/\s+\(edited\)$/,''); opt.textContent = tplIsSaved(opt.value, theme) ? `${base} (edited)` : base; }); }
-function updateSaveResetEnabled(){ const has=currentTemplateKey!=null; document.getElementById('saveTemplateBtn').disabled=!has; document.getElementById('resetTemplateBtn').disabled=!has||!tplIsSaved(currentTemplateKey,textThemeSelect.value); }
+
+function markTemplateEditedUI(){
+  const theme = textThemeSelect.value;
+  Array.from(templateSelect.options).forEach(opt=>{
+    const base = PRESET_NAMES.find(p=>p.key===opt.value)?.name
+               || opt.textContent.replace(/\s+\(edited\)$/,'');
+    opt.textContent = tplIsSaved(opt.value, theme) ? `${base} (edited)` : base;
+  });
+}
+function updateSaveResetEnabled(){
+  const has=currentTemplateKey!=null;
+  document.getElementById('saveTemplateBtn').disabled=!has;
+  document.getElementById('resetTemplateBtn').disabled=!has||!tplIsSaved(currentTemplateKey,textThemeSelect.value);
+}
 
 async function applyTemplate(key, theme){
-  const saved=tplLoad(key,theme);
-  const data=saved || await loadPreset(key,theme);
-  clearCanvas(); renderLayout(data);
-  currentTemplateKey=key; templateSelect.value=key; updateSaveResetEnabled(); markTemplateEditedUI(); refreshGalleryThumb(key);
+  const saved = tplLoad(key, theme);
+  let data = saved || await loadPreset(key, theme);
+  clearCanvas();
+  renderLayout(data);
+  currentTemplateKey = key;
+  templateSelect.value = key;
+  updateSaveResetEnabled();
+  markTemplateEditedUI();
+  refreshGalleryThumb(key);
 }
-templateSelect.onchange=()=>applyTemplate(templateSelect.value,textThemeSelect.value);
-textThemeSelect.onchange=()=>applyTemplate(currentTemplateKey||templateSelect.value,textThemeSelect.value);
 
-// Save / Reset
-document.getElementById('saveTemplateBtn').onclick=()=>{ if(!currentTemplateKey)return; const theme=textThemeSelect.value; tplSave(currentTemplateKey,theme,getCurrentLayoutJSON()); updateSaveResetEnabled(); markTemplateEditedUI(); refreshGalleryThumb(currentTemplateKey); };
-document.getElementById('resetTemplateBtn').onclick=async()=>{ if(!currentTemplateKey)return; const theme=textThemeSelect.value; tplReset(currentTemplateKey,theme); await applyTemplate(currentTemplateKey,theme); updateSaveResetEnabled(); markTemplateEditedUI(); refreshGalleryThumb(currentTemplateKey); };
-
-// Gallery previews
-const galleryThumbMap=new Map();
+// === Template gallery build (smaller thumbs) ===
 async function drawPreviewForKey(key, theme, cv){
   const ctx=cv.getContext('2d'); ctx.clearRect(0,0,cv.width,cv.height);
-  // bg
-  const g=ctx.createLinearGradient(0,0,cv.width,cv.height); g.addColorStop(0,'#2d2f55'); g.addColorStop(.5,'#4a99a7'); g.addColorStop(1,'#9ad1c8'); ctx.fillStyle=g; ctx.fillRect(0,0,cv.width,cv.height);
-  // load data
-  const data = tplLoad(key,theme) || await loadPreset(key,theme);
-  // draw simple boxes only (static)
+  // BG fake gradient
+  const g=ctx.createLinearGradient(0,0,cv.width,cv.height);
+  g.addColorStop(0,'#2d2f55');g.addColorStop(.5,'#4a99a7');g.addColorStop(1,'#9ad1c8');
+  ctx.fillStyle=g;ctx.fillRect(0,0,cv.width,cv.height);
+  // load preset
+  const data = await loadPreset(key, theme);
+  // draw simple boxes/text approximations
+  ctx.strokeStyle='rgba(255,255,255,.45)';
+  ctx.fillStyle='rgba(255,255,255,.16)';
   (data.elements||[]).forEach(el=>{
-    const x=(el.x||0)/800*cv.width, y=(el.y||0)/480*cv.height, w=(el.w||150)/800*cv.width, h=(el.h||50)/480*cv.height;
-    if((el.kind||'').includes('box')){ roundRect(ctx,x,y,w,h,6); ctx.fillStyle='rgba(255,255,255,.18)'; ctx.strokeStyle='rgba(185,215,211,.85)'; ctx.lineWidth=1; ctx.fill(); ctx.stroke(); }
+    const sx=el.x/800*cv.width, sy=el.y/480*cv.height, sw=el.w/800*cv.width, sh=el.h/480*cv.height;
+    if((el.kind||'box')==='box'){
+      roundRect(ctx,sx,sy,sw,sh,6,true,true);
+    }else{
+      ctx.fillStyle='#000'; ctx.font='10px Roboto, Arial'; ctx.textBaseline='top';
+      ctx.fillText((el.type||el.text||'txt').toString().slice(0,10), sx+3, sy+2);
+      ctx.fillStyle='rgba(255,255,255,.16)';
+    }
   });
-  // title
-  ctx.fillStyle = theme==='light' ? '#fff' : '#000'; ctx.font='bold 14px Arial'; ctx.fillText(PRESET_NAMES.find(p=>p.key===key)?.name||key, 10, 18);
 }
-function refreshGalleryThumb(key){ const cv=galleryThumbMap.get(key); if(cv) drawPreviewForKey(key, galleryTextTheme.value, cv); }
+function roundRect(ctx,x,y,w,h,r,fill,stroke){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();
+  if(fill)ctx.fill(); if(stroke){ctx.strokeStyle='rgba(255,255,255,.45)';ctx.stroke();}
+}
+
 async function buildGallery(){
   templateGrid.innerHTML='';
   for(const p of PRESET_NAMES){
-    const card=document.createElement('div'); card.className='card';
-    const thumb=document.createElement('div'); thumb.className='thumb';
-    const cv=document.createElement('canvas'); cv.width=240; cv.height=140; thumb.appendChild(cv);
-    const t=document.createElement('div'); t.className='title'; t.textContent=p.name;
-    const btn=document.createElement('button'); btn.textContent='Use this template'; btn.className='tiny';
-    btn.onclick=async()=>{ galleryOverlay.style.display='none'; await applyTemplate(p.key, galleryTextTheme.value); };
-    card.appendChild(thumb); card.appendChild(t); card.appendChild(btn); templateGrid.appendChild(card);
-    galleryThumbMap.set(p.key, cv); await drawPreviewForKey(p.key, galleryTextTheme.value, cv);
+    const card=document.createElement('div');card.className='card';
+    const thumb=document.createElement('div');thumb.className='thumb';
+    const cv=document.createElement('canvas');cv.width=180;cv.height=100;  // smaller canvas
+    thumb.appendChild(cv);card.appendChild(thumb);
+    const t=document.createElement('div');t.className='title';t.textContent=p.name;card.appendChild(t);
+    const btn=document.createElement('button');btn.textContent='Use this template';btn.className='tiny';
+    btn.onclick=async()=>{
+      galleryOverlay.style.display='none';
+      await applyTemplate(p.key,galleryTextTheme.value);
+    };
+    card.appendChild(btn);
+    templateGrid.appendChild(card);
+    galleryThumbMap.set(p.key, cv);
+    drawPreviewForKey(p.key, galleryTextTheme.value, cv);
   }
 }
-galleryTextTheme.onchange=async()=>{ for(const [k,cv] of galleryThumbMap.entries()){ await drawPreviewForKey(k, galleryTextTheme.value, cv); } await applyTemplate(currentTemplateKey||PRESET_NAMES[0].key, galleryTextTheme.value); markTemplateEditedUI(); };
-
-// Export / Import
-function getCurrentLayoutJSON(){ const els=[...canvas.querySelectorAll('.el')].filter(n=>n!==bg).map(el=>({kind: el.className, x: parsePx(el.style.left), y: parsePx(el.style.top), w: el.offsetWidth, h: el.offsetHeight, text:(el.textContent||'').trim(), color:getComputedStyle(el).color })); return {elements:els}; }
-document.getElementById('btnExport').onclick=()=>{ const data=getCurrentLayoutJSON(); const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=(currentTemplateKey||'layout')+'.json'; a.click(); };
-document.getElementById('btnImport').onclick=()=>document.getElementById('importFile').click();
-document.getElementById('importFile').onchange=async(e)=>{ const f=e.target.files[0]; if(!f)return; try{ const json=JSON.parse(await f.text()); clearCanvas(); renderLayout(json); alert('Layout imported!'); }catch{ alert('Invalid JSON'); } };
-
-// RoundRect polyfill
-CanvasRenderingContext2D.prototype.roundRect = CanvasRenderingContext2D.prototype.roundRect || function(x,y,w,h,r){const rr=Math.min(r,w/2,h/2);this.beginPath();this.moveTo(x+rr,y);this.arcTo(x+w,y,x+w,y+h,rr);this.arcTo(x+w,y+h,x,y+h,rr);this.arcTo(x,y+h,x,y,rr);this.arcTo(x,y,x+w,y,rr);this.closePath();return this;};
-function roundRect(ctx,x,y,w,h,r){ ctx.beginPath(); ctx.roundRect(x,y,w,h,r); }
-
-// Text wrapping with ellipsis
-function wrapAndDraw(ctx, text, x, y, maxW, maxH, lineH, font){
-  if(!text) return;
-  const words=text.split(/\s+/), lines=[]; let line='';
-  for(const w of words){ const test=line?line+' '+w:w; if(ctx.measureText(test).width<=maxW || !line){ line=test; } else { lines.push(line); line=w; } }
-  if(line) lines.push(line);
-  const maxLines=Math.max(1, Math.floor(maxH/lineH));
-  if(lines.length>maxLines){
-    let last=lines[maxLines-1];
-    while(ctx.measureText(last+'…').width>maxW && last.length>0){ last=last.slice(0,-1); }
-    lines.length=maxLines; lines[maxLines-1]=last+'…';
+galleryTextTheme.onchange=async ()=>{
+  for(const [key,cv] of galleryThumbMap.entries()){
+    await drawPreviewForKey(key, galleryTextTheme.value, cv);
   }
-  let yy=y; for(const ln of lines){ ctx.fillText(ln, x, yy); yy+=lineH; if(yy>y+maxH-lineH) break; }
-}
-
-// Download PNG (with wrapping)
-document.getElementById('btnDownloadPNG').onclick=()=>{
-  const ex=document.getElementById('exportCanvas'), ctx=ex.getContext('2d');
-  // bg
-  const g=ctx.createLinearGradient(0,0,800,480); g.addColorStop(0,'#2d2f55'); g.addColorStop(.5,'#4a99a7'); g.addColorStop(1,'#9ad1c8');
-  ctx.clearRect(0,0,800,480); ctx.fillStyle=g; ctx.fillRect(0,0,800,480);
-  // elements
-  const els=[...canvas.querySelectorAll('.el')].filter(n=>n!==bg);
-  els.forEach(el=>{
-    const x=parsePx(el.style.left), y=parsePx(el.style.top), w=el.offsetWidth, h=el.offsetHeight;
-    if(el.classList.contains('box')){
-      // soft glass box + outline
-      ctx.save(); ctx.fillStyle='rgba(0,0,0,0.18)'; roundRect(ctx,x+2,y+4,w,h,12); ctx.filter='blur(3px)'; ctx.fill(); ctx.restore();
-      ctx.fillStyle='rgba(255,255,255,.16)'; ctx.strokeStyle='rgba(185,215,211,.85)'; ctx.lineWidth=1; roundRect(ctx,x,y,w,h,12); ctx.fill(); ctx.stroke();
-    }else{
-      const style=getComputedStyle(el); const color=style.color; const size=Math.max(12,Math.floor(h*0.78));
-      ctx.fillStyle=color; ctx.textBaseline='top'; ctx.font=`bold ${size}px ${style.fontFamily||'Arial'}`;
-      wrapAndDraw(ctx, el.textContent.trim(), x+8, y+8, w-16, h-16, Math.round(size*1.12));
-    }
-  });
-  const a=document.createElement('a'); a.download='overlay.png'; a.href=ex.toDataURL('image/png'); a.click();
+  await applyTemplate(currentTemplateKey||PRESET_NAMES[0].key, galleryTextTheme.value);
+  markTemplateEditedUI();
 };
 
-// Backend sync (CORS)
-async function loadFromServer(){
-  const base=beUrl.value.trim().replace(/\/$/,''); const dev=beDevice.value.trim();
-  if(!base||!dev) return alert('Enter Backend URL and Device ID');
-  try{
-    const res=await fetch(`${base}/layouts/${encodeURIComponent(dev)}`,{mode:'cors',cache:'no-store'});
-    if(!res.ok) throw new Error(`HTTP ${res.status}`);
-    const json=await res.json(); clearCanvas(); renderLayout(json); alert('Loaded from server.');
-  }catch(err){ alert('Load failed: '+err.message); }
-}
-async function saveToServer(){
-  const base=beUrl.value.trim().replace(/\/$/,''); const dev=beDevice.value.trim(); const tok=beToken.value.trim();
-  if(!base||!dev) return alert('Enter Backend URL and Device ID');
-  if(!confirm(`Publish this layout to device “${dev}”?`)) return;
-  try{
-    const res=await fetch(`${base}/admin/layouts/${encodeURIComponent(dev)}${tok?`?token=${encodeURIComponent(tok)}`:''}`,{
-      method:'PUT', mode:'cors', headers:{'Content-Type':'application/json'}, body:JSON.stringify(getCurrentLayoutJSON())
-    });
-    if(!res.ok) throw new Error(`HTTP ${res.status} — ${await res.text()}`);
-    const out=await res.json(); alert(`Saved ✔︎ version: ${out.version}`);
-  }catch(err){ alert('Save failed: '+err.message); }
-}
-document.getElementById('btnLoadServer').onclick=loadFromServer;
-document.getElementById('btnSaveServer').onclick=saveToServer;
+// Dropdown init
+PRESET_NAMES.forEach(p=>{
+  const opt=document.createElement('option');
+  opt.value=p.key;opt.textContent=p.name;
+  templateSelect.appendChild(opt);
+});
+templateSelect.onchange=()=>applyTemplate(templateSelect.value,textThemeSelect.value);
+textThemeSelect.onchange=()=>applyTemplate(currentTemplateKey||templateSelect.value,textThemeSelect.value);
 
-// Build gallery & start
-async function start(){
-  // Prefill from URL (?backend=&device=&token=)
-  try{ const u=new URL(location.href); if(u.searchParams.get('backend')) beUrl.value=u.searchParams.get('backend'); if(u.searchParams.get('device')) beDevice.value=u.searchParams.get('device'); if(u.searchParams.get('token')) beToken.value=u.searchParams.get('token'); }catch{}
-  await buildGallery(); galleryOverlay.style.display='flex'; galleryTextTheme.value='dark'; await applyTemplate('coastal_split','dark');
-}
-document.getElementById('galleryAdvanced').onclick=()=>{ galleryOverlay.style.display='none'; advancedUnlocked=true; advancedBtn.textContent='🔒 Lock Advanced'; };
-start();
+// URL params to preselect
+const urlParams = new URLSearchParams(location.search);
+const initialTemplate = urlParams.get('template') || 'sticker_parade';
+const initialTheme = urlParams.get('theme') || 'dark';
+
+// Start
+buildGallery();
+galleryOverlay.style.display='flex';
+galleryTextTheme.value = initialTheme;
+applyTemplate(initialTemplate, initialTheme);
+
+// Export / Import
+document.getElementById('btnExport').onclick=()=>{
+  const data=getCurrentLayoutJSON();
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=(currentTemplateKey||'layout')+'.json';
+  a.click();
+};
+document.getElementById('btnImport').onclick=()=>document.getElementById('importFile').click();
+document.getElementById('importFile').onchange=async(e)=>{
+  const file=e.target.files[0];
+  if(!file)return;
+  const text=await file.text();
+  try{
+    const json=JSON.parse(text);
+    clearCanvas();
+    renderLayout(json);
+    alert('Layout imported!');
+  }catch(err){alert('Invalid JSON');}
+};
+
+// PNG export (simple preview render)
+document.getElementById('btnDownloadPNG').onclick=()=>{
+  const exportCanvas=document.getElementById('exportCanvas');
+  const ctx=exportCanvas.getContext('2d');
+  ctx.clearRect(0,0,exportCanvas.width,exportCanvas.height);
+  const g=ctx.createLinearGradient(0,0,800,480);
+  g.addColorStop(0,'#2d2f55');g.addColorStop(.5,'#4a99a7');g.addColorStop(1,'#9ad1c8');
+  ctx.fillStyle=g;ctx.fillRect(0,0,800,480);
+  const els=[...canvas.querySelectorAll('.el')].filter(x=>x!==bg);
+  els.forEach(el=>{
+    const x=parsePx(el.style.left), y=parsePx(el.style.top),
+          w=el.offsetWidth, h=el.offsetHeight;
+    if(el.classList.contains('box')){
+      ctx.fillStyle='rgba(255,255,255,.16)';
+      ctx.strokeStyle='rgba(255,255,255,.45)';
+      ctx.lineWidth=1;
+      roundRect(ctx,x,y,w,h,12,true,true);
+    }else{
+      ctx.fillStyle=getComputedStyle(el).color;
+      const size=Math.floor(h*.8);
+      ctx.font=`${size}px Roboto, Arial`;
+      ctx.textBaseline='top';
+      ctx.fillText(el.textContent.trim(),x+4,y+2);
+    }
+  });
+  const link=document.createElement('a');
+  link.download='overlay.png';
+  link.href=exportCanvas.toDataURL('image/png');
+  link.click();
+};
+
+// Close gallery on Advanced
+document.getElementById('galleryAdvanced').onclick=()=>{
+  galleryOverlay.style.display='none';
+  advancedUnlocked=true;
+  advancedBtn.textContent='🔒 Lock Advanced';
+};
 </script>
 </body>
 </html>
