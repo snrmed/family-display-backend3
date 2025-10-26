@@ -26,11 +26,10 @@ DEFAULT_DEVICE = os.getenv("DEFAULT_LAYOUT_DEVICE", "familydisplay")
 DEFAULT_MODE = os.getenv("DEFAULT_RENDER_MODE", "sticker_parade")
 DEFAULT_THEME = "abstract"
 PER_THEME_COUNT = int(os.getenv("PER_THEME_COUNT", "8") or 8)
-BASE_DIR = pathlib.Path(__file__).resolve().parent
-FONT_DIR = BASE_DIR / "web" / "designer" / "fonts"
+FONT_DIR = os.getenv("FONT_DIR", "./backend/web/designer/fonts")
 
 # UI constants
-GLASS_ALPHA = 100
+GLASS_ALPHA = 180
 GLASS_RADIUS = 14
 TEXT_PADDING_X = 8
 TEXT_PADDING_Y = 6
@@ -39,8 +38,9 @@ TEXT_SPACING = 4
 storage_client = storage.Client()
 bucket = storage_client.bucket(GCS_BUCKET)
 
-# cache fonts
+# caches
 _font_cache: dict[str, ImageFont.FreeTypeFont] = {}
+_icon_cache: dict[str, Image.Image] = {}
 
 # ──────────────────────────────────────────────────────────────────────────────
 # HELPERS
@@ -58,9 +58,9 @@ def _blob_text(path: str) -> Optional[str]:
         return None
     return b.download_as_text()
 
-def _put_png(path: str, data: bytes):
+def _put_png(path: str, data: bytes, cache_control: str = "public, max-age=86400"):
     b = bucket.blob(path)
-    b.cache_control = "public, max-age=3600"
+    b.cache_control = cache_control
     b.upload_from_string(data, content_type="image/png")
 
 def _load_font(size: int, weight: str = "400") -> ImageFont.FreeTypeFont:
@@ -100,7 +100,6 @@ def _download_and_fit(url: str, size=(800, 480)) -> Image.Image:
     r.raise_for_status()
     im = Image.open(io.BytesIO(r.content)).convert("RGB")
     tw, th = size
-    # PIL compatibility: Resampling on new PIL, else fallback to LANCZOS attr
     resample = getattr(Image, "Resampling", Image).LANCZOS
     scale = max(tw / im.width, th / im.height)
     nw, nh = int(im.width * scale), int(im.height * scale)
@@ -150,12 +149,64 @@ def _layout_paths(device: str):
     }
 
 # ──────────────────────────────────────────────────────────────────────────────
+# OPENWEATHER ICONS (PNG)
+# ──────────────────────────────────────────────────────────────────────────────
+OWM_ICON_URL = "https://openweathermap.org/img/wn/{code}@2x.png"
+
+def _get_weather_icon_image(code: str) -> Optional[Image.Image]:
+    """Return an RGBA icon image for an OpenWeather icon code, cached to GCS and memory."""
+    if not code:
+        code = "02d"
+    # memory cache
+    if code in _icon_cache:
+        return _icon_cache[code]
+
+    gcs_path = f"icons/openweather/{code}.png"
+    blob = bucket.blob(gcs_path)
+    try:
+        if blob.exists():  # type: ignore[attr-defined]
+            data = blob.download_as_bytes()
+            img = Image.open(io.BytesIO(data)).convert("RGBA")
+            _icon_cache[code] = img
+            return img
+    except Exception:
+        pass
+
+    # fetch from OWM
+    try:
+        r = requests.get(OWM_ICON_URL.format(code=code), timeout=10)
+        if r.status_code == 200:
+            data = r.content
+            # store to GCS for reuse
+            _put_png(gcs_path, data)
+            img = Image.open(io.BytesIO(data)).convert("RGBA")
+            _icon_cache[code] = img
+            return img
+    except Exception:
+        pass
+
+    return None
+
+def _paste_icon_rgba(base: Image.Image, icon: Image.Image, x: int, y: int, w: int, h: int):
+    """Paste icon centered into (x,y,w,h), preserving aspect and using alpha mask."""
+    resample = getattr(Image, "Resampling", Image).LANCZOS
+    iw, ih = icon.size
+    if iw == 0 or ih == 0:
+        return
+    scale = min(w / iw, h / ih) * 0.9  # a little padding
+    nw, nh = max(1, int(iw * scale)), max(1, int(ih * scale))
+    icon_resized = icon.resize((nw, nh), resample)
+    px = x + (w - nw) // 2
+    py = y + (h - nh) // 2
+    base.alpha_composite(icon_resized, (px, py))
+
+# ──────────────────────────────────────────────────────────────────────────────
 # DATA SOURCES
 # ──────────────────────────────────────────────────────────────────────────────
 def _weather(city="Darwin", country="AU"):
-    # Minimal; icon as emoji; NO auto text color
+    # Minimal; returns OpenWeather icon 'code'
     if not OPENWEATHER_API_KEY:
-        return {"city": city, "min": 26, "max": 33, "desc": "Few Clouds", "icon": "⛅"}
+        return {"city": city, "min": 26, "max": 33, "desc": "Few Clouds", "icon": "⛅", "code": "02d"}
     try:
         r = requests.get(
             "https://api.openweathermap.org/data/2.5/weather",
@@ -166,16 +217,17 @@ def _weather(city="Darwin", country="AU"):
         main = j.get("main", {})
         w = (j.get("weather") or [{}])[0]
         code = (w.get("icon") or "02d")
-        icon = "☀️" if code.startswith("01") else "⛅" if code.startswith("02") else "☁️" if code.startswith("03") else "🌧️"
+        icon_emoji = "☀️" if code.startswith("01") else "⛅" if code.startswith("02") else "☁️" if code.startswith("03") else "🌧️"
         return {
             "city": j.get("name") or city,
             "min": int(round(main.get("temp_min", 26))),
             "max": int(round(main.get("temp_max", 33))),
             "desc": (w.get("description") or "—").title(),
-            "icon": icon,
+            "icon": icon_emoji,
+            "code": code,
         }
     except Exception:
-        return {"city": city, "min": 26, "max": 33, "desc": "Few Clouds", "icon": "⛅"}
+        return {"city": city, "min": 26, "max": 33, "desc": "Few Clouds", "icon": "⛅", "code": "02d"}
 
 def _dad_joke():
     fallbacks = [
@@ -240,12 +292,20 @@ def _render_from_layout(bg_png: bytes, layout: dict) -> bytes:
         x = int(el.get("x", 0)); y = int(el.get("y", 0))
         w = int(el.get("w", 100)); h = int(el.get("h", 40))
         etype = el.get("type")
-        color = el.get("color") or "#000000"  # no auto color; default black
+        color = el.get("color") or "#000000"  # default black
 
         if kind == "box":
             _glass(draw, x, y, w, h, alpha=GLASS_ALPHA, radius=GLASS_RADIUS)
             continue
 
+        if kind == "icon" and etype == "WEATHER_ICON":
+            code = weather.get("code") or "02d"
+            icon_img = _get_weather_icon_image(code)
+            if icon_img is not None:
+                _paste_icon_rgba(im, icon_img, x, y, w, h)
+            continue
+
+        # text-like elements
         size = max(14, int(h * 0.7))
         weight_raw = el.get("weight", "400")
         weight = "700" if "bold" in str(weight_raw).lower() else (str(weight_raw) if weight_raw else "400")
@@ -258,8 +318,6 @@ def _render_from_layout(bg_png: bytes, layout: dict) -> bytes:
             text = f"{weather['min']}° / {weather['max']}°"
         elif etype == "WEATHER_NOTE":
             text = weather["desc"]
-        elif etype == "WEATHER_ICON":
-            text = weather["icon"]
         elif etype == "DATE":
             text = date_str
         elif etype == "JOKE":
@@ -281,7 +339,7 @@ def _render_from_layout(bg_png: bytes, layout: dict) -> bytes:
 def root():
     return jsonify({
         "status": "ok",
-        "version": "pexels-800x480-fixed-2025-10-26",
+        "version": "pexels-owm-icons-2025-10-26",
         "gcs": True,
         "pexels": bool(PEXELS_API_KEY),
         "openweather": bool(OPENWEATHER_API_KEY),
