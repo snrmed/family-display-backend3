@@ -1,4 +1,4 @@
-# backend/main.py - FIXED VERSION 2 for E-ink Display
+# backend/main.py - FIXED VERSION 4 for E-ink Display
 
 import os
 import io
@@ -25,7 +25,7 @@ OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY", "")
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")
 
 DEFAULT_DEVICE = os.getenv("DEFAULT_LAYOUT_DEVICE", "familydisplay")
-DEFAULT_MODE = os.getenv("DEFAULT_RENDER_MODE", "sticker_parade")
+DEFAULT_MODE = os.getenv("DEFAULT_RENDER_MODE", "left_sidebar")
 DEFAULT_THEME = "abstract"
 PER_THEME_COUNT = int(os.getenv("PER_THEME_COUNT", "8") or 8)
 
@@ -34,11 +34,11 @@ BASE_DIR = pathlib.Path(__file__).resolve().parent
 FONT_DIR = BASE_DIR / "web" / "designer" / "fonts"
 
 # UI Constants - OPTIMIZED FOR E-INK (Waveshare 6-color Spectra)
-GLASS_ALPHA = 50  # MUCH more transparent (was 100, now 60) - better for e-ink
+GLASS_ALPHA = 10  # Transparent overlays for e-ink
 GLASS_RADIUS = 14
-TEXT_PADDING_X = 12  # Increased padding
-TEXT_PADDING_Y = 10  # Increased padding
-TEXT_SPACING = 2     # Tighter line spacing
+TEXT_PADDING_X = 12
+TEXT_PADDING_Y = 10
+TEXT_SPACING = 2
 
 storage_client = storage.Client()
 bucket = storage_client.bucket(GCS_BUCKET)
@@ -81,7 +81,7 @@ def _load_font(size: int, weight: str = "400") -> ImageFont.FreeTypeFont:
         except (ValueError, TypeError):
             weight_int = 400
         
-        # FIXED: Check if FONT_DIR exists and construct proper paths
+        # Check if FONT_DIR exists and construct proper paths
         if FONT_DIR.exists() and FONT_DIR.is_dir():
             font_path = None
             
@@ -105,17 +105,14 @@ def _load_font(size: int, weight: str = "400") -> ImageFont.FreeTypeFont:
             if font_path:
                 font = ImageFont.truetype(font_path, size=size)
                 _font_cache[cache_key] = font
-                print(f"✓ Loaded Roboto: {pathlib.Path(font_path).name} at size {size}")
                 return font
         
         # Fallback to DejaVu Sans
         font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", size=size)
         _font_cache[cache_key] = font
-        print(f"⚠ Using fallback DejaVu font at size {size}")
         return font
     except Exception as e:
         # Last resort: default bitmap font
-        print(f"⚠ Font loading failed ({e}), using default bitmap font")
         font = ImageFont.load_default()
         _font_cache[cache_key] = font
         return font
@@ -150,8 +147,59 @@ def _glass(draw: ImageDraw.ImageDraw, x, y, w, h, alpha=GLASS_ALPHA, radius=GLAS
     """Draw frosted glass box - optimized for e-ink with higher transparency."""
     draw.rounded_rectangle([x, y, x + w, y + h], radius=radius,
                           fill=(255, 255, 255, alpha), 
-                          outline=(200, 200, 200, 200),  # Lighter outline
+                          outline=(200, 200, 200, 200),
                           width=1)
+
+def _draw_weather_icon(draw: ImageDraw.ImageDraw, x: int, y: int, w: int, h: int, 
+                       icon_code: str, color: str = "#000000"):
+    """Draw a simple weather icon using shapes instead of Unicode."""
+    center_x = x + w // 2
+    center_y = y + h // 2
+    size = min(w, h) - 4
+    
+    # Simple icon drawings based on weather code
+    if icon_code.startswith("01"):  # Clear
+        # Draw a circle for sun
+        radius = size // 2
+        draw.ellipse([center_x - radius, center_y - radius, 
+                     center_x + radius, center_y + radius], 
+                    outline=color, width=2)
+    elif icon_code.startswith("02"):  # Partly cloudy
+        # Draw cloud shape (simplified)
+        r = size // 3
+        draw.ellipse([center_x - r, center_y - r//2, center_x + r, center_y + r], 
+                    outline=color, width=2)
+    elif icon_code.startswith("03") or icon_code.startswith("04"):  # Cloudy
+        # Multiple overlapping circles for cloud
+        r = size // 4
+        draw.ellipse([center_x - r*2, center_y, center_x, center_y + r*2], 
+                    outline=color, width=2)
+        draw.ellipse([center_x - r, center_y - r//2, center_x + r, center_y + r*2], 
+                    outline=color, width=2)
+    elif icon_code.startswith("09") or icon_code.startswith("10"):  # Rain
+        # Rain drops
+        for i in range(3):
+            drop_x = center_x - size//3 + i * size//3
+            draw.line([drop_x, center_y - size//4, drop_x, center_y + size//4], 
+                     fill=color, width=2)
+    elif icon_code.startswith("11"):  # Thunderstorm
+        # Lightning bolt (simple zigzag)
+        points = [center_x, center_y - size//2, 
+                 center_x + size//4, center_y,
+                 center_x, center_y + size//2]
+        draw.line(points, fill=color, width=2)
+    elif icon_code.startswith("13"):  # Snow
+        # Snowflake (simple cross)
+        draw.line([center_x - size//2, center_y, center_x + size//2, center_y], 
+                 fill=color, width=2)
+        draw.line([center_x, center_y - size//2, center_x, center_y + size//2], 
+                 fill=color, width=2)
+    else:  # Fog/mist
+        # Horizontal lines
+        for i in range(3):
+            y_pos = center_y - size//3 + i * size//3
+            draw.line([center_x - size//2, y_pos, center_x + size//2, y_pos], 
+                     fill=color, width=2)
 
 def _wrap_text_to_lines(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont, 
                         max_w: int, max_h: int, line_height: int) -> List[str]:
@@ -162,7 +210,12 @@ def _wrap_text_to_lines(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.Fr
     
     for w in words:
         t = (cur + " " + w).strip()
-        if draw.textlength(t, font=font) <= max_w or not cur:
+        try:
+            text_width = draw.textlength(t, font=font)
+        except:
+            text_width = len(t) * (line_height * 0.6)  # Fallback estimate
+        
+        if text_width <= max_w or not cur:
             cur = t
         else:
             lines.append(cur)
@@ -179,7 +232,13 @@ def _wrap_text_to_lines(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.Fr
         if lines:
             last_line = lines[-1]
             # Try to add ellipsis
-            while draw.textlength(last_line + "...", font=font) > max_w and len(last_line) > 0:
+            while len(last_line) > 0:
+                try:
+                    if draw.textlength(last_line + "...", font=font) <= max_w:
+                        break
+                except:
+                    if len(last_line + "...") * (line_height * 0.6) <= max_w:
+                        break
                 last_line = last_line[:-1]
             lines[-1] = last_line + "..."
     
@@ -197,9 +256,15 @@ def _layout_paths(device: str):
 # ──────────────────────────────────────────────────────────────────────────────
 
 def _weather(city="Darwin", country="AU"):
-    """Fetch weather - return text icon instead of emoji for better e-ink rendering."""
+    """Fetch weather data."""
     if not OPENWEATHER_API_KEY:
-        return {"city": city, "min": 26, "max": 33, "desc": "Few Clouds", "icon": "⛅", "icon_text": "☁"}
+        return {
+            "city": city, 
+            "min": 26, 
+            "max": 33, 
+            "desc": "Few Clouds", 
+            "icon_code": "02d"
+        }
     
     try:
         r = requests.get(
@@ -210,42 +275,24 @@ def _weather(city="Darwin", country="AU"):
         j = r.json()
         main = j.get("main", {})
         w = (j.get("weather") or [{}])[0]
-        code = (w.get("icon") or "02d")
-        
-        # Text-based icons that render better
-        if code.startswith("01"):
-            icon = "☀"
-            icon_text = "☼"  # Alternative text sun
-        elif code.startswith("02"):
-            icon = "⛅"
-            icon_text = "☁"
-        elif code.startswith("03") or code.startswith("04"):
-            icon = "☁"
-            icon_text = "☁"
-        elif code.startswith("09") or code.startswith("10"):
-            icon = "🌧"
-            icon_text = "☂"  # Umbrella
-        elif code.startswith("11"):
-            icon = "⛈"
-            icon_text = "⚡"  # Lightning
-        elif code.startswith("13"):
-            icon = "❄"
-            icon_text = "❄"
-        else:
-            icon = "🌫"
-            icon_text = "≋"  # Fog waves
+        icon_code = w.get("icon") or "02d"
         
         return {
             "city": j.get("name") or city,
             "min": int(round(main.get("temp_min", 26))),
             "max": int(round(main.get("temp_max", 33))),
             "desc": (w.get("description") or "—").title(),
-            "icon": icon,
-            "icon_text": icon_text
+            "icon_code": icon_code
         }
     except Exception as e:
         print(f"⚠ Weather fetch error: {e}")
-        return {"city": city, "min": 26, "max": 33, "desc": "Few Clouds", "icon": "⛅", "icon_text": "☁"}
+        return {
+            "city": city, 
+            "min": 26, 
+            "max": 33, 
+            "desc": "Few Clouds", 
+            "icon_code": "02d"
+        }
 
 def _dad_joke():
     """Fetch dad joke with fallbacks."""
@@ -301,7 +348,7 @@ def _load_layout(device: str) -> dict:
 # ──────────────────────────────────────────────────────────────────────────────
 
 def _render_from_layout(bg_png: bytes, layout: dict) -> bytes:
-    """Render overlay with FIXED sizing and proper text wrapping."""
+    """Render overlay with drawn icons and proper text wrapping."""
     # Ensure background is exactly 800×480
     bg_png = _fit_to_800x480(bg_png)
     
@@ -325,7 +372,12 @@ def _render_from_layout(bg_png: bytes, layout: dict) -> bytes:
             _glass(draw, x, y, w, h, alpha=GLASS_ALPHA, radius=GLASS_RADIUS)
             continue
         
-        # FIXED: Smaller font size calculation - reduced from 0.7 to 0.5
+        # Handle weather icon with drawn shapes
+        if kind == "icon" and etype == "WEATHER_ICON":
+            _draw_weather_icon(draw, x, y, w, h, weather["icon_code"], color)
+            continue
+        
+        # Font size calculation
         base_size = max(12, int(h * 0.5))
         
         # Parse weight properly
@@ -343,18 +395,6 @@ def _render_from_layout(bg_png: bytes, layout: dict) -> bytes:
             text = f"{weather['min']}° / {weather['max']}°"
         elif etype == "WEATHER_NOTE":
             text = weather["desc"]
-        elif etype == "WEATHER_ICON":
-            # Use text-based icon for better rendering
-            text = weather.get("icon_text", weather["icon"])
-            # Larger size for icons
-            font = _load_font(size=int(base_size * 1.2), weight=weight)
-            draw.text(
-                (x + TEXT_PADDING_X, y + TEXT_PADDING_Y), 
-                text, 
-                font=font, 
-                fill=color
-            )
-            continue
         elif etype == "DATE":
             text = date_str
         elif etype == "JOKE":
@@ -364,7 +404,6 @@ def _render_from_layout(bg_png: bytes, layout: dict) -> bytes:
         font = _load_font(size=base_size, weight=weight)
         
         # Calculate line height
-        # Use getbbox for more accurate height measurement
         try:
             bbox = draw.textbbox((0, 0), "Ay", font=font)
             line_height = bbox[3] - bbox[1] + TEXT_SPACING
@@ -409,7 +448,7 @@ def root():
     
     return jsonify({
         "status": "ok",
-        "version": "eink-optimized-2025-10-26-v3",
+        "version": "eink-optimized-2025-10-26-v4",
         "gcs": True,
         "pexels": bool(PEXELS_API_KEY),
         "openweather": bool(OPENWEATHER_API_KEY),
@@ -546,9 +585,8 @@ def v1_random():
 # ──────────────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    # Print diagnostic info on startup
     print("=" * 70)
-    print("🖼️  Family Display Backend - E-ink Optimized v3")
+    print("🖼️  Family Display Backend - E-ink Optimized v4")
     print("=" * 70)
     print(f"Font directory: {FONT_DIR}")
     print(f"Font directory exists: {FONT_DIR.exists()}")
@@ -560,10 +598,9 @@ if __name__ == "__main__":
             print(f"  ✓ {f.name}")
     else:
         print("  ⚠ WARNING: Font directory does not exist!")
-        print(f"  Expected location: {FONT_DIR}")
     
-    print(f"\nGlass overlay alpha: {GLASS_ALPHA}/255 (transparency for e-ink)")
-    print(f"Default device: {DEFAULT_DEVICE}")
+    print(f"\nGlass overlay alpha: {GLASS_ALPHA}/255")
+    print(f"Weather icons: Drawn shapes (not Unicode)")
     print("=" * 70)
     
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", "8080")), debug=False)
