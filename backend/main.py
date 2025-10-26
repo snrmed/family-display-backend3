@@ -1,5 +1,4 @@
-# backend/main.py - FIXED VERSION 4 for E-ink Display
-
+# backend/main.py
 import os
 import io
 import json
@@ -16,7 +15,6 @@ from PIL import Image, ImageDraw, ImageFont
 # ──────────────────────────────────────────────────────────────────────────────
 # ENV / GLOBALS
 # ──────────────────────────────────────────────────────────────────────────────
-
 app = Flask(__name__)
 
 GCS_BUCKET = os.getenv("GCS_BUCKET", "family-display-packs")
@@ -25,31 +23,28 @@ OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY", "")
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")
 
 DEFAULT_DEVICE = os.getenv("DEFAULT_LAYOUT_DEVICE", "familydisplay")
-DEFAULT_MODE = os.getenv("DEFAULT_RENDER_MODE", "left_sidebar")
+DEFAULT_MODE = os.getenv("DEFAULT_RENDER_MODE", "sticker_parade")
 DEFAULT_THEME = "abstract"
 PER_THEME_COUNT = int(os.getenv("PER_THEME_COUNT", "8") or 8)
-
-# FIXED: Correct path resolution
 BASE_DIR = pathlib.Path(__file__).resolve().parent
 FONT_DIR = BASE_DIR / "web" / "designer" / "fonts"
 
-# UI Constants - OPTIMIZED FOR E-INK (Waveshare 6-color Spectra)
-GLASS_ALPHA = 10  # Transparent overlays for e-ink
+# UI constants
+GLASS_ALPHA = 100
 GLASS_RADIUS = 14
-TEXT_PADDING_X = 12
-TEXT_PADDING_Y = 10
-TEXT_SPACING = 2
+TEXT_PADDING_X = 8
+TEXT_PADDING_Y = 6
+TEXT_SPACING = 4
 
 storage_client = storage.Client()
 bucket = storage_client.bucket(GCS_BUCKET)
 
-# Font cache for performance
-_font_cache = {}
+# cache fonts
+_font_cache: dict[str, ImageFont.FreeTypeFont] = {}
 
 # ──────────────────────────────────────────────────────────────────────────────
 # HELPERS
 # ──────────────────────────────────────────────────────────────────────────────
-
 def _iso_week() -> str:
     y, w, _ = datetime.date.today().isocalendar()
     return f"{y}-W{w:02d}"
@@ -57,7 +52,7 @@ def _iso_week() -> str:
 def _blob_text(path: str) -> Optional[str]:
     b = bucket.blob(path)
     try:
-        if not b.exists():
+        if not b.exists():  # type: ignore[attr-defined]
             return None
     except Exception:
         return None
@@ -69,50 +64,32 @@ def _put_png(path: str, data: bytes):
     b.upload_from_string(data, content_type="image/png")
 
 def _load_font(size: int, weight: str = "400") -> ImageFont.FreeTypeFont:
-    """Load Roboto from FONT_DIR with FIXED path handling."""
-    cache_key = f"{size}_{weight}"
+    """Load Roboto from FONT_DIR, fallback to DejaVu, then default bitmap."""
+    cache_key = f"{size}:{weight}"
     if cache_key in _font_cache:
         return _font_cache[cache_key]
 
     try:
-        # Parse weight
-        try:
-            weight_int = int(weight)
-        except (ValueError, TypeError):
-            weight_int = 400
-        
-        # Check if FONT_DIR exists and construct proper paths
-        if FONT_DIR.exists() and FONT_DIR.is_dir():
-            font_path = None
-            
-            # Select appropriate font file based on weight
-            if weight_int >= 700:
-                bold_path = FONT_DIR / "Roboto-Bold.ttf"
-                if bold_path.exists():
-                    font_path = str(bold_path)
-            elif weight_int <= 300:
-                light_path = FONT_DIR / "Roboto-Light.ttf"
-                if light_path.exists():
-                    font_path = str(light_path)
-            
-            # Fallback to Regular if specific weight not found
-            if not font_path:
-                regular_path = FONT_DIR / "Roboto-Regular.ttf"
-                if regular_path.exists():
-                    font_path = str(regular_path)
-            
-            # Load the font if we found a valid path
-            if font_path:
-                font = ImageFont.truetype(font_path, size=size)
+        if FONT_DIR and os.path.isdir(FONT_DIR):
+            path = None
+            try:
+                weight_int = int(weight)
+            except (ValueError, TypeError):
+                weight_int = 400
+            if weight_int >= 700 and os.path.exists(os.path.join(FONT_DIR, "Roboto-Bold.ttf")):
+                path = os.path.join(FONT_DIR, "Roboto-Bold.ttf")
+            elif weight_int <= 300 and os.path.exists(os.path.join(FONT_DIR, "Roboto-Light.ttf")):
+                path = os.path.join(FONT_DIR, "Roboto-Light.ttf")
+            elif os.path.exists(os.path.join(FONT_DIR, "Roboto-Regular.ttf")):
+                path = os.path.join(FONT_DIR, "Roboto-Regular.ttf")
+            if path:
+                font = ImageFont.truetype(path, size=size)
                 _font_cache[cache_key] = font
                 return font
-        
-        # Fallback to DejaVu Sans
-        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", size=size)
+        font = ImageFont.truetype("DejaVuSans.ttf", size=size)
         _font_cache[cache_key] = font
         return font
-    except Exception as e:
-        # Last resort: default bitmap font
+    except Exception:
         font = ImageFont.load_default()
         _font_cache[cache_key] = font
         return font
@@ -123,9 +100,11 @@ def _download_and_fit(url: str, size=(800, 480)) -> Image.Image:
     r.raise_for_status()
     im = Image.open(io.BytesIO(r.content)).convert("RGB")
     tw, th = size
+    # PIL compatibility: Resampling on new PIL, else fallback to LANCZOS attr
+    resample = getattr(Image, "Resampling", Image).LANCZOS
     scale = max(tw / im.width, th / im.height)
     nw, nh = int(im.width * scale), int(im.height * scale)
-    im = im.resize((nw, nh), Image.Resampling.LANCZOS)
+    im = im.resize((nw, nh), resample)
     left, top = (nw - tw) // 2, (nh - th) // 2
     return im.crop((left, top, left + tw, top + th))
 
@@ -133,9 +112,10 @@ def _fit_to_800x480(png_bytes: bytes) -> bytes:
     """Cover-crop any PNG/JPEG bytes to exactly 800×480."""
     im = Image.open(io.BytesIO(png_bytes)).convert("RGB")
     tw, th = 800, 480
+    resample = getattr(Image, "Resampling", Image).LANCZOS
     scale = max(tw / im.width, th / im.height)
     nw, nh = int(im.width * scale), int(im.height * scale)
-    im = im.resize((nw, nh), Image.Resampling.LANCZOS)
+    im = im.resize((nw, nh), resample)
     left, top = (nw - tw) // 2, (nh - th) // 2
     im = im.crop((left, top, left + tw, top + th))
     out = io.BytesIO()
@@ -144,105 +124,23 @@ def _fit_to_800x480(png_bytes: bytes) -> bytes:
     return out.getvalue()
 
 def _glass(draw: ImageDraw.ImageDraw, x, y, w, h, alpha=GLASS_ALPHA, radius=GLASS_RADIUS):
-    """Draw frosted glass box - optimized for e-ink with higher transparency."""
     draw.rounded_rectangle([x, y, x + w, y + h], radius=radius,
-                          fill=(255, 255, 255, alpha), 
-                          outline=(200, 200, 200, 200),
-                          width=1)
+                           fill=(255, 255, 255, alpha), outline=(185, 215, 211, 255), width=1)
 
-def _draw_weather_icon(draw: ImageDraw.ImageDraw, x: int, y: int, w: int, h: int, 
-                       icon_code: str, color: str = "#000000"):
-    """Draw a simple weather icon using shapes instead of Unicode."""
-    center_x = x + w // 2
-    center_y = y + h // 2
-    size = min(w, h) - 4
-    
-    # Simple icon drawings based on weather code
-    if icon_code.startswith("01"):  # Clear
-        # Draw a circle for sun
-        radius = size // 2
-        draw.ellipse([center_x - radius, center_y - radius, 
-                     center_x + radius, center_y + radius], 
-                    outline=color, width=2)
-    elif icon_code.startswith("02"):  # Partly cloudy
-        # Draw cloud shape (simplified)
-        r = size // 3
-        draw.ellipse([center_x - r, center_y - r//2, center_x + r, center_y + r], 
-                    outline=color, width=2)
-    elif icon_code.startswith("03") or icon_code.startswith("04"):  # Cloudy
-        # Multiple overlapping circles for cloud
-        r = size // 4
-        draw.ellipse([center_x - r*2, center_y, center_x, center_y + r*2], 
-                    outline=color, width=2)
-        draw.ellipse([center_x - r, center_y - r//2, center_x + r, center_y + r*2], 
-                    outline=color, width=2)
-    elif icon_code.startswith("09") or icon_code.startswith("10"):  # Rain
-        # Rain drops
-        for i in range(3):
-            drop_x = center_x - size//3 + i * size//3
-            draw.line([drop_x, center_y - size//4, drop_x, center_y + size//4], 
-                     fill=color, width=2)
-    elif icon_code.startswith("11"):  # Thunderstorm
-        # Lightning bolt (simple zigzag)
-        points = [center_x, center_y - size//2, 
-                 center_x + size//4, center_y,
-                 center_x, center_y + size//2]
-        draw.line(points, fill=color, width=2)
-    elif icon_code.startswith("13"):  # Snow
-        # Snowflake (simple cross)
-        draw.line([center_x - size//2, center_y, center_x + size//2, center_y], 
-                 fill=color, width=2)
-        draw.line([center_x, center_y - size//2, center_x, center_y + size//2], 
-                 fill=color, width=2)
-    else:  # Fog/mist
-        # Horizontal lines
-        for i in range(3):
-            y_pos = center_y - size//3 + i * size//3
-            draw.line([center_x - size//2, y_pos, center_x + size//2, y_pos], 
-                     fill=color, width=2)
-
-def _wrap_text_to_lines(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont, 
-                        max_w: int, max_h: int, line_height: int) -> List[str]:
-    """Wrap text to fit within bounds and truncate if needed."""
+def _wrap(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont, max_w: int) -> str:
     words = text.split()
     lines: List[str] = []
     cur = ""
-    
     for w in words:
         t = (cur + " " + w).strip()
-        try:
-            text_width = draw.textlength(t, font=font)
-        except:
-            text_width = len(t) * (line_height * 0.6)  # Fallback estimate
-        
-        if text_width <= max_w or not cur:
+        if draw.textlength(t, font=font) <= max_w or not cur:
             cur = t
         else:
             lines.append(cur)
             cur = w
     if cur:
         lines.append(cur)
-    
-    # Calculate max lines that fit in height
-    max_lines = max(1, int(max_h / line_height))
-    
-    # Truncate with ellipsis if too many lines
-    if len(lines) > max_lines:
-        lines = lines[:max_lines]
-        if lines:
-            last_line = lines[-1]
-            # Try to add ellipsis
-            while len(last_line) > 0:
-                try:
-                    if draw.textlength(last_line + "...", font=font) <= max_w:
-                        break
-                except:
-                    if len(last_line + "...") * (line_height * 0.6) <= max_w:
-                        break
-                last_line = last_line[:-1]
-            lines[-1] = last_line + "..."
-    
-    return lines
+    return "\n".join(lines)
 
 def _layout_paths(device: str):
     base = f"layouts/{device}"
@@ -254,18 +152,10 @@ def _layout_paths(device: str):
 # ──────────────────────────────────────────────────────────────────────────────
 # DATA SOURCES
 # ──────────────────────────────────────────────────────────────────────────────
-
 def _weather(city="Darwin", country="AU"):
-    """Fetch weather data."""
+    # Minimal; icon as emoji; NO auto text color
     if not OPENWEATHER_API_KEY:
-        return {
-            "city": city, 
-            "min": 26, 
-            "max": 33, 
-            "desc": "Few Clouds", 
-            "icon_code": "02d"
-        }
-    
+        return {"city": city, "min": 26, "max": 33, "desc": "Few Clouds", "icon": "⛅"}
     try:
         r = requests.get(
             "https://api.openweathermap.org/data/2.5/weather",
@@ -275,27 +165,19 @@ def _weather(city="Darwin", country="AU"):
         j = r.json()
         main = j.get("main", {})
         w = (j.get("weather") or [{}])[0]
-        icon_code = w.get("icon") or "02d"
-        
+        code = (w.get("icon") or "02d")
+        icon = "☀️" if code.startswith("01") else "⛅" if code.startswith("02") else "☁️" if code.startswith("03") else "🌧️"
         return {
             "city": j.get("name") or city,
             "min": int(round(main.get("temp_min", 26))),
             "max": int(round(main.get("temp_max", 33))),
             "desc": (w.get("description") or "—").title(),
-            "icon_code": icon_code
+            "icon": icon,
         }
-    except Exception as e:
-        print(f"⚠ Weather fetch error: {e}")
-        return {
-            "city": city, 
-            "min": 26, 
-            "max": 33, 
-            "desc": "Few Clouds", 
-            "icon_code": "02d"
-        }
+    except Exception:
+        return {"city": city, "min": 26, "max": 33, "desc": "Few Clouds", "icon": "⛅"}
 
 def _dad_joke():
-    """Fetch dad joke with fallbacks."""
     fallbacks = [
         "I'm reading a book on anti-gravity. It's impossible to put down.",
         "Why do pirates not know the alphabet? They always get stuck at 'C'.",
@@ -303,9 +185,7 @@ def _dad_joke():
         "Why can't you trust atoms? They make up everything!",
     ]
     try:
-        r = requests.get("https://icanhazdadjoke.com/", 
-                        headers={"Accept": "application/json"}, 
-                        timeout=8)
+        r = requests.get("https://icanhazdadjoke.com/", headers={"Accept": "application/json"}, timeout=8)
         if r.status_code == 200:
             return r.json().get("joke") or random.choice(fallbacks)
     except Exception:
@@ -315,7 +195,6 @@ def _dad_joke():
 # ──────────────────────────────────────────────────────────────────────────────
 # LAYOUT
 # ──────────────────────────────────────────────────────────────────────────────
-
 def _load_layout(device: str) -> dict:
     """Use saved Designer layout or fallback to a sensible default."""
     paths = _layout_paths(device)
@@ -325,8 +204,7 @@ def _load_layout(device: str) -> dict:
             return json.loads(raw)
         except Exception:
             pass
-    
-    # Default = Sticker Parade proportions (optimized for e-ink)
+    # Default (Sticker Parade proportions)
     return {
         "device": device,
         "mode": DEFAULT_MODE,
@@ -346,48 +224,33 @@ def _load_layout(device: str) -> dict:
 # ──────────────────────────────────────────────────────────────────────────────
 # RENDER
 # ──────────────────────────────────────────────────────────────────────────────
-
 def _render_from_layout(bg_png: bytes, layout: dict) -> bytes:
-    """Render overlay with drawn icons and proper text wrapping."""
     # Ensure background is exactly 800×480
     bg_png = _fit_to_800x480(bg_png)
-    
+
     im = Image.open(io.BytesIO(bg_png)).convert("RGBA")
     draw = ImageDraw.Draw(im, "RGBA")
-    
+
     weather = _weather()
     joke = _dad_joke()
     date_str = datetime.datetime.now().strftime("%a, %d %b")
-    
+
     for el in layout.get("elements", []):
         kind = el.get("kind", "box")
-        x = int(el.get("x", 0))
-        y = int(el.get("y", 0))
-        w = int(el.get("w", 100))
-        h = int(el.get("h", 40))
+        x = int(el.get("x", 0)); y = int(el.get("y", 0))
+        w = int(el.get("w", 100)); h = int(el.get("h", 40))
         etype = el.get("type")
-        color = el.get("color") or "#000000"
-        
+        color = el.get("color") or "#000000"  # no auto color; default black
+
         if kind == "box":
             _glass(draw, x, y, w, h, alpha=GLASS_ALPHA, radius=GLASS_RADIUS)
             continue
-        
-        # Handle weather icon with drawn shapes
-        if kind == "icon" and etype == "WEATHER_ICON":
-            _draw_weather_icon(draw, x, y, w, h, weather["icon_code"], color)
-            continue
-        
-        # Font size calculation
-        base_size = max(12, int(h * 0.5))
-        
-        # Parse weight properly
+
+        size = max(14, int(h * 0.7))
         weight_raw = el.get("weight", "400")
-        if "bold" in str(weight_raw).lower():
-            weight = "700"
-        else:
-            weight = str(weight_raw) if weight_raw else "400"
-        
-        # Get text content
+        weight = "700" if "bold" in str(weight_raw).lower() else (str(weight_raw) if weight_raw else "400")
+        font = _load_font(size=size, weight=weight)
+
         text = el.get("text", "")
         if etype == "WEATHER_CITY":
             text = weather["city"]
@@ -395,41 +258,17 @@ def _render_from_layout(bg_png: bytes, layout: dict) -> bytes:
             text = f"{weather['min']}° / {weather['max']}°"
         elif etype == "WEATHER_NOTE":
             text = weather["desc"]
+        elif etype == "WEATHER_ICON":
+            text = weather["icon"]
         elif etype == "DATE":
             text = date_str
         elif etype == "JOKE":
             text = joke
-        
-        # Load font
-        font = _load_font(size=base_size, weight=weight)
-        
-        # Calculate line height
-        try:
-            bbox = draw.textbbox((0, 0), "Ay", font=font)
-            line_height = bbox[3] - bbox[1] + TEXT_SPACING
-        except:
-            line_height = int(base_size * 1.2)
-        
-        # Get available space
-        max_text_w = max(8, w - TEXT_PADDING_X * 2)
-        max_text_h = max(8, h - TEXT_PADDING_Y * 2)
-        
-        # Wrap text with proper bounds checking
-        lines = _wrap_text_to_lines(draw, text, font, max_text_w, max_text_h, line_height)
-        
-        # Draw each line
-        y_offset = y + TEXT_PADDING_Y
-        for line in lines:
-            if y_offset + line_height > y + h - TEXT_PADDING_Y:
-                break  # Don't draw lines that would overflow
-            draw.text(
-                (x + TEXT_PADDING_X, y_offset), 
-                line, 
-                font=font, 
-                fill=color
-            )
-            y_offset += line_height
-    
+
+        wrapped = _wrap(draw, text, font, max_w=max(8, w - TEXT_PADDING_X * 2))
+        draw.multiline_text((x + TEXT_PADDING_X, y + TEXT_PADDING_Y),
+                            wrapped, font=font, fill=color, spacing=TEXT_SPACING)
+
     out = io.BytesIO()
     im.save(out, "PNG")
     out.seek(0)
@@ -438,29 +277,20 @@ def _render_from_layout(bg_png: bytes, layout: dict) -> bytes:
 # ──────────────────────────────────────────────────────────────────────────────
 # ROUTES
 # ──────────────────────────────────────────────────────────────────────────────
-
 @app.get("/")
 def root():
-    # Check font availability
-    fonts_found = []
-    if FONT_DIR.exists():
-        fonts_found = [f.name for f in FONT_DIR.glob("*.ttf")]
-    
     return jsonify({
         "status": "ok",
-        "version": "eink-optimized-2025-10-26-v4",
+        "version": "pexels-800x480-fixed-2025-10-26",
         "gcs": True,
         "pexels": bool(PEXELS_API_KEY),
         "openweather": bool(OPENWEATHER_API_KEY),
         "default_device": DEFAULT_DEVICE,
-        "default_mode": DEFAULT_MODE,
-        "glass_alpha": GLASS_ALPHA,
-        "font_dir": str(FONT_DIR),
-        "font_dir_exists": FONT_DIR.exists(),
-        "fonts_available": fonts_found
+        "default_mode": DEFAULT_MODE
     })
 
-# Designer static files
+# Designer static
+BASE_DIR = pathlib.Path(__file__).resolve().parent
 DESIGNER_DIR = BASE_DIR / "web" / "designer"
 
 @app.route("/designer/")
@@ -483,7 +313,7 @@ def admin_prefetch():
     tok = request.args.get("token") or request.headers.get("X-Admin-Token")
     if not ADMIN_TOKEN or tok != ADMIN_TOKEN:
         abort(401, "Unauthorized")
-    
+
     body = request.get_json(silent=True) or {}
     themes = body.get("themes") or ["abstract","geometry","nature","minimal","architecture","kids","space","ocean"]
     if isinstance(themes, str):
@@ -491,10 +321,10 @@ def admin_prefetch():
     per_theme = int(body.get("per_theme", body.get("count", PER_THEME_COUNT)))
     overwrite = bool(body.get("overwrite", False))
     week = body.get("week") or _iso_week()
-    
+
     if not PEXELS_API_KEY:
         return jsonify({"error": "PEXELS_API_KEY missing"}), 500
-    
+
     headers = {"Authorization": PEXELS_API_KEY}
     saved = []
     for theme in themes:
@@ -509,15 +339,13 @@ def admin_prefetch():
             if not url:
                 continue
             im = _download_and_fit(url, (800, 480))
-            buf = io.BytesIO()
-            im.save(buf, "PNG")
-            buf.seek(0)
+            buf = io.BytesIO(); im.save(buf, "PNG"); buf.seek(0)
             name = f"images/{week}/{theme}/v_{i}.png"
-            if not overwrite and bucket.blob(name).exists():
+            if not overwrite and bucket.blob(name).exists():  # type: ignore[attr-defined]
                 continue
             _put_png(name, buf.getvalue())
             saved.append(name)
-    
+
     return jsonify({"status": "done", "week": week, "themes": themes, "saved": len(saved)})
 
 # List cached images
@@ -537,15 +365,15 @@ def v1_frame():
     device = request.args.get("device") or DEFAULT_DEVICE
     theme = request.args.get("theme") or DEFAULT_THEME
     week = request.args.get("week") or _iso_week()
-    
+
     prefix = f"images/{week}/{theme}/"
     blobs = list(storage_client.list_blobs(GCS_BUCKET, prefix=prefix))
     if not blobs:
         return jsonify({"error": f"no cached images for week={week} theme={theme}"}), 404
-    
+
     bg_png = random.choice(blobs).download_as_bytes()
     bg_png = _fit_to_800x480(bg_png)
-    
+
     layout = _load_layout(device)
     png = _render_from_layout(bg_png, layout)
     return send_file(io.BytesIO(png), mimetype="image/png")
@@ -556,17 +384,17 @@ def v1_random():
     device = request.args.get("device") or DEFAULT_DEVICE
     week = request.args.get("week") or _iso_week()
     theme = request.args.get("theme")
-    
+
     if not theme:
         base = f"images/{week}/"
         themes = sorted({b.name.split("/")[2] for b in storage_client.list_blobs(GCS_BUCKET, prefix=base)
-                        if len(b.name.split("/")) > 2})
+                         if len(b.name.split("/")) > 2})
         theme = random.choice(themes) if themes else DEFAULT_THEME
-    
+
     blobs = list(storage_client.list_blobs(GCS_BUCKET, prefix=f"images/{week}/{theme}/"))
     if not blobs:
         return jsonify({"error": f"no cached images for {theme}"}), 404
-    
+
     layout = _load_layout(device)
     picks = random.sample(blobs, min(4, len(blobs)))
     frames = []
@@ -574,7 +402,7 @@ def v1_random():
         bg = b.download_as_bytes()
         bg = _fit_to_800x480(bg)
         frames.append(_render_from_layout(bg, layout))
-    
+
     manifest = [b.name for b in picks]
     resp = send_file(io.BytesIO(frames[0]), mimetype="image/png")
     resp.headers["X-Random-Manifest"] = json.dumps(manifest)
@@ -583,24 +411,5 @@ def v1_random():
 # ──────────────────────────────────────────────────────────────────────────────
 # MAIN
 # ──────────────────────────────────────────────────────────────────────────────
-
 if __name__ == "__main__":
-    print("=" * 70)
-    print("🖼️  Family Display Backend - E-ink Optimized v4")
-    print("=" * 70)
-    print(f"Font directory: {FONT_DIR}")
-    print(f"Font directory exists: {FONT_DIR.exists()}")
-    
-    if FONT_DIR.exists():
-        fonts = list(FONT_DIR.glob("*.ttf"))
-        print(f"Found {len(fonts)} font file(s):")
-        for f in fonts:
-            print(f"  ✓ {f.name}")
-    else:
-        print("  ⚠ WARNING: Font directory does not exist!")
-    
-    print(f"\nGlass overlay alpha: {GLASS_ALPHA}/255")
-    print(f"Weather icons: Drawn shapes (not Unicode)")
-    print("=" * 70)
-    
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", "8080")), debug=False)
