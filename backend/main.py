@@ -1,10 +1,11 @@
+# backend/main.py
 import os
 import io
 import json
 import random
 import datetime
 import pathlib
-from typing import Optional, List
+from typing import List, Optional
 
 import requests
 from flask import Flask, jsonify, request, send_file, send_from_directory, abort
@@ -31,7 +32,7 @@ storage_client = storage.Client()
 bucket = storage_client.bucket(GCS_BUCKET)
 
 # ──────────────────────────────────────────────────────────────────────────────
-# UTILS
+# HELPERS
 # ──────────────────────────────────────────────────────────────────────────────
 def _iso_week() -> str:
     y, w, _ = datetime.date.today().isocalendar()
@@ -40,7 +41,7 @@ def _iso_week() -> str:
 def _blob_text(path: str) -> Optional[str]:
     b = bucket.blob(path)
     try:
-        if not b.exists():  # type: ignore
+        if not b.exists():  # type: ignore[attr-defined]
             return None
     except Exception:
         return None
@@ -51,30 +52,25 @@ def _put_png(path: str, data: bytes):
     b.cache_control = "public, max-age=3600"
     b.upload_from_string(data, content_type="image/png")
 
-# fonts
 def _load_font(size: int, weight: str = "400") -> ImageFont.FreeTypeFont:
+    """Load Roboto from FONT_DIR, fallback to DejaVu, then default bitmap."""
     try:
         if FONT_DIR and os.path.isdir(FONT_DIR):
-            pick = None
+            p = None
             if weight >= "700" and os.path.exists(os.path.join(FONT_DIR, "Roboto-Bold.ttf")):
-                pick = os.path.join(FONT_DIR, "Roboto-Bold.ttf")
+                p = os.path.join(FONT_DIR, "Roboto-Bold.ttf")
             elif weight <= "300" and os.path.exists(os.path.join(FONT_DIR, "Roboto-Light.ttf")):
-                pick = os.path.join(FONT_DIR, "Roboto-Light.ttf")
+                p = os.path.join(FONT_DIR, "Roboto-Light.ttf")
             elif os.path.exists(os.path.join(FONT_DIR, "Roboto-Regular.ttf")):
-                pick = os.path.join(FONT_DIR, "Roboto-Regular.ttf")
-            if pick:
-                return ImageFont.truetype(pick, size=size)
+                p = os.path.join(FONT_DIR, "Roboto-Regular.ttf")
+            if p:
+                return ImageFont.truetype(p, size=size)
         return ImageFont.truetype("DejaVuSans.ttf", size=size)
     except Exception:
         return ImageFont.load_default()
 
-# brightness for auto text color
-def _is_dark(png_bytes: bytes) -> bool:
-    im = Image.open(io.BytesIO(png_bytes)).convert("L").resize((50, 30))
-    return sum(im.getdata()) / (50 * 30) < 110
-
-# cover+crop to 800x480
 def _download_and_fit(url: str, size=(800, 480)) -> Image.Image:
+    """Download an image and cover-crop to exact size."""
     r = requests.get(url, timeout=30)
     r.raise_for_status()
     im = Image.open(io.BytesIO(r.content)).convert("RGB")
@@ -85,10 +81,38 @@ def _download_and_fit(url: str, size=(800, 480)) -> Image.Image:
     left, top = (nw - tw) // 2, (nh - th) // 2
     return im.crop((left, top, left + tw, top + th))
 
-# simple glass card
+def _fit_to_800x480(png_bytes: bytes) -> bytes:
+    """Cover-crop any PNG/JPEG bytes to exactly 800×480."""
+    im = Image.open(io.BytesIO(png_bytes)).convert("RGB")
+    tw, th = 800, 480
+    scale = max(tw / im.width, th / im.height)
+    nw, nh = int(im.width * scale), int(im.height * scale)
+    im = im.resize((nw, nh), Image.LANCZOS)
+    left, top = (nw - tw) // 2, (nh - th) // 2
+    im = im.crop((left, top, left + tw, top + th))
+    out = io.BytesIO()
+    im.save(out, "PNG")
+    out.seek(0)
+    return out.getvalue()
+
 def _glass(draw: ImageDraw.ImageDraw, x, y, w, h, alpha=180, radius=14):
     draw.rounded_rectangle([x, y, x + w, y + h], radius=radius,
                            fill=(255, 255, 255, alpha), outline=(185, 215, 211, 255), width=1)
+
+def _wrap(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont, max_w: int) -> str:
+    words = text.split()
+    lines: List[str] = []
+    cur = ""
+    for w in words:
+        t = (cur + " " + w).strip()
+        if draw.textlength(t, font=font) <= max_w or not cur:
+            cur = t
+        else:
+            lines.append(cur)
+            cur = w
+    if cur:
+        lines.append(cur)
+    return "\n".join(lines)
 
 def _layout_paths(device: str):
     base = f"layouts/{device}"
@@ -97,8 +121,11 @@ def _layout_paths(device: str):
         "ver": f"{base}/versions/{int(datetime.datetime.now().timestamp())}.json",
     }
 
-# weather + joke
+# ──────────────────────────────────────────────────────────────────────────────
+# DATA SOURCES
+# ──────────────────────────────────────────────────────────────────────────────
 def _weather(city="Darwin", country="AU"):
+    # Minimal; icon as emoji (no auto color logic)
     if not OPENWEATHER_API_KEY:
         return {"city": city, "min": 26, "max": 33, "desc": "Few Clouds", "icon": "⛅"}
     try:
@@ -110,7 +137,7 @@ def _weather(city="Darwin", country="AU"):
         j = r.json()
         main = j.get("main", {})
         w = (j.get("weather") or [{}])[0]
-        code = w.get("icon", "02d")
+        code = (w.get("icon") or "02d")
         icon = "☀️" if code.startswith("01") else "⛅" if code.startswith("02") else "☁️" if code.startswith("03") else "🌧️"
         return {
             "city": j.get("name") or city,
@@ -138,54 +165,43 @@ def _dad_joke():
     return random.choice(fallbacks)
 
 # ──────────────────────────────────────────────────────────────────────────────
-# LAYOUT LOAD
+# LAYOUT
 # ──────────────────────────────────────────────────────────────────────────────
 def _load_layout(device: str) -> dict:
-    """Load designer JSON if present or return a sensible default."""
-    cur = _layout_paths(device)["current"]
-    raw = _blob_text(cur)
+    """Use saved Designer layout or fallback to a sensible default."""
+    paths = _layout_paths(device)
+    raw = _blob_text(paths["current"])
     if raw:
         try:
             return json.loads(raw)
         except Exception:
             pass
-    # default matches your sticker layout proportions
+    # Default = Sticker Parade proportions
     return {
         "device": device,
         "mode": DEFAULT_MODE,
         "elements": [
-            {"kind": "box",  "x": 16, "y": 360, "w": 360, "h": 96, "role": "CARD_WEATHER"},
-            {"kind": "box",  "x": 400, "y": 360, "w": 384, "h": 96, "role": "CARD_JOKE"},
-            {"kind": "box",  "x": 590, "y": 18,  "w": 194, "h": 56, "role": "CARD_GENERIC"},
-            {"kind": "text", "x": 28, "y": 372, "w": 320, "h": 30, "type": "WEATHER_CITY"},
-            {"kind": "text", "x": 28, "y": 405, "w": 320, "h": 24, "type": "WEATHER_MINMAX"},
-            {"kind": "icon", "x": 325, "y": 374, "w": 28,  "h": 28, "type": "WEATHER_ICON"},
-            {"kind": "text", "x": 412, "y": 380, "w": 360, "h": 60, "type": "JOKE"},
-            {"kind": "text", "x": 605, "y": 28,  "w": 160, "h": 28, "type": "DATE"},
+            {"kind": "box",  "x": 16,  "y": 360, "w": 360, "h": 96,  "role": "CARD_WEATHER"},
+            {"kind": "box",  "x": 400, "y": 360, "w": 384, "h": 96,  "role": "CARD_JOKE"},
+            {"kind": "box",  "x": 620, "y": 16,  "w": 164, "h": 48,  "role": "CARD_GENERIC"},
+            {"kind": "icon", "x": 28,  "y": 372, "w": 36,  "h": 36,  "type": "WEATHER_ICON"},
+            {"kind": "text", "x": 80,  "y": 372, "w": 260, "h": 46,  "type": "WEATHER_CITY",   "weight": "700"},
+            {"kind": "text", "x": 80,  "y": 412, "w": 260, "h": 32,  "type": "WEATHER_MINMAX"},
+            {"kind": "text", "x": 80,  "y": 444, "w": 260, "h": 24,  "type": "WEATHER_NOTE"},
+            {"kind": "text", "x": 412, "y": 376, "w": 360, "h": 80,  "type": "JOKE"},
+            {"kind": "text", "x": 632, "y": 28,  "w": 140, "h": 28,  "type": "DATE",          "weight": "700"}
         ],
     }
 
 # ──────────────────────────────────────────────────────────────────────────────
-# RENDER ENGINE (uses layout)
+# RENDER
 # ──────────────────────────────────────────────────────────────────────────────
-def _wrap(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont, max_w: int) -> str:
-    words = text.split()
-    lines: List[str] = []
-    cur = ""
-    for w in words:
-        t = (cur + " " + w).strip()
-        if draw.textlength(t, font=font) <= max_w or not cur:
-            cur = t
-        else:
-            lines.append(cur)
-            cur = w
-    if cur: lines.append(cur)
-    return "\n".join(lines)
-
 def _render_from_layout(bg_png: bytes, layout: dict) -> bytes:
+    # Ensure background is exactly 800×480
+    bg_png = _fit_to_800x480(bg_png)
+
     im = Image.open(io.BytesIO(bg_png)).convert("RGBA")
     draw = ImageDraw.Draw(im, "RGBA")
-    dark = _is_dark(bg_png)
 
     weather = _weather()
     joke = _dad_joke()
@@ -196,18 +212,16 @@ def _render_from_layout(bg_png: bytes, layout: dict) -> bytes:
         x = int(el.get("x", 0)); y = int(el.get("y", 0))
         w = int(el.get("w", 100)); h = int(el.get("h", 40))
         etype = el.get("type")
-        color = el.get("color") or ("#FFFFFF" if dark else "#000000")
+        color = el.get("color") or "#000000"  # <- no auto light/dark; default black
 
         if kind == "box":
             _glass(draw, x, y, w, h, alpha=180, radius=14)
             continue
 
-        # choose font size from element height
         size = max(14, int(h * 0.7))
-        weight = "700" if "bold" in (el.get("weight", "").lower()) else "400"
+        weight = "700" if "bold" in (el.get("weight", "").lower()) else el.get("weight", "400")
         font = _load_font(size=size, weight=weight)
 
-        # text source
         text = el.get("text", "")
         if etype == "WEATHER_CITY":
             text = weather["city"]
@@ -222,7 +236,6 @@ def _render_from_layout(bg_png: bytes, layout: dict) -> bytes:
         elif etype == "JOKE":
             text = joke
 
-        # wrap inside element width (padding 8)
         wrapped = _wrap(draw, text, font, max_w=max(8, w - 12))
         draw.multiline_text((x + 8, y + 6), wrapped, font=font, fill=color, spacing=4)
 
@@ -238,7 +251,7 @@ def _render_from_layout(bg_png: bytes, layout: dict) -> bytes:
 def root():
     return jsonify({
         "status": "ok",
-        "version": "fix-800x480-fonts-layout-2025-10-26",
+        "version": "pexels-800x480-no-autocolor-2025-10-26",
         "gcs": True,
         "pexels": bool(PEXELS_API_KEY),
         "openweather": bool(OPENWEATHER_API_KEY),
@@ -262,7 +275,7 @@ def designer_presets(fname):
 def designer_fonts(fname):
     return send_from_directory(DESIGNER_DIR / "fonts", fname)
 
-# Prefetch via Pexels (admin)
+# Admin: Pexels prefetch
 PEXELS_SEARCH = "https://api.pexels.com/v1/search"
 
 @app.post("/admin/prefetch")
@@ -272,7 +285,7 @@ def admin_prefetch():
         abort(401, "Unauthorized")
 
     body = request.get_json(silent=True) or {}
-    themes = body.get("themes") or ["nature","geometry","minimal","ocean","architecture","kids","abstract","space"]
+    themes = body.get("themes") or ["abstract","geometry","nature","minimal","architecture","kids","space","ocean"]
     if isinstance(themes, str):
         themes = [t.strip() for t in themes.split(",") if t.strip()]
     per_theme = int(body.get("per_theme", body.get("count", PER_THEME_COUNT)))
@@ -298,7 +311,7 @@ def admin_prefetch():
             im = _download_and_fit(url, (800, 480))
             buf = io.BytesIO(); im.save(buf, "PNG"); buf.seek(0)
             name = f"images/{week}/{theme}/v_{i}.png"
-            if not overwrite and bucket.blob(name).exists():  # type: ignore
+            if not overwrite and bucket.blob(name).exists():  # type: ignore[attr-defined]
                 continue
             _put_png(name, buf.getvalue())
             saved.append(name)
@@ -313,40 +326,36 @@ def v1_list():
     prefix = f"images/{week}/"
     if theme:
         prefix += f"{theme.strip().rstrip('/')}/"
-    blobs = _list_blobs(prefix, limit=int(request.args.get("limit", "500")))
-    return jsonify({"week": week, "theme": theme, "count": len(blobs), "objects": blobs})
+    objs = [b.name for b in storage_client.list_blobs(GCS_BUCKET, prefix=prefix)]
+    return jsonify({"week": week, "theme": theme, "count": len(objs), "objects": objs})
 
-def _list_blobs(prefix: str, limit: int = 500) -> List[str]:
-    out = []
-    for i, b in enumerate(storage_client.list_blobs(GCS_BUCKET, prefix=prefix)):
-        if i >= limit: break
-        out.append(b.name)
-    return out
-
-# Single frame render (uses layout)
+# Render single frame
 @app.get("/v1/frame")
 def v1_frame():
     device = request.args.get("device") or DEFAULT_DEVICE
     theme = request.args.get("theme") or DEFAULT_THEME
     week = request.args.get("week") or _iso_week()
 
-    # choose a background from cache
     prefix = f"images/{week}/{theme}/"
     blobs = list(storage_client.list_blobs(GCS_BUCKET, prefix=prefix))
     if not blobs:
         return jsonify({"error": f"no cached images for week={week} theme={theme}"}), 404
+
     bg_png = random.choice(blobs).download_as_bytes()
+    # force to 800×480 even if the cached image is another size
+    bg_png = _fit_to_800x480(bg_png)
 
     layout = _load_layout(device)
     png = _render_from_layout(bg_png, layout)
     return send_file(io.BytesIO(png), mimetype="image/png")
 
-# Random batch (auto-pick theme if none). Returns first PNG + header manifest
+# Random batch (returns first image + manifest header)
 @app.get("/v1/random")
 def v1_random():
     device = request.args.get("device") or DEFAULT_DEVICE
     week = request.args.get("week") or _iso_week()
     theme = request.args.get("theme")
+
     if not theme:
         base = f"images/{week}/"
         themes = sorted({b.name.split("/")[2] for b in storage_client.list_blobs(GCS_BUCKET, prefix=base)
@@ -362,11 +371,13 @@ def v1_random():
     frames = []
     for b in picks:
         bg = b.download_as_bytes()
+        bg = _fit_to_800x480(bg)
         frames.append(_render_from_layout(bg, layout))
 
     manifest = [b.name for b in picks]
-    return send_file(io.BytesIO(frames[0]), mimetype="image/png",
-                     headers={"X-Random-Manifest": json.dumps(manifest)})
+    resp = send_file(io.BytesIO(frames[0]), mimetype="image/png")
+    resp.headers["X-Random-Manifest"] = json.dumps(manifest)
+    return resp
 
 # ──────────────────────────────────────────────────────────────────────────────
 # MAIN
