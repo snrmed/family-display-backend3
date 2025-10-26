@@ -1,4 +1,4 @@
-# backend/main.py - COMPLETE FIXED VERSION for E-ink Display
+# backend/main.py - FIXED VERSION 2 for E-ink Display
 
 import os
 import io
@@ -34,11 +34,11 @@ BASE_DIR = pathlib.Path(__file__).resolve().parent
 FONT_DIR = BASE_DIR / "web" / "designer" / "fonts"
 
 # UI Constants - OPTIMIZED FOR E-INK (Waveshare 6-color Spectra)
-GLASS_ALPHA = 100  # Much more transparent (was 180) - better for e-ink
+GLASS_ALPHA = 50  # MUCH more transparent (was 100, now 60) - better for e-ink
 GLASS_RADIUS = 14
-TEXT_PADDING_X = 8
-TEXT_PADDING_Y = 6
-TEXT_SPACING = 4
+TEXT_PADDING_X = 12  # Increased padding
+TEXT_PADDING_Y = 10  # Increased padding
+TEXT_SPACING = 2     # Tighter line spacing
 
 storage_client = storage.Client()
 bucket = storage_client.bucket(GCS_BUCKET)
@@ -150,14 +150,16 @@ def _glass(draw: ImageDraw.ImageDraw, x, y, w, h, alpha=GLASS_ALPHA, radius=GLAS
     """Draw frosted glass box - optimized for e-ink with higher transparency."""
     draw.rounded_rectangle([x, y, x + w, y + h], radius=radius,
                           fill=(255, 255, 255, alpha), 
-                          outline=(185, 215, 211, 255), 
+                          outline=(200, 200, 200, 200),  # Lighter outline
                           width=1)
 
-def _wrap(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont, max_w: int) -> str:
-    """Wrap text to fit within max_w pixels."""
+def _wrap_text_to_lines(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont, 
+                        max_w: int, max_h: int, line_height: int) -> List[str]:
+    """Wrap text to fit within bounds and truncate if needed."""
     words = text.split()
     lines: List[str] = []
     cur = ""
+    
     for w in words:
         t = (cur + " " + w).strip()
         if draw.textlength(t, font=font) <= max_w or not cur:
@@ -167,7 +169,21 @@ def _wrap(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont, ma
             cur = w
     if cur:
         lines.append(cur)
-    return "\n".join(lines)
+    
+    # Calculate max lines that fit in height
+    max_lines = max(1, int(max_h / line_height))
+    
+    # Truncate with ellipsis if too many lines
+    if len(lines) > max_lines:
+        lines = lines[:max_lines]
+        if lines:
+            last_line = lines[-1]
+            # Try to add ellipsis
+            while draw.textlength(last_line + "...", font=font) > max_w and len(last_line) > 0:
+                last_line = last_line[:-1]
+            lines[-1] = last_line + "..."
+    
+    return lines
 
 def _layout_paths(device: str):
     base = f"layouts/{device}"
@@ -181,9 +197,9 @@ def _layout_paths(device: str):
 # ──────────────────────────────────────────────────────────────────────────────
 
 def _weather(city="Darwin", country="AU"):
-    """Fetch weather with FIXED emoji icons optimized for e-ink display."""
+    """Fetch weather - return text icon instead of emoji for better e-ink rendering."""
     if not OPENWEATHER_API_KEY:
-        return {"city": city, "min": 26, "max": 33, "desc": "Few Clouds", "icon": "⛅"}
+        return {"city": city, "min": 26, "max": 33, "desc": "Few Clouds", "icon": "⛅", "icon_text": "☁"}
     
     try:
         r = requests.get(
@@ -196,21 +212,28 @@ def _weather(city="Darwin", country="AU"):
         w = (j.get("weather") or [{}])[0]
         code = (w.get("icon") or "02d")
         
-        # Simpler emoji set that renders better on e-ink displays
+        # Text-based icons that render better
         if code.startswith("01"):
-            icon = "☀"  # Clear sky
+            icon = "☀"
+            icon_text = "☼"  # Alternative text sun
         elif code.startswith("02"):
-            icon = "⛅"  # Partly cloudy
+            icon = "⛅"
+            icon_text = "☁"
         elif code.startswith("03") or code.startswith("04"):
-            icon = "☁"  # Cloudy
+            icon = "☁"
+            icon_text = "☁"
         elif code.startswith("09") or code.startswith("10"):
-            icon = "🌧"  # Rain
+            icon = "🌧"
+            icon_text = "☂"  # Umbrella
         elif code.startswith("11"):
-            icon = "⛈"  # Thunderstorm
+            icon = "⛈"
+            icon_text = "⚡"  # Lightning
         elif code.startswith("13"):
-            icon = "❄"  # Snow
+            icon = "❄"
+            icon_text = "❄"
         else:
-            icon = "🌫"  # Mist/Fog
+            icon = "🌫"
+            icon_text = "≋"  # Fog waves
         
         return {
             "city": j.get("name") or city,
@@ -218,10 +241,11 @@ def _weather(city="Darwin", country="AU"):
             "max": int(round(main.get("temp_max", 33))),
             "desc": (w.get("description") or "—").title(),
             "icon": icon,
+            "icon_text": icon_text
         }
     except Exception as e:
         print(f"⚠ Weather fetch error: {e}")
-        return {"city": city, "min": 26, "max": 33, "desc": "Few Clouds", "icon": "⛅"}
+        return {"city": city, "min": 26, "max": 33, "desc": "Few Clouds", "icon": "⛅", "icon_text": "☁"}
 
 def _dad_joke():
     """Fetch dad joke with fallbacks."""
@@ -277,7 +301,7 @@ def _load_layout(device: str) -> dict:
 # ──────────────────────────────────────────────────────────────────────────────
 
 def _render_from_layout(bg_png: bytes, layout: dict) -> bytes:
-    """Render overlay with FIXED font loading and icon rendering for e-ink."""
+    """Render overlay with FIXED sizing and proper text wrapping."""
     # Ensure background is exactly 800×480
     bg_png = _fit_to_800x480(bg_png)
     
@@ -301,8 +325,8 @@ def _render_from_layout(bg_png: bytes, layout: dict) -> bytes:
             _glass(draw, x, y, w, h, alpha=GLASS_ALPHA, radius=GLASS_RADIUS)
             continue
         
-        # Calculate font size
-        size = max(14, int(h * 0.7))
+        # FIXED: Smaller font size calculation - reduced from 0.7 to 0.5
+        base_size = max(12, int(h * 0.5))
         
         # Parse weight properly
         weight_raw = el.get("weight", "400")
@@ -310,9 +334,6 @@ def _render_from_layout(bg_png: bytes, layout: dict) -> bytes:
             weight = "700"
         else:
             weight = str(weight_raw) if weight_raw else "400"
-        
-        # FIXED: Load font with corrected path handling
-        font = _load_font(size=size, weight=weight)
         
         # Get text content
         text = el.get("text", "")
@@ -323,24 +344,52 @@ def _render_from_layout(bg_png: bytes, layout: dict) -> bytes:
         elif etype == "WEATHER_NOTE":
             text = weather["desc"]
         elif etype == "WEATHER_ICON":
-            text = weather["icon"]
-            # FIXED: Use larger font for weather icons (better visibility on e-ink)
-            icon_size = int(size * 1.3)
-            font = _load_font(size=icon_size, weight=weight)
+            # Use text-based icon for better rendering
+            text = weather.get("icon_text", weather["icon"])
+            # Larger size for icons
+            font = _load_font(size=int(base_size * 1.2), weight=weight)
+            draw.text(
+                (x + TEXT_PADDING_X, y + TEXT_PADDING_Y), 
+                text, 
+                font=font, 
+                fill=color
+            )
+            continue
         elif etype == "DATE":
             text = date_str
         elif etype == "JOKE":
             text = joke
         
-        # Wrap and draw text
-        wrapped = _wrap(draw, text, font, max_w=max(8, w - TEXT_PADDING_X * 2))
-        draw.multiline_text(
-            (x + TEXT_PADDING_X, y + TEXT_PADDING_Y), 
-            wrapped, 
-            font=font, 
-            fill=color, 
-            spacing=TEXT_SPACING
-        )
+        # Load font
+        font = _load_font(size=base_size, weight=weight)
+        
+        # Calculate line height
+        # Use getbbox for more accurate height measurement
+        try:
+            bbox = draw.textbbox((0, 0), "Ay", font=font)
+            line_height = bbox[3] - bbox[1] + TEXT_SPACING
+        except:
+            line_height = int(base_size * 1.2)
+        
+        # Get available space
+        max_text_w = max(8, w - TEXT_PADDING_X * 2)
+        max_text_h = max(8, h - TEXT_PADDING_Y * 2)
+        
+        # Wrap text with proper bounds checking
+        lines = _wrap_text_to_lines(draw, text, font, max_text_w, max_text_h, line_height)
+        
+        # Draw each line
+        y_offset = y + TEXT_PADDING_Y
+        for line in lines:
+            if y_offset + line_height > y + h - TEXT_PADDING_Y:
+                break  # Don't draw lines that would overflow
+            draw.text(
+                (x + TEXT_PADDING_X, y_offset), 
+                line, 
+                font=font, 
+                fill=color
+            )
+            y_offset += line_height
     
     out = io.BytesIO()
     im.save(out, "PNG")
@@ -360,7 +409,7 @@ def root():
     
     return jsonify({
         "status": "ok",
-        "version": "eink-optimized-2025-10-26-v2",
+        "version": "eink-optimized-2025-10-26-v3",
         "gcs": True,
         "pexels": bool(PEXELS_API_KEY),
         "openweather": bool(OPENWEATHER_API_KEY),
@@ -499,7 +548,7 @@ def v1_random():
 if __name__ == "__main__":
     # Print diagnostic info on startup
     print("=" * 70)
-    print("🖼️  Family Display Backend - E-ink Optimized")
+    print("🖼️  Family Display Backend - E-ink Optimized v3")
     print("=" * 70)
     print(f"Font directory: {FONT_DIR}")
     print(f"Font directory exists: {FONT_DIR.exists()}")
