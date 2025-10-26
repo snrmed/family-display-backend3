@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Overlay Designer — Hosted</title>
+<style>
+:root{
+  --bg:#0d1117; --panel:#111826; --panel2:#0f1623; --ink:#e6edf3; --muted:#8b98a5; --ac:#22c55e;
+  --pill:#25344b; --pill-ink:#b8c7dd; --blue:#60a5fa; --red:#ef4444;
+  --w:800; --h:480;
+}
+*{box-sizing:border-box} html,body{height:100%;background:var(--bg);color:var(--ink);font:14px system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;margin:0}
+.app{display:grid;grid-template-columns:1fr 360px;grid-template-rows:auto 1fr;gap:0}
+header{grid-column:1 / -1;display:flex;align-items:center;gap:16px;padding:10px 14px;background:linear-gradient(180deg,#0f172a,#0b1220);border-bottom:1px solid #1f2a3a}
+header strong{font-weight:700}
+.tiny{font-size:12px;padding:6px 10px;border:1px solid #304058;background:#172235;color:#e6edf3;border-radius:8px;cursor:pointer}
+.tiny:hover{background:#1b2942}
+.right{margin-left:auto;display:flex;align-items:center;gap:12px}
+label{display:inline-flex;align-items:center;gap:6px}
+.muted{color:var(--muted)}
+.stage-wrap{position:relative;display:flex;align-items:center;justify-content:center;padding:14px;background:#0c1421;border-right:1px solid #1f2a3a}
+#zoomStage{transform-origin:0 0}
+#canvas{position:relative;width:var(--w)*1px;height:var(--h)*1px;width:800px;height:480px;border:1px solid #213148;border-radius:14px;overflow:hidden;background:#0b1220}
+#bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:contrast(1.05) saturate(1.05)}
+.sidebar{height:100%;overflow:auto;padding:14px;background:var(--panel)}
+.panel{background:var(--panel2);border:1px solid #213148;border-radius:12px;padding:12px;margin-bottom:12px}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:6px 0}
+.value-pill{background:var(--pill);color:var(--pill-ink);padding:4px 8px;border-radius:999px;border:1px solid #2f415f;font-size:12px}
+.el{position:absolute;user-select:none}
+.el.box{background:rgba(255,255,255,.12);border:1px solid rgba(185,215,211,.65);border-radius:14px;backdrop-filter:blur(6px);box-shadow:0 4px 16px rgba(0,0,0,.35)}
+.el.text,.el.icon{color:#000;display:flex;align-items:flex-start;justify-content:flex-start;padding:6px 8px;font-weight:700;text-shadow:0 1px 0 rgba(255,255,255,.4)}
+.selected{outline:2px dashed var(--blue);outline-offset:2px}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);display:none;align-items:center;justify-content:center;z-index:20}
+.gallery{width:min(1100px,92vw);max-height:88vh;background:#0e1625;border:1px solid #223149;border-radius:12px;overflow:hidden;display:flex;flex-direction:column}
+.gallery .toolbar{display:flex;align-items:center;gap:14px;padding:12px 14px;border-bottom:1px solid #1f2a3a;background:#0d1422}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;padding:14px;overflow:auto}
+.card{background:#0b1220;border:1px solid #1f2a3a;border-radius:10px;padding:10px}
+.thumb{height:150px;background:#0a1320;border-radius:8px;display:flex;align-items:center;justify-content:center;border:1px solid #1c2b44;margin-bottom:8px}
+.swatches{display:flex;gap:6px;flex-wrap:wrap}
+.swatches button{width:18px;height:18px;border-radius:4px;border:1px solid #38506f}
+#output{white-space:pre-wrap;background:#06101d;border:1px solid #142136;border-radius:8px;padding:8px;max-height:200px;overflow:auto}
+input[type="text"],input[type="password"]{background:#0d1728;border:1px solid #22324a;border-radius:8px;color:#e6edf3;padding:6px 8px}
+select{background:#0d1728;border:1px solid #22324a;border-radius:8px;color:#e6edf3;padding:6px 8px}
+</style>
+
+<!-- optional local fonts -->
+<style>
+@font-face{font-family:'Roboto Local';src:url('fonts/Roboto-Regular.ttf') format('truetype');font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:'Roboto Local';src:url('fonts/Roboto-Bold.ttf') format('truetype');font-weight:700;font-style:normal;font-display:swap}
+@font-face{font-family:'Roboto Local';src:url('fonts/Roboto-Light.ttf') format('truetype');font-weight:300;font-style:normal;font-display:swap}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <strong>🖼️ Overlay Designer (Hosted)</strong>
+    <span class="muted">800×480 canvas</span>
+    <label>Zoom <input type="range" id="zoomSlider" min="25" max="175" value="100" style="width:160px"><span id="zoomLabel">100%</span></label>
+    <button id="fitBtn" class="tiny">Fit</button>
+    <div class="right">
+      <label>Template <select id="templateSelect"></select></label>
+      <label>Text theme
+        <select id="textTheme">
+          <option value="dark">Dark text</option>
+          <option value="light" selected>Light text</option>
+        </select>
+      </label>
+      <button id="advancedBtn" class="tiny">🔓 Advanced</button>
+    </div>
+  </header>
+
+  <div class="stage-wrap">
+    <div id="zoomStage">
+      <div id="canvas">
+        <img id="bg" alt="background">
+      </div>
+    </div>
+  </div>
+
+  <div class="sidebar">
+    <div class="panel">
+      <h3>Add</h3>
+      <div class="row">
+        <button id="addBox">▦ Box</button>
+        <button id="addText">Text</button>
+        <button id="addIcon">Icon</button>
+        <button id="addWeather">Weather</button>
+        <button id="addJoke">Dad Joke</button>
+        <button id="addDate">Date</button>
+        <button id="deleteBtn" class="tiny">Delete Selected</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>Backend Sync (CORS)</h3>
+      <div class="row">
+        <label>Backend URL <input id="beUrl" type="text" placeholder="https://<cloud-run>.run.app" style="width:260px"></label>
+      </div>
+      <div class="row">
+        <label>Device ID <input id="beDevice" type="text" placeholder="familydisplay" value="familydisplay" style="width:160px"></label>
+        <label>Admin Token <input id="beToken" type="password" placeholder="••••••••" style="width:160px"></label>
+      </div>
+      <div class="row">
+        <button id="btnLoadServer" class="tiny">⬇️ Load from server</button>
+        <button id="btnSaveServer" class="tiny">⬆️ Save to server</button>
+      </div>
+      <div class="muted">Requires CORS enabled on backend for <code>/layouts/*</code> and <code>/admin/layouts/*</code>.</div>
+    </div>
+
+    <div class="panel" id="inspect" style="display:none">
+      <h3>Selected</h3>
+      <div class="row" id="inspectInfo"></div>
+    </div>
+
+    <div class="panel" id="textCtrl" style="display:none">
+      <h3>Text / Icon</h3>
+      <div class="row">
+        <label>Size <input type="range" id="fontSize" min="10" max="180" value="28" style="width:180px"></label>
+        <span id="fontSizeVal" class="value-pill">28 px</span>
+      </div>
+      <div class="row">
+        <label>Family
+          <select id="fontFamilySel">
+            <option value="system">System</option>
+            <option value="'Roboto Local', Roboto, Arial, sans-serif">Roboto</option>
+          </select>
+        </label>
+        <label>Weight
+          <select id="fontWeightSel">
+            <option value="300">Light</option>
+            <option value="400" selected>Regular</option>
+            <option value="700">Bold</option>
+          </select>
+        </label>
+      </div>
+      <div class="row">
+        <label>Color <input type="color" id="fontColor" value="#000000"></label>
+        <span id="fontColorVal" class="value-pill">#000000</span>
+      </div>
+      <div class="row">
+        <div class="swatches" id="fontColorSwatches"></div>
+      </div>
+    </div>
+
+    <div class="panel" id="boxCtrl" style="display:none">
+      <h3>Box Style</h3>
+      <div class="row">
+        <label>Opacity <input type="range" id="alpha" min="0" max="255" step="5" value="160" style="width:180px"></label>
+        <span id="alphaVal" class="value-pill">160 / 255</span>
+      </div>
+      <div class="row">
+        <label>Radius <input type="range" id="radius" min="0" max="30" value="14" style="width:180px"></label>
+        <span id="radiusVal" class="value-pill">14 px</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>Export / Import</h3>
+      <div class="row">
+        <button id="btnExport" class="tiny">Export JSON</button>
+        <input type="file" id="importFile" accept=".json" style="display:none">
+        <button id="btnImport" class="tiny">Import JSON</button>
+        <button id="btnDownloadPNG" class="tiny">Download PNG</button>
+      </div>
+      <pre id="output"></pre>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="galleryOverlay">
+  <div class="gallery">
+    <div class="toolbar">
+      <div>
+        <h2 style="margin:0">Choose a Template</h2>
+        <div class="muted">Pick a template to start (previews are static here).</div>
+      </div>
+      <div class="right">
+        <label>Text theme <select id="galleryTextTheme">
+          <option value="dark">Dark</option>
+          <option value="light" selected>Light</option>
+        </select></label>
+        <button id="galleryAdvanced" class="tiny">🔓 Advanced</button>
+      </div>
+    </div>
+    <div class="grid" id="templateGrid"></div>
+  </div>
+</div>
+
+<canvas id="exportCanvas" width="800" height="480" style="display:none"></canvas>
+
+<script>
+// ---------- INIT ----------
+const canvas = document.getElementById('canvas');
+const bg = document.getElementById('bg');
+const zoomSlider = document.getElementById('zoomSlider');
+const zoomLabel = document.getElementById('zoomLabel');
+const zoomStage = document.getElementById('zoomStage');
+const fitBtn = document.getElementById('fitBtn');
+const templateSelect = document.getElementById('templateSelect');
+const textThemeSelect = document.getElementById('textTheme');
+const galleryOverlay = document.getElementById('galleryOverlay');
+const galleryTextTheme = document.getElementById('galleryTextTheme');
+const templateGrid = document.getElementById('templateGrid');
+const beUrl = document.getElementById('beUrl');
+const beDevice = document.getElementById('beDevice');
+const beToken = document.getElementById('beToken');
+let advancedUnlocked=false, selected=null;
+
+// background gradient
+(function drawGradient(){
+  const c=document.createElement('canvas'); c.width=800; c.height=480;
+  const g=c.getContext('2d').createLinearGradient(0,0,800,480);
+  const ctx=c.getContext('2d'); g.addColorStop(0,'#2d2f55'); g.addColorStop(.5,'#4a99a7'); g.addColorStop(1,'#9ad1c8');
+  ctx.fillStyle=g; ctx.fillRect(0,0,800,480); bg.src=c.toDataURL();
+})();
+
+// zoom
+zoomSlider.addEventListener('input',()=>{ const z=zoomSlider.value/100; zoomStage.style.transform=`scale(${z})`; zoomLabel.textContent=zoomSlider.value+'%'; });
+fitBtn.onclick=()=>{
+  const zw=(window.innerWidth-380)/800; const zh=(window.innerHeight-100)/480; const fit=Math.min(zw,zh)*100;
+  zoomSlider.value=Math.round(fit); zoomSlider.dispatchEvent(new Event('input'));
+};
+
+// helpers
+function makeEl(cls,x=50,y=50,w=160,h=80){ const el=document.createElement('div'); el.className='el '+cls; el.style.left=x+'px'; el.style.top=y+'px'; el.style.width=w+'px'; el.style.height=h+'px'; el.draggable=false; canvas.appendChild(el); return el; }
+function parsePx(v){return parseFloat(v.replace('px',''))||0;}
+function selectEl(el){ if(selected) selected.classList.remove('selected'); selected=el; if(selected){selected.classList.add('selected'); updateInspector();} else hideInspector(); }
+function hideInspector(){ document.getElementById('inspect').style.display='none'; document.getElementById('textCtrl').style.display='none'; document.getElementById('boxCtrl').style.display='none'; }
+function updateInspector(){
+  const insp=document.getElementById('inspect'); const info=document.getElementById('inspectInfo');
+  if(!selected){insp.style.display='none';return;}
+  insp.style.display='block'; info.textContent=selected.className;
+  document.getElementById('textCtrl').style.display = (selected.classList.contains('text')||selected.classList.contains('icon'))?'block':'none';
+  document.getElementById('boxCtrl').style.display  = (selected.classList.contains('box'))?'block':'none';
+}
+
+// drag/move
+let dragData=null;
+canvas.addEventListener('mousedown',e=>{
+  if(!advancedUnlocked)return;
+  const t=e.target.closest('.el'); if(t){ selectEl(t);
+    const r=t.getBoundingClientRect(); dragData={el:t,dx:e.clientX-r.left,dy:e.clientY-r.top};
+  } else selectEl(null);
+});
+window.addEventListener('mousemove',e=>{
+  if(dragData){ const el=dragData.el;
+    const nx=e.clientX-dragData.dx-canvas.getBoundingClientRect().left;
+    const ny=e.clientY-dragData.dy-canvas.getBoundingClientRect().top;
+    el.style.left=Math.max(0,Math.min(nx,canvas.clientWidth-el.offsetWidth))+'px';
+    el.style.top=Math.max(0,Math.min(ny,canvas.clientHeight-el.offsetHeight))+'px';
+  }
+});
+window.addEventListener('mouseup',()=>dragData=null);
+
+// add elements
+function addBox(){ selectEl(makeEl('box',100,100,300,120)); }
+function addText(){ const el=makeEl('text',140,130,180,40); el.textContent='Text'; selectEl(el); }
+function addIcon(){ const el=makeEl('icon',200,200,60,60); el.textContent='☀️'; selectEl(el); }
+function addWeather(){ const el=makeEl('text',100,380,240,40); el.textContent='City • 32° / 26°'; selectEl(el); }
+function addJoke(){ const el=makeEl('text',420,380,340,60); el.textContent='Dad joke goes here and wraps across lines.'; selectEl(el); }
+function addDate(){ const el=makeEl('text',540,40,200,40); el.textContent='Sunday, 26 Oct'; selectEl(el); }
+document.getElementById('addBox').onclick=addBox;
+document.getElementById('addText').onclick=addText;
+document.getElementById('addIcon').onclick=addIcon;
+document.getElementById('addWeather').onclick=addWeather;
+document.getElementById('addJoke').onclick=addJoke;
+document.getElementById('addDate').onclick=addDate;
+document.getElementById('deleteBtn').onclick=()=>{ if(selected){selected.remove(); selected=null; hideInspector(); }};
+
+// advanced toggle
+const advancedBtn=document.getElementById('advancedBtn');
+advancedBtn.onclick=()=>{ advancedUnlocked=!advancedUnlocked; advancedBtn.textContent=advancedUnlocked?'🔒 Lock Advanced':'🔓 Advanced'; };
+
+// inspector controls
+const fontSize=document.getElementById('fontSize'); const fontSizeVal=document.getElementById('fontSizeVal');
+const fontFamilySel=document.getElementById('fontFamilySel'); const fontWeightSel=document.getElementById('fontWeightSel');
+const fontColor=document.getElementById('fontColor'); const fontColorVal=document.getElementById('fontColorVal');
+const alpha=document.getElementById('alpha'); const alphaVal=document.getElementById('alphaVal'); const radius=document.getElementById('radius'); const radiusVal=document.getElementById('radiusVal');
+
+fontSize.oninput=()=>{ if(selected){ selected.style.fontSize=fontSize.value+'px'; selected.style.height=(parseInt(fontSize.value,10)*1.2)+'px'; fontSizeVal.textContent=fontSize.value+' px'; } };
+fontFamilySel.onchange=()=>{ if(selected){ selected.style.fontFamily=fontFamilySel.value==='system'?'':fontFamilySel.value; } };
+fontWeightSel.onchange=()=>{ if(selected){ selected.style.fontWeight=fontWeightSel.value; } };
+fontColor.oninput=()=>{ if(selected){ selected.style.color=fontColor.value; fontColorVal.textContent=fontColor.value; } };
+alpha.oninput=()=>{ if(selected && selected.classList.contains('box')){ selected.style.background=`rgba(255,255,255,${(+alpha.value/255).toFixed(2)})`; alphaVal.textContent=alpha.value+' / 255'; } };
+radius.oninput=()=>{ if(selected && selected.classList.contains('box')){ selected.style.borderRadius=radius.value+'px'; radiusVal.textContent=radius.value+' px'; } };
+
+// preset list
+const PRESET_NAMES=[
+  {key:'coastal_split', name:'Coastal Split'},
+  {key:'minimal_column', name:'Minimal Column'},
+  {key:'top_bar_breeze', name:'Top Bar Breeze'},
+  {key:'left_rail_clear', name:'Left Rail Clear'},
+  {key:'center_float', name:'Center Float'}
+];
+PRESET_NAMES.forEach(p=>{ const o=document.createElement('option'); o.value=p.key; o.textContent=p.name; templateSelect.appendChild(o); });
+
+// load presets (from relative /presets/)
+async function loadPreset(key, theme){
+  const suffix = theme==='light' ? '_light' : '_dark';
+  const url = `presets/${key}${suffix}.json`;
+  const r = await fetch(url, {cache:'no-store'});
+  if(!r.ok) return {elements:[]};
+  return r.json();
+}
+function clearCanvas(){ [...canvas.querySelectorAll('.el')].forEach(n=>n.remove()); }
+
+function renderLayout(data){
+  (data.elements||[]).forEach(el=>{
+    const div=makeEl(el.kind||'box',el.x||0,el.y||0,el.w||150,el.h||50);
+    div.textContent = el.text || (String(el.kind).includes('icon') ? '☀️' : '');
+    if(el.color) div.style.color=el.color;
+  });
+}
+
+async function applyTemplate(key, theme){
+  clearCanvas();
+  const json = await loadPreset(key, theme);
+  renderLayout(json);
+}
+
+templateSelect.onchange=()=>applyTemplate(templateSelect.value, textThemeSelect.value);
+textThemeSelect.onchange=()=>applyTemplate(templateSelect.value || 'coastal_split', textThemeSelect.value);
+
+// gallery
+async function buildGallery(){
+  templateGrid.innerHTML='';
+  for(const p of PRESET_NAMES){
+    const card=document.createElement('div'); card.className='card';
+    const th=document.createElement('div'); th.className='thumb';
+    const cv=document.createElement('canvas'); cv.width=240; cv.height=140; th.appendChild(cv);
+    const t=document.createElement('div'); t.className='title'; t.textContent=p.name;
+    const btn=document.createElement('button'); btn.textContent='Use this'; btn.className='tiny';
+    btn.onclick=()=>{ galleryOverlay.style.display='none'; templateSelect.value=p.key; applyTemplate(p.key, galleryTextTheme.value); };
+    card.appendChild(th); card.appendChild(t); card.appendChild(btn); templateGrid.appendChild(card);
+    // draw miniature
+    const ctx=cv.getContext('2d');
+    const g=ctx.createLinearGradient(0,0,240,140); g.addColorStop(0,'#2d2f55'); g.addColorStop(.5,'#4a99a7'); g.addColorStop(1,'#9ad1c8');
+    ctx.fillStyle=g; ctx.fillRect(0,0,240,140);
+    ctx.fillStyle = galleryTextTheme.value==='light' ? '#fff':'#000';
+    ctx.font='bold 14px Arial'; ctx.fillText(p.name,10,20);
+  }
+}
+galleryTextTheme.onchange=buildGallery;
+
+// export/import
+document.getElementById('btnExport').onclick=()=>{
+  const data=getCurrentLayoutJSON();
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='layout.json'; a.click();
+};
+document.getElementById('btnImport').onclick=()=>document.getElementById('importFile').click();
+document.getElementById('importFile').onchange=async(e)=>{
+  const f=e.target.files[0]; if(!f)return; const txt=await f.text();
+  try{ const json=JSON.parse(txt); clearCanvas(); renderLayout(json); }catch(_){ alert('Invalid JSON'); }
+};
+
+// PNG render (approx)
+document.getElementById('btnDownloadPNG').onclick=()=>{
+  const ex=document.getElementById('exportCanvas'), ctx=ex.getContext('2d');
+  // bg
+  const g=ctx.createLinearGradient(0,0,800,480); g.addColorStop(0,'#2d2f55'); g.addColorStop(.5,'#4a99a7'); g.addColorStop(1,'#9ad1c8');
+  ctx.fillStyle=g; ctx.fillRect(0,0,800,480);
+  // draw items
+  const els=[...canvas.querySelectorAll('.el')];
+  els.forEach(el=>{
+    const x=parsePx(el.style.left), y=parsePx(el.style.top), w=el.offsetWidth, h=el.offsetHeight;
+    if(el.classList.contains('box')){
+      ctx.fillStyle='rgba(255,255,255,.16)'; ctx.strokeStyle='rgba(185,215,211,.65)'; ctx.lineWidth=1;
+      ctx.beginPath(); roundRect(ctx, x,y,w,h,12); ctx.fill(); ctx.stroke();
+    }else{
+      ctx.fillStyle=getComputedStyle(el).color; ctx.font=`bold ${Math.max(12,Math.floor(h*0.7))}px Arial`; ctx.textBaseline='top';
+      wrapText(ctx, el.textContent.trim(), x+6,y+4, w-12, Math.max(12,Math.floor(h*0.8)));
+    }
+  });
+  const link=document.createElement('a'); link.download='overlay.png'; link.href=ex.toDataURL('image/png'); link.click();
+};
+function roundRect(ctx,x,y,w,h,r){ const rr=Math.min(r, w/2, h/2); ctx.moveTo(x+rr,y); ctx.arcTo(x+w,y,x+w,y+h,rr); ctx.arcTo(x+w,y+h,x,y+h,rr); ctx.arcTo(x,y+h,x,y,rr); ctx.arcTo(x,y,x+w,y,rr); ctx.closePath(); }
+function wrapText(ctx, text, x, y, maxW, lineH){ const words=text.split(/\s+/); let line=''; for(const w of words){ const t=(line?line+' ':'')+w; if(ctx.measureText(t).width<=maxW||!line){ line=t; }else{ ctx.fillText(line,x,y); y+=lineH; line=w; } } if(line) ctx.fillText(line,x,y); }
+function getCurrentLayoutJSON(){
+  const els=[...canvas.querySelectorAll('.el')].map(el=>({
+    kind: el.className.includes('box')?'box':(el.className.includes('icon')?'icon':'text'),
+    x: parsePx(el.style.left), y: parsePx(el.style.top), w: el.offsetWidth, h: el.offsetHeight,
+    text: (el.textContent||'').trim(),
+    color: getComputedStyle(el).color
+  }));
+  return {elements:els};
+}
+
+// Backend (CORS)
+async function loadFromServer(){
+  const base=beUrl.value.trim().replace(/\/$/,''); const dev=beDevice.value.trim();
+  if(!base||!dev) return alert('Enter Backend URL and Device ID');
+  try{
+    const res=await fetch(`${base}/layouts/${encodeURIComponent(dev)}`, {mode:'cors', cache:'no-store'});
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json=await res.json(); clearCanvas(); renderLayout(json); alert('Loaded from server.');
+  }catch(err){ alert('Load failed: '+err.message); }
+}
+async function saveToServer(){
+  const base=beUrl.value.trim().replace(/\/$/,''); const dev=beDevice.value.trim(); const tok=beToken.value.trim();
+  if(!base||!dev) return alert('Enter Backend URL and Device ID');
+  if(!confirm(`Publish this layout to device “${dev}”?`)) return;
+  try{
+    const res=await fetch(`${base}/admin/layouts/${encodeURIComponent(dev)}${tok?`?token=${encodeURIComponent(tok)}`:''}`,{
+      method:'PUT', mode:'cors', headers:{'Content-Type':'application/json'}, body:JSON.stringify(getCurrentLayoutJSON())
+    });
+    if(!res.ok) throw new Error(`HTTP ${res.status} — ${await res.text()}`);
+    const out=await res.json(); alert(`Saved ✔︎ version: ${out.version}`);
+  }catch(err){ alert('Save failed: '+err.message); }
+}
+document.getElementById('btnLoadServer').onclick=loadFromServer;
+document.getElementById('btnSaveServer').onclick=saveToServer;
+
+// template gallery
+async function init(){
+  // prefill from URL ?backend=&device=&token=
+  try{
+    const u=new URL(location.href);
+    if(u.searchParams.get('backend')) beUrl.value=u.searchParams.get('backend');
+    if(u.searchParams.get('device'))  beDevice.value=u.searchParams.get('device');
+    if(u.searchParams.get('token'))   beToken.value=u.searchParams.get('token');
+  }catch(_){}
+  buildGallery();
+  galleryOverlay.style.display='flex';
+  templateSelect.value='coastal_split';
+  await applyTemplate('coastal_split', textThemeSelect.value);
+}
+document.getElementById('galleryAdvanced').onclick=()=>{ galleryOverlay.style.display='none'; advancedUnlocked=true; advancedBtn.textContent='🔒 Lock Advanced'; };
+init();
+</script>
+</body>
+</html>
