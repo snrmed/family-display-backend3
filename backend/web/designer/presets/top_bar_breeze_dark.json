@@ -1,0 +1,9 @@
+{
+  "elements": [
+    {"kind":"box","x":20,"y":20,"w":760,"h":80},
+    {"kind":"text","x":40,"y":40,"w":260,"h":40,"text":"Darwin • 32° / 26°","color":"#000000"},
+    {"kind":"text","x":320,"y":40,"w":260,"h":40,"text":"Sunday, 26 Oct","color":"#000000"},
+    {"kind":"text","x":620,"y":40,"w":140,"h":40,"text":"☀️","color":"#000000"},
+    {"kind":"text","x":200,"y":380,"w":400,"h":60,"text":"I used to play piano by ear... now I use my hands.","color":"#000000"}
+  ]
+}

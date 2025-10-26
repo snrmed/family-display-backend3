@@ -1,0 +1,8 @@
+{
+  "elements": [
+    {"kind":"box","x":200,"y":160,"w":400,"h":160},
+    {"kind":"text","x":240,"y":180,"w":320,"h":60,"text":"Darwin • 32° / 26°","color":"#000000"},
+    {"kind":"text","x":240,"y":250,"w":320,"h":60,"text":"Sunday, 26 Oct","color":"#000000"},
+    {"kind":"text","x":180,"y":360,"w":440,"h":60,"text":"I used to play piano by ear... now I use my hands.","color":"#000000"}
+  ]
+}
