@@ -1,20 +1,17 @@
 import os
 import datetime
+from typing import Optional
+
 from fastapi import FastAPI, Response, HTTPException, Query
 from fastapi.responses import JSONResponse, HTMLResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from playwright.sync_api import sync_playwright
-from typing import Optional
 
 # ── ENV ────────────────────────────────────────────────────────────────────────
 BUCKET = os.getenv("GCS_BUCKET", "")                # e.g. family-display-packs
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "adm_demo")  # change in prod
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "http://127.0.0.1:8080")
-
-# Multi-device ready: default single device for now
 DEFAULT_DEVICE_ID = os.getenv("DEFAULT_DEVICE_ID", "familydisplay")
-
-# Fallback presentation defaults (used by /v1/render_data until you wire real data)
 DEFAULT_CITY = os.getenv("DEFAULT_CITY", "Darwin, AU")
 DEFAULT_UNITS = os.getenv("DEFAULT_UNITS", "metric")
 TIMEZONE = os.getenv("TIMEZONE", "Australia/Adelaide")
@@ -22,7 +19,6 @@ TIMEZONE = os.getenv("TIMEZONE", "Australia/Adelaide")
 # ── App ────────────────────────────────────────────────────────────────────────
 app = FastAPI(title="Family Display - HTML Renderer", version="1.0")
 
-# CORS (Designer preview or other tools may call this service from a different host)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], allow_credentials=True,
@@ -44,25 +40,22 @@ except Exception:
 
 def gcs_exists(key: str) -> bool:
     if not storage_enabled: return False
-    b = _gcs_bucket.blob(key)
-    return b.exists()
+    return _gcs_bucket.blob(key).exists()
 
 def gcs_read_bytes(key: str) -> bytes:
-    b = _gcs_bucket.blob(key)
-    return b.download_as_bytes()
+    return _gcs_bucket.blob(key).download_as_bytes()
 
 def gcs_write_bytes(key: str, data: bytes, content_type: str, cache: str = "public, max-age=60"):
     b = _gcs_bucket.blob(key)
     b.cache_control = cache
     b.upload_from_string(data, content_type=content_type)
 
-# ── Data API (Stage 1 stub; replace with real providers in Step 2.1) ──────────
+# ── Data API (Stage 1 stub; wire real providers later) ────────────────────────
 @app.get("/v1/render_data")
 def v1_render_data(
     device: Optional[str] = Query(None),
     theme: str = Query("abstract")
 ):
-    """Return live data for the HTML layout (stub for Stage 1)."""
     device = device or DEFAULT_DEVICE_ID
     today = datetime.date.today().isoformat()
     return JSONResponse({
@@ -71,7 +64,6 @@ def v1_render_data(
         "timezone": TIMEZONE,
         "weather": {"min": 27, "max": 34, "desc": "Sunny", "icon": "01d", "provider": "openweather"},
         "dad_joke": "I told my wife she should embrace her mistakes — she gave me a hug.",
-        # Use your cached image path (serve from your domain) for reliability
         "pexels_bg_url": "/images/preview/abstract_v0.png",
         "theme": theme,
         "units": DEFAULT_UNITS,
@@ -88,11 +80,11 @@ def get_layout_html(name: str):
     with open(path, "r", encoding="utf-8") as f:
         return HTMLResponse(f.read())
 
-# ── Render Now: open layout URL in headless Chromium and screenshot #canvas ────
+# ── Render Now: headless Chromium → screenshot #canvas ─────────────────────────
 @app.get("/admin/render_now")
 def admin_render_now(
     device: Optional[str] = Query(None, description="Device ID (defaults to DEFAULT_DEVICE_ID)"),
-    layout: str = Query("base", description="Layout file in web/layouts/ (without .html)"),
+    layout: str = Query("base", description="Layout file name in web/layouts/ (without .html)"),
     token: str = Query(..., description="Admin token")
 ):
     if token != ADMIN_TOKEN:
@@ -105,7 +97,6 @@ def admin_render_now(
     )
     png = _take_element_screenshot(layout_url, selector="#canvas", width=800, height=480)
 
-    # Save to GCS if configured
     today = datetime.date.today().strftime("%Y-%m-%d")
     latest_key = f"renders/{device}/latest.png"
     dated_key  = f"renders/{device}/{today}/v_0.png"
@@ -114,17 +105,12 @@ def admin_render_now(
         gcs_write_bytes(latest_key, png, "image/png", cache="no-cache")
         gcs_write_bytes(dated_key,  png, "image/png", cache="public, max-age=31536000")
 
-    # Also return the PNG for immediate verification
     return Response(content=png, media_type="image/png")
 
 def _take_element_screenshot(url: str, selector: str, width: int, height: int) -> bytes:
-    """Launch headless Chromium, load URL, screenshot specific element."""
     with sync_playwright() as p:
         browser = p.chromium.launch(args=["--no-sandbox"])
-        page = browser.new_page(
-            viewport={"width": width, "height": height},
-            device_scale_factor=1
-        )
+        page = browser.new_page(viewport={"width": width, "height": height}, device_scale_factor=1)
         page.goto(url, wait_until="networkidle")
         page.wait_for_selector(selector, state="visible", timeout=15_000)
         element = page.query_selector(selector)
@@ -144,7 +130,7 @@ def v1_frame(device: Optional[str] = Query(None)):
         data = gcs_read_bytes(key)
         return Response(content=data, media_type="image/png", headers={"Cache-Control": "no-cache"})
 
-    # Local dev fallback: serve a sample if present
+    # Local dev fallback
     here = os.path.dirname(__file__)
     local_sample = os.path.join(here, "web", "layouts", "sample.png")
     if os.path.exists(local_sample):
