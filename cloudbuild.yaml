@@ -1,9 +1,5 @@
-# Cloud Build configuration to build and (optionally) deploy the HTML-render backend.
-# Set substitutions when creating the trigger or running builds:
-# _SERVICE_NAME: the Cloud Run service name (e.g., family-display-backend)
-# _REGION: e.g., australia-southeast1
-# _PROJECT_ID: the GCP project ID
-# _IMAGE_NAME: container name (default: family-html)
+# Cloud Build: build + push + deploy from backend/ directory
+# Edit _SERVICE_NAME, _REGION as needed.
 
 substitutions:
   _SERVICE_NAME: "family-display-backend"
@@ -21,7 +17,7 @@ steps:
   - name: "gcr.io/cloud-builders/docker"
     args: ["push", "gcr.io/${_PROJECT_ID}/${_IMAGE_NAME}"]
 
-  # Optional: Deploy to Cloud Run (comment out if you only want to build/push)
+  # Deploy to Cloud Run
   - name: "gcr.io/cloud-builders/gcloud"
     entrypoint: gcloud
     args:
@@ -33,7 +29,14 @@ steps:
       - --platform=managed
       - --allow-unauthenticated
       - --set-env-vars
-      - GCS_BUCKET=family-display-packs,ADMIN_TOKEN=adm_123456,PUBLIC_BASE_URL=https://REPLACE-WITH-RUN-URL
+      - >
+        GCS_BUCKET=family-display-packs,
+        ADMIN_TOKEN=adm_123456,
+        PUBLIC_BASE_URL=https://REPLACE-WITH-RUN-URL,
+        DEFAULT_DEVICE_ID=familydisplay,
+        DEFAULT_CITY=Darwin, AU,
+        DEFAULT_UNITS=metric,
+        TIMEZONE=Australia/Adelaide
 
 images:
   - "gcr.io/${_PROJECT_ID}/${_IMAGE_NAME}"
