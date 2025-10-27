@@ -200,6 +200,18 @@ def _take_element_screenshot(url: str, selector: str, width: int, height: int) -
         browser.close()
         return png
 
+# --- Helper: render & save the latest image ---
+def _render_and_store_latest(device: str, layout: str = "base") -> bytes:
+    layout_url = (
+        f"{PUBLIC_BASE_URL}/web/layouts/{layout}.html"
+        f"?mode=render&device={device}&backend={PUBLIC_BASE_URL}"
+    )
+    png = _take_element_screenshot(layout_url, selector="#canvas", width=800, height=480)
+    if storage_enabled:
+        latest_key = f"renders/{device}/latest.png"
+        gcs_write_bytes(latest_key, png, "image/png", cache="no-cache")
+    return png
+
 
 # ── /v1/frame  → serve latest PNG for device ────────────────────────────
 @app.get("/v1/frame")
@@ -267,3 +279,23 @@ def admin_prefetch(
         written[theme] = {"downloaded": len(keys), "keys": keys}
 
     return JSONResponse({"themes": theme_list, "result": written})
+
+# --- Endpoint: ensure latest render exists ---
+@app.api_route("/admin/ensure_latest", methods=["POST", "GET"])
+def admin_ensure_latest(
+    request: Request,
+    token: str = Query(...),
+    device: Optional[str] = Query(None),
+    layout: str = Query("base"),
+):
+    if token != ADMIN_TOKEN:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    device = device or DEFAULT_DEVICE_ID
+
+    key = f"renders/{device}/latest.png"
+    if storage_enabled and gcs_exists(key):
+        data = gcs_read_bytes(key)
+        return Response(content=data, media_type="image/png")
+
+    png = _render_and_store_latest(device=device, layout=layout)
+    return Response(content=png, media_type="image/png")
