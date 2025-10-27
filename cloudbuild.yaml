@@ -1,22 +1,22 @@
 steps:
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'gcr.io/$PROJECT_ID/family-display-backend', '-f', 'Dockerfile', '.']
+    args: ['build', '-t', 'australia-southeast1-docker.pkg.dev/$PROJECT_ID/family-display/backend', '-f', 'Dockerfile', '.']
     timeout: 1200s
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'gcr.io/$PROJECT_ID/family-display-backend']
+    args: ['push', 'australia-southeast1-docker.pkg.dev/$PROJECT_ID/family-display/backend']
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
     args:
       - 'run'
       - 'deploy'
       - 'family-display-backend'
-      - '--image=gcr.io/$PROJECT_ID/family-display-backend'
+      - '--image=australia-southeast1-docker.pkg.dev/$PROJECT_ID/family-display/backend'
       - '--region=australia-southeast1'
       - '--platform=managed'
       - '--allow-unauthenticated'
-      - '--set-env-vars=GCS_BUCKET=family-display-packs,ADMIN_TOKEN=adm_860510,PUBLIC_BASE_URL=https://family-display-backend-867804884116.australia-southeast1.run.app,DEFAULT_DEVICE_ID=familydisplay,DEFAULT_CITY=Darwin AU,DEFAULT_UNITS=metric,TIMEZONE=Australia/Adelaide'
+      - '--update-env-vars=GCS_BUCKET=family-display-packs,ADMIN_TOKEN=adm_860510,PUBLIC_BASE_URL=https://family-display-backend-867804884116.australia-southeast1.run.app,DEFAULT_DEVICE_ID=familydisplay,DEFAULT_CITY=Darwin AU,DEFAULT_UNITS=metric,TIMEZONE=Australia/Adelaide'
 images:
-  - 'gcr.io/$PROJECT_ID/family-display-backend'
+  - 'australia-southeast1-docker.pkg.dev/$PROJECT_ID/family-display/backend'
 timeout: 1800s
 options:
   logging: CLOUD_LOGGING_ONLY
