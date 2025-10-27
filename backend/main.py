@@ -4,23 +4,32 @@ from fastapi import FastAPI, Response, HTTPException, Query
 from fastapi.responses import JSONResponse, HTMLResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from playwright.sync_api import sync_playwright
+from typing import Optional
 
-# ---- ENV ----
+# ── ENV ────────────────────────────────────────────────────────────────────────
 BUCKET = os.getenv("GCS_BUCKET", "")                # e.g. family-display-packs
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "adm_demo")  # change in prod
-PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "http://127.0.0.1:8080")  # Cloud Run URL once deployed
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "http://127.0.0.1:8080")
 
-# ---- App ----
+# Multi-device ready: default single device for now
+DEFAULT_DEVICE_ID = os.getenv("DEFAULT_DEVICE_ID", "familydisplay")
+
+# Fallback presentation defaults (used by /v1/render_data until you wire real data)
+DEFAULT_CITY = os.getenv("DEFAULT_CITY", "Darwin, AU")
+DEFAULT_UNITS = os.getenv("DEFAULT_UNITS", "metric")
+TIMEZONE = os.getenv("TIMEZONE", "Australia/Adelaide")
+
+# ── App ────────────────────────────────────────────────────────────────────────
 app = FastAPI(title="Family Display - HTML Renderer", version="1.0")
 
-# CORS (Designer preview may call this service from a different host)
+# CORS (Designer preview or other tools may call this service from a different host)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], allow_credentials=True,
     allow_methods=["*"], allow_headers=["*"],
 )
 
-# ---- Storage: GCS if configured, else local-only ----
+# ── Storage: GCS if configured, else local-only ───────────────────────────────
 storage_enabled = False
 try:
     from google.cloud import storage as gcs_storage  # type: ignore
@@ -47,21 +56,29 @@ def gcs_write_bytes(key: str, data: bytes, content_type: str, cache: str = "publ
     b.cache_control = cache
     b.upload_from_string(data, content_type=content_type)
 
-# ---- Data API (stub for Stage 1) ----
+# ── Data API (Stage 1 stub; replace with real providers in Step 2.1) ──────────
 @app.get("/v1/render_data")
-def v1_render_data(device: str, theme: str = "abstract"):
-    """Return the dynamic data your HTML uses. Wire real weather/pexels later."""
+def v1_render_data(
+    device: Optional[str] = Query(None),
+    theme: str = Query("abstract")
+):
+    """Return live data for the HTML layout (stub for Stage 1)."""
+    device = device or DEFAULT_DEVICE_ID
     today = datetime.date.today().isoformat()
     return JSONResponse({
         "date": today,
-        "city": "Darwin, AU",
-        "weather": {"min": 27, "max": 34, "desc": "Sunny", "icon": "01d"},
+        "city": DEFAULT_CITY,
+        "timezone": TIMEZONE,
+        "weather": {"min": 27, "max": 34, "desc": "Sunny", "icon": "01d", "provider": "openweather"},
         "dad_joke": "I told my wife she should embrace her mistakes — she gave me a hug.",
-        # Point to your cached background if you have it; else a dev placeholder path
-        "pexels_bg_url": "/images/preview/abstract_v0.png"
+        # Use your cached image path (serve from your domain) for reliability
+        "pexels_bg_url": "/images/preview/abstract_v0.png",
+        "theme": theme,
+        "units": DEFAULT_UNITS,
+        "device": device
     })
 
-# ---- Serve a local layout (Stage-1 example) ----
+# ── Serve a local layout (Stage-1 example) ─────────────────────────────────────
 @app.get("/web/layouts/{name}.html")
 def get_layout_html(name: str):
     here = os.path.dirname(__file__)
@@ -71,16 +88,17 @@ def get_layout_html(name: str):
     with open(path, "r", encoding="utf-8") as f:
         return HTMLResponse(f.read())
 
-# ---- Render Now: open layout URL in headless Chromium and screenshot #canvas ----
+# ── Render Now: open layout URL in headless Chromium and screenshot #canvas ────
 @app.get("/admin/render_now")
 def admin_render_now(
-    device: str = Query(..., description="Device ID"),
-    layout: str = Query("base", description="Layout name (file in web/layouts/)"),
+    device: Optional[str] = Query(None, description="Device ID (defaults to DEFAULT_DEVICE_ID)"),
+    layout: str = Query("base", description="Layout file in web/layouts/ (without .html)"),
     token: str = Query(..., description="Admin token")
 ):
     if token != ADMIN_TOKEN:
         raise HTTPException(status_code=401, detail="Invalid token")
 
+    device = device or DEFAULT_DEVICE_ID
     layout_url = (
         f"{PUBLIC_BASE_URL}/web/layouts/{layout}.html"
         f"?mode=render&device={device}&backend={PUBLIC_BASE_URL}"
@@ -117,9 +135,10 @@ def _take_element_screenshot(url: str, selector: str, width: int, height: int) -
         browser.close()
         return png
 
-# ---- Device endpoint: returns latest PNG ----
+# ── Device endpoint: returns latest PNG ────────────────────────────────────────
 @app.get("/v1/frame")
-def v1_frame(device: str):
+def v1_frame(device: Optional[str] = Query(None)):
+    device = device or DEFAULT_DEVICE_ID
     key = f"renders/{device}/latest.png"
     if storage_enabled and gcs_exists(key):
         data = gcs_read_bytes(key)
@@ -130,4 +149,4 @@ def v1_frame(device: str):
     local_sample = os.path.join(here, "web", "layouts", "sample.png")
     if os.path.exists(local_sample):
         return FileResponse(local_sample, media_type="image/png")
-    raise HTTPException(404, "No render available")
+    raise HTTPException(404, f"No render available for device '{device}'")
