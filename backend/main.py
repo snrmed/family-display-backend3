@@ -45,10 +45,6 @@ _icon_cache: dict[str, Image.Image] = {}
 # ──────────────────────────────────────────────────────────────────────────────
 # HELPERS
 # ──────────────────────────────────────────────────────────────────────────────
-def _iso_week() -> str:
-    y, w, _ = datetime.date.today().isocalendar()
-    return f"{y}-W{w:02d}"
-
 def _blob_text(path: str) -> Optional[str]:
     b = bucket.blob(path)
     try:
@@ -64,7 +60,6 @@ def _put_png(path: str, data: bytes, cache_control: str = "public, max-age=86400
     b.upload_from_string(data, content_type="image/png")
 
 def _load_font(size: int, weight: str = "400") -> ImageFont.FreeTypeFont:
-    """Load Roboto from FONT_DIR, fallback to DejaVu, then default bitmap."""
     cache_key = f"{size}:{weight}"
     if cache_key in _font_cache:
         return _font_cache[cache_key]
@@ -154,10 +149,8 @@ def _layout_paths(device: str):
 OWM_ICON_URL = "https://openweathermap.org/img/wn/{code}@2x.png"
 
 def _get_weather_icon_image(code: str) -> Optional[Image.Image]:
-    """Return an RGBA icon image for an OpenWeather icon code, cached to GCS and memory."""
     if not code:
         code = "02d"
-    # memory cache
     if code in _icon_cache:
         return _icon_cache[code]
 
@@ -172,28 +165,24 @@ def _get_weather_icon_image(code: str) -> Optional[Image.Image]:
     except Exception:
         pass
 
-    # fetch from OWM
     try:
         r = requests.get(OWM_ICON_URL.format(code=code), timeout=10)
         if r.status_code == 200:
             data = r.content
-            # store to GCS for reuse
             _put_png(gcs_path, data)
             img = Image.open(io.BytesIO(data)).convert("RGBA")
             _icon_cache[code] = img
             return img
     except Exception:
         pass
-
     return None
 
 def _paste_icon_rgba(base: Image.Image, icon: Image.Image, x: int, y: int, w: int, h: int):
-    """Paste icon centered into (x,y,w,h), preserving aspect and using alpha mask."""
     resample = getattr(Image, "Resampling", Image).LANCZOS
     iw, ih = icon.size
     if iw == 0 or ih == 0:
         return
-    scale = min(w / iw, h / ih) * 0.9  # a little padding
+    scale = min(w / iw, h / ih) * 0.9
     nw, nh = max(1, int(iw * scale)), max(1, int(ih * scale))
     icon_resized = icon.resize((nw, nh), resample)
     px = x + (w - nw) // 2
@@ -204,7 +193,6 @@ def _paste_icon_rgba(base: Image.Image, icon: Image.Image, x: int, y: int, w: in
 # DATA SOURCES
 # ──────────────────────────────────────────────────────────────────────────────
 def _weather(city="Darwin", country="AU"):
-    # Minimal; returns OpenWeather icon 'code'
     if not OPENWEATHER_API_KEY:
         return {"city": city, "min": 26, "max": 33, "desc": "Few Clouds", "icon": "⛅", "code": "02d"}
     try:
@@ -248,7 +236,6 @@ def _dad_joke():
 # LAYOUT
 # ──────────────────────────────────────────────────────────────────────────────
 def _load_layout(device: str) -> dict:
-    """Use saved Designer layout or fallback to a sensible default."""
     paths = _layout_paths(device)
     raw = _blob_text(paths["current"])
     if raw:
@@ -256,7 +243,6 @@ def _load_layout(device: str) -> dict:
             return json.loads(raw)
         except Exception:
             pass
-    # Default (Sticker Parade proportions)
     return {
         "device": device,
         "mode": DEFAULT_MODE,
@@ -277,9 +263,7 @@ def _load_layout(device: str) -> dict:
 # RENDER
 # ──────────────────────────────────────────────────────────────────────────────
 def _render_from_layout(bg_png: bytes, layout: dict) -> bytes:
-    # Ensure background is exactly 800×480
     bg_png = _fit_to_800x480(bg_png)
-
     im = Image.open(io.BytesIO(bg_png)).convert("RGBA")
     draw = ImageDraw.Draw(im, "RGBA")
 
@@ -292,10 +276,10 @@ def _render_from_layout(bg_png: bytes, layout: dict) -> bytes:
         x = int(el.get("x", 0)); y = int(el.get("y", 0))
         w = int(el.get("w", 100)); h = int(el.get("h", 40))
         etype = el.get("type")
-        color = el.get("color") or "#000000"  # default black
+        color = el.get("color") or "#000000"
 
         if kind == "box":
-            _glass(draw, x, y, w, h, alpha=GLASS_ALPHA, radius=GLASS_RADIUS)
+            _glass(draw, x, y, w, h)
             continue
 
         if kind == "icon" and etype == "WEATHER_ICON":
@@ -305,7 +289,6 @@ def _render_from_layout(bg_png: bytes, layout: dict) -> bytes:
                 _paste_icon_rgba(im, icon_img, x, y, w, h)
             continue
 
-        # text-like elements
         size = max(14, int(h * 0.7))
         weight_raw = el.get("weight", "400")
         weight = "700" if "bold" in str(weight_raw).lower() else (str(weight_raw) if weight_raw else "400")
@@ -339,7 +322,7 @@ def _render_from_layout(bg_png: bytes, layout: dict) -> bytes:
 def root():
     return jsonify({
         "status": "ok",
-        "version": "pexels-owm-icons-2025-10-26",
+        "version": "pexels-current-backup-2025-10-27",
         "gcs": True,
         "pexels": bool(PEXELS_API_KEY),
         "openweather": bool(OPENWEATHER_API_KEY),
@@ -363,7 +346,9 @@ def designer_presets(fname):
 def designer_fonts(fname):
     return send_from_directory(DESIGNER_DIR / "fonts", fname)
 
-# Admin: Pexels prefetch
+# ──────────────────────────────────────────────────────────────────────────────
+# ADMIN: PEXELS PREFETCH (CURRENT/BACKUP MODEL)
+# ──────────────────────────────────────────────────────────────────────────────
 PEXELS_SEARCH = "https://api.pexels.com/v1/search"
 
 @app.post("/admin/prefetch")
@@ -373,15 +358,19 @@ def admin_prefetch():
         abort(401, "Unauthorized")
 
     body = request.get_json(silent=True) or {}
-    themes = body.get("themes") or ["abstract","geometry","nature","minimal","architecture","kids","space","ocean"]
+    themes = body.get("themes") or ["abstract"]
     if isinstance(themes, str):
         themes = [t.strip() for t in themes.split(",") if t.strip()]
     per_theme = int(body.get("per_theme", body.get("count", PER_THEME_COUNT)))
-    overwrite = bool(body.get("overwrite", False))
-    week = body.get("week") or _iso_week()
+    overwrite = bool(body.get("overwrite", True))
 
     if not PEXELS_API_KEY:
         return jsonify({"error": "PEXELS_API_KEY missing"}), 500
+
+    # Backup existing current → backup
+    for b in storage_client.list_blobs(GCS_BUCKET, prefix="images/current/"):
+        new_name = b.name.replace("images/current/", "images/backup/", 1)
+        bucket.copy_blob(b, bucket, new_name)
 
     headers = {"Authorization": PEXELS_API_KEY}
     saved = []
@@ -398,58 +387,50 @@ def admin_prefetch():
                 continue
             im = _download_and_fit(url, (800, 480))
             buf = io.BytesIO(); im.save(buf, "PNG"); buf.seek(0)
-            name = f"images/{week}/{theme}/v_{i}.png"
+            name = f"images/current/{theme}/v_{i}.png"
             if not overwrite and bucket.blob(name).exists():  # type: ignore[attr-defined]
                 continue
             _put_png(name, buf.getvalue())
             saved.append(name)
 
-    return jsonify({"status": "done", "week": week, "themes": themes, "saved": len(saved)})
+    return jsonify({"status": "done", "themes": themes, "saved": len(saved)})
 
-# List cached images
+# ──────────────────────────────────────────────────────────────────────────────
+# LIST + FRAME + RANDOM
+# ──────────────────────────────────────────────────────────────────────────────
 @app.get("/v1/list")
 def v1_list():
-    week = request.args.get("week") or _iso_week()
     theme = request.args.get("theme")
-    prefix = f"images/{week}/"
+    prefix = f"images/current/"
     if theme:
         prefix += f"{theme.strip().rstrip('/')}/"
     objs = [b.name for b in storage_client.list_blobs(GCS_BUCKET, prefix=prefix)]
-    return jsonify({"week": week, "theme": theme, "count": len(objs), "objects": objs})
+    return jsonify({"theme": theme, "count": len(objs), "objects": objs})
 
-# Render single frame
 @app.get("/v1/frame")
 def v1_frame():
     device = request.args.get("device") or DEFAULT_DEVICE
     theme = request.args.get("theme") or DEFAULT_THEME
-    week = request.args.get("week") or _iso_week()
-
-    prefix = f"images/{week}/{theme}/"
+    prefix = f"images/current/{theme}/"
     blobs = list(storage_client.list_blobs(GCS_BUCKET, prefix=prefix))
     if not blobs:
-        return jsonify({"error": f"no cached images for week={week} theme={theme}"}), 404
-
+        return jsonify({"error": f"no cached images for theme={theme}"}), 404
     bg_png = random.choice(blobs).download_as_bytes()
-    bg_png = _fit_to_800x480(bg_png)
-
     layout = _load_layout(device)
     png = _render_from_layout(bg_png, layout)
     return send_file(io.BytesIO(png), mimetype="image/png")
 
-# Random batch (returns first image + manifest header)
 @app.get("/v1/random")
 def v1_random():
     device = request.args.get("device") or DEFAULT_DEVICE
-    week = request.args.get("week") or _iso_week()
     theme = request.args.get("theme")
-
     if not theme:
-        base = f"images/{week}/"
+        base = f"images/current/"
         themes = sorted({b.name.split("/")[2] for b in storage_client.list_blobs(GCS_BUCKET, prefix=base)
                          if len(b.name.split("/")) > 2})
         theme = random.choice(themes) if themes else DEFAULT_THEME
 
-    blobs = list(storage_client.list_blobs(GCS_BUCKET, prefix=f"images/{week}/{theme}/"))
+    blobs = list(storage_client.list_blobs(GCS_BUCKET, prefix=f"images/current/{theme}/"))
     if not blobs:
         return jsonify({"error": f"no cached images for {theme}"}), 404
 
@@ -458,7 +439,6 @@ def v1_random():
     frames = []
     for b in picks:
         bg = b.download_as_bytes()
-        bg = _fit_to_800x480(bg)
         frames.append(_render_from_layout(bg, layout))
 
     manifest = [b.name for b in picks]
