@@ -1,9 +1,3 @@
-# ==========================================================
-# Family Display / Kin:D backend Cloud Build configuration
-# Deploys the FastAPI HTML-render backend from /backend
-# to Cloud Run service: family-display-backend-867804884116
-# ==========================================================
-
 substitutions:
   _SERVICE_NAME: "family-display-backend-867804884116"
   _REGION: "australia-southeast1"
@@ -11,36 +5,32 @@ substitutions:
   _PROJECT_ID: "$PROJECT_ID"
 
 steps:
-  # ---- 1. Build Docker image from backend/ directory ----
+  # 1) Build from backend/ using its Dockerfile
   - name: "gcr.io/cloud-builders/docker"
     args:
       [
         "build",
+        "-f", "backend/Dockerfile",             # <— explicit Dockerfile path
         "-t", "gcr.io/${_PROJECT_ID}/${_IMAGE_NAME}",
-        "."
+        "backend"                               # <— build context is backend/
       ]
-    dir: "backend"
 
-  # ---- 2. Push image to Google Container Registry ----
+  # 2) Push
   - name: "gcr.io/cloud-builders/docker"
     args: ["push", "gcr.io/${_PROJECT_ID}/${_IMAGE_NAME}"]
 
-  # ---- 3. Deploy image to Cloud Run ----
+  # 3) Deploy to your active service
   - name: "gcr.io/cloud-builders/gcloud"
     args:
       [
-        "run", "deploy", "${_SERVICE_NAME}",
-        "--image", "gcr.io/${_PROJECT_ID}/${_IMAGE_NAME}",
-        "--region", "${_REGION}",
-        "--platform", "managed",
+        "run","deploy","${_SERVICE_NAME}",
+        "--image","gcr.io/${_PROJECT_ID}/${_IMAGE_NAME}",
+        "--region","${_REGION}",
+        "--platform","managed",
         "--allow-unauthenticated",
         "--quiet",
         "--set-env-vars",
-        "PUBLIC_BASE_URL=https://family-display-backend-867804884116.australia-southeast1.run.app,",
-        "DEFAULT_DEVICE_ID=familydisplay,",
-        "DEFAULT_CITY=Darwin, AU,",
-        "DEFAULT_UNITS=metric,",
-        "TIMEZONE=Australia/Adelaide"
+        "PUBLIC_BASE_URL=https://family-display-backend-867804884116.australia-southeast1.run.app,DEFAULT_DEVICE_ID=familydisplay,DEFAULT_CITY=Darwin, AU,DEFAULT_UNITS=metric,TIMEZONE=Australia/Adelaide"
       ]
 
 images:
