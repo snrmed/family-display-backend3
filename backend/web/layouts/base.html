@@ -10,9 +10,9 @@
     padding: 0;
     width: 800px;
     height: 480px;
-    background: #222;
+    background: #222;     /* fallback if no bg image */
     color: #000;
-    font-family: "Roboto", sans-serif;
+    font-family: "Roboto", system-ui, -apple-system, Segoe UI, Arial, sans-serif;
     overflow: hidden;
   }
   #canvas {
@@ -23,11 +23,13 @@
   }
   #bg {
     position: absolute;
+    inset: 0;
     width: 100%;
     height: 100%;
     object-fit: cover;
     z-index: 0;
     opacity: 0.95;
+    background: #111;     /* prevents flash while loading */
   }
   .card {
     position: absolute;
@@ -36,13 +38,14 @@
     padding: 14px 18px;
     backdrop-filter: blur(8px);
     box-shadow: 0 0 6px rgba(0,0,0,0.3);
+    z-index: 5;
   }
   #dateChip {
     top: 16px;
     right: 16px;
     font-weight: 700;
     font-size: 18px;
-    background: rgba(255,255,255,0.8);
+    background: rgba(255,255,255,0.85);
     padding: 6px 12px;
     border-radius: 12px;
   }
@@ -59,6 +62,7 @@
     width: 360px;
     font-size: 18px;
     font-weight: 500;
+    line-height: 1.25;
   }
 </style>
 </head>
@@ -72,30 +76,45 @@
 
 <script>
 (async () => {
-  const params = new URLSearchParams(window.location.search);
-  const backend = params.get("backend") || window.location.origin;
-  const device = params.get("device") || "familydisplay";
-  const theme = params.get("theme") || "abstract";
+  const qs = new URLSearchParams(location.search);
+  const backend = qs.get("backend") || location.origin;
+  const device  = qs.get("device")  || "familydisplay";
+  const theme   = qs.get("theme")   || ""; // optional
 
-  const resp = await fetch(`${backend}/v1/render_data?device=${device}&theme=${theme}`);
+  // fetch render data from backend
+  const url = `${backend}/v1/render_data?device=${encodeURIComponent(device)}${theme ? `&theme=${encodeURIComponent(theme)}` : ""}`;
+  const resp = await fetch(url);
   const d = await resp.json();
 
+  // 1) Background
   const bg = document.getElementById("bg");
-  bg.src = d.pexels_bg_url.startsWith("http") ? d.pexels_bg_url : `${backend}${d.pexels_bg_url}`;
+  if (d.bg_url) {
+    // cache-bust to avoid stale chromium cache in repeated renders
+    bg.src = d.bg_url + (d.bg_url.includes("?") ? "&" : "?") + "t=" + Date.now();
+  }
 
+  // 2) Date chip (use server "now" if provided; fallback to client now)
   const dateChip = document.getElementById("dateChip");
-  const date = new Date(d.date);
-  const opts = { weekday: "short", day: "numeric", month: "short" };
-  dateChip.textContent = date.toLocaleDateString("en-AU", opts);
+  const now = d.now ? new Date(d.now) : new Date();
+  const opts = { weekday: "short", day: "2-digit", month: "short" };
+  dateChip.textContent = now.toLocaleDateString("en-AU", opts);
 
-  const w = d.weather;
+  // 3) Weather
   const weather = document.getElementById("weather");
-  weather.innerHTML = `${d.city} • ${w.min}° / ${w.max}°<br>(${w.desc})`;
+  const w = d.weather || {};
+  const min = (w.temp_min ?? "–");
+  const max = (w.temp_max ?? "–");
+  const cond = (w.condition || "");
+  weather.innerHTML = `${d.city || ""} • ${max}° / ${min}°<br>(${cond})`;
 
+  // 4) Dad joke
   const joke = document.getElementById("joke");
-  joke.textContent = d.dad_joke || "No joke today.";
+  joke.textContent = d.joke || "No joke today.";
 
-  // Hide while loading
+  // signal to Playwright that content is ready
+  document.body.setAttribute("data-ready", "1");
+
+  // optional: tidy background once loaded
   bg.onload = () => { document.body.style.background = "#000"; };
 })();
 </script>
