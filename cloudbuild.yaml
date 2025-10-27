@@ -37,3 +37,6 @@ images:
   - "gcr.io/${_PROJECT_ID}/${_IMAGE_NAME}"
 
 timeout: "1200s"
+
+options:
+  logging: CLOUD_LOGGING_ONLY
