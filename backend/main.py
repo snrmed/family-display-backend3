@@ -5,6 +5,7 @@ import json
 import random
 import datetime
 import pathlib
+import uuid
 from typing import List, Optional
 
 import requests
@@ -63,7 +64,6 @@ def _load_font(size: int, weight: str = "400") -> ImageFont.FreeTypeFont:
     cache_key = f"{size}:{weight}"
     if cache_key in _font_cache:
         return _font_cache[cache_key]
-
     try:
         if FONT_DIR and os.path.isdir(FONT_DIR):
             path = None
@@ -142,6 +142,21 @@ def _layout_paths(device: str):
         "current": f"{base}/current.json",
         "ver": f"{base}/versions/{int(datetime.datetime.now().timestamp())}.json",
     }
+
+# Small utilities for listing
+def _list_image_blobs(prefix: str) -> List[storage.Blob]:
+    return [b for b in storage_client.list_blobs(GCS_BUCKET, prefix=prefix)
+            if b.name.lower().endswith((".png", ".jpg", ".jpeg"))]
+
+def _themes_under_current() -> List[str]:
+    """Return theme folder names under images/current/ that actually contain files."""
+    themes = set()
+    for b in storage_client.list_blobs(GCS_BUCKET, prefix="images/current/"):
+        parts = b.name.split("/")
+        # Expect images/current/<theme>/<file>
+        if len(parts) >= 4 and parts[0] == "images" and parts[1] == "current":
+            themes.add(parts[2])
+    return sorted(themes)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # OPENWEATHER ICONS (PNG)
@@ -322,7 +337,7 @@ def _render_from_layout(bg_png: bytes, layout: dict) -> bytes:
 def root():
     return jsonify({
         "status": "ok",
-        "version": "pexels-current-backup-2025-10-27",
+        "version": "pexels-current-backup-random-2025-10-27",
         "gcs": True,
         "pexels": bool(PEXELS_API_KEY),
         "openweather": bool(OPENWEATHER_API_KEY),
@@ -347,9 +362,18 @@ def designer_fonts(fname):
     return send_from_directory(DESIGNER_DIR / "fonts", fname)
 
 # ──────────────────────────────────────────────────────────────────────────────
-# ADMIN: PEXELS PREFETCH (CURRENT/BACKUP MODEL)
+# ADMIN: PEXELS PREFETCH (CURRENT/BACKUP WITH DEEPER RANDOM)
 # ──────────────────────────────────────────────────────────────────────────────
 PEXELS_SEARCH = "https://api.pexels.com/v1/search"
+
+def _copy_prefix(src_prefix: str, dst_prefix: str):
+    for b in storage_client.list_blobs(GCS_BUCKET, prefix=src_prefix):
+        new_name = b.name.replace(src_prefix, dst_prefix, 1)
+        bucket.copy_blob(b, bucket, new_name)
+
+def _delete_prefix(prefix: str):
+    for b in storage_client.list_blobs(GCS_BUCKET, prefix=prefix):
+        b.delete()
 
 @app.post("/admin/prefetch")
 def admin_prefetch():
@@ -358,50 +382,104 @@ def admin_prefetch():
         abort(401, "Unauthorized")
 
     body = request.get_json(silent=True) or {}
-    themes = body.get("themes") or ["abstract"]
+    themes = body.get("themes") or ["abstract","geometry","nature","minimal","architecture","kids","space","ocean"]
     if isinstance(themes, str):
         themes = [t.strip() for t in themes.split(",") if t.strip()]
     per_theme = int(body.get("per_theme", body.get("count", PER_THEME_COUNT)))
     overwrite = bool(body.get("overwrite", True))
+    # deeper randomization controls
+    max_pages = int(body.get("max_pages", 3))   # fetch up to N random pages per theme
+    per_page = max(per_theme, int(body.get("per_page", 40)))  # pull more than you need, then sample
+    random.seed(datetime.datetime.utcnow().timestamp())
 
     if not PEXELS_API_KEY:
         return jsonify({"error": "PEXELS_API_KEY missing"}), 500
 
-    # Backup existing current → backup
-    for b in storage_client.list_blobs(GCS_BUCKET, prefix="images/current/"):
-        new_name = b.name.replace("images/current/", "images/backup/", 1)
-        bucket.copy_blob(b, bucket, new_name)
-
     headers = {"Authorization": PEXELS_API_KEY}
+
+    # 0) BACKUP current → backup
+    _copy_prefix("images/current/", "images/backup/")
+
+    # 1) Clear CURRENT if overwrite
+    if overwrite:
+        _delete_prefix("images/current/")
+
+    # 2) Remove any stray top-level images under current/ (no theme folder)
+    # (after clearing, this is redundant, but keeps things tidy if overwrite=false)
+    for b in storage_client.list_blobs(GCS_BUCKET, prefix="images/current/"):
+        parts = b.name.split("/")
+        if len(parts) == 3 and parts[2].lower().endswith((".png",".jpg",".jpeg")):
+            b.delete()
+
     saved = []
+
     for theme in themes:
-        params = {"query": theme, "per_page": max(8, per_theme), "orientation": "landscape", "size": "large"}
-        r = requests.get(PEXELS_SEARCH, headers=headers, params=params, timeout=30)
-        if r.status_code != 200:
-            continue
-        photos = (r.json().get("photos") or [])[:per_theme]
-        for i, p in enumerate(photos):
-            src = p.get("src", {})
-            url = src.get("large2x") or src.get("large") or src.get("original")
-            if not url:
+        # randomize page selection up to a reasonable range
+        # Pexels pages start at 1; pick a few random distinct pages
+        candidate_pages = list(range(1, 11))  # 1..10
+        random.shuffle(candidate_pages)
+        pick_pages = candidate_pages[:max(1, max_pages)]
+
+        # aggregate a large pool, then sample
+        pool = []
+        for page in pick_pages:
+            params = {
+                "query": theme,
+                "per_page": min(80, max(8, per_page)),
+                "page": page,
+                "orientation": "landscape",
+                "size": "large"
+            }
+            r = requests.get(PEXELS_SEARCH, headers=headers, params=params, timeout=30)
+            if r.status_code != 200:
                 continue
+            photos = (r.json().get("photos") or [])
+            pool.extend(photos)
+
+        # dedupe by Pexels id
+        seen = set()
+        unique_pool = []
+        for p in pool:
+            pid = p.get("id")
+            if pid in seen:
+                continue
+            seen.add(pid)
+            unique_pool.append(p)
+
+        if not unique_pool:
+            continue
+
+        # random sample for this theme
+        picks = random.sample(unique_pool, k=min(per_theme, len(unique_pool)))
+        random.shuffle(picks)  # shuffle order further
+
+        for p in picks:
+            src = p.get("src", {})
+            # randomize which source we take (if available)
+            src_candidates = [src.get("large2x"), src.get("large"), src.get("original"), src.get("landscape")]
+            url_choices = [u for u in src_candidates if u]
+            if not url_choices:
+                continue
+            url = random.choice(url_choices)
+
             im = _download_and_fit(url, (800, 480))
             buf = io.BytesIO(); im.save(buf, "PNG"); buf.seek(0)
-            name = f"images/current/{theme}/v_{i}.png"
-            if not overwrite and bucket.blob(name).exists():  # type: ignore[attr-defined]
-                continue
+
+            # randomized filename to avoid predictable sequences
+            rid = uuid.uuid4().hex[:10]
+            name = f"images/current/{theme}/v_{rid}.png"
             _put_png(name, buf.getvalue())
             saved.append(name)
 
     return jsonify({"status": "done", "themes": themes, "saved": len(saved)})
 
 # ──────────────────────────────────────────────────────────────────────────────
-# LIST + FRAME + RANDOM
+# LIST + FRAME + RANDOM (robust)
 # ──────────────────────────────────────────────────────────────────────────────
 @app.get("/v1/list")
 def v1_list():
     theme = request.args.get("theme")
-    prefix = f"images/current/"
+    prefix = "images/current/"
     if theme:
         prefix += f"{theme.strip().rstrip('/')}/"
     objs = [b.name for b in storage_client.list_blobs(GCS_BUCKET, prefix=prefix)]
@@ -410,40 +488,70 @@ def v1_list():
 @app.get("/v1/frame")
 def v1_frame():
     device = request.args.get("device") or DEFAULT_DEVICE
-    theme = request.args.get("theme") or DEFAULT_THEME
-    prefix = f"images/current/{theme}/"
-    blobs = list(storage_client.list_blobs(GCS_BUCKET, prefix=prefix))
+    theme = request.args.get("theme")
+
+    # If theme omitted, pick a random one that exists
+    if not theme:
+        themes = _themes_under_current()
+        theme = random.choice(themes) if themes else DEFAULT_THEME
+
+    blobs = _list_image_blobs(f"images/current/{theme}/")
     if not blobs:
-        return jsonify({"error": f"no cached images for theme={theme}"}), 404
+        # fallback to any images at top-level (no theme folder)
+        blobs = [b for b in storage_client.list_blobs(GCS_BUCKET, prefix="images/current/")
+                 if (b.name.lower().endswith((".png",".jpg",".jpeg")) and b.name.count("/") == 2)]
+        if not blobs:
+            return jsonify({"error": f"no cached images for theme={theme}"}), 404
+
     bg_png = random.choice(blobs).download_as_bytes()
     layout = _load_layout(device)
     png = _render_from_layout(bg_png, layout)
-    return send_file(io.BytesIO(png), mimetype="image/png")
+
+    resp = send_file(io.BytesIO(png), mimetype="image/png")
+    resp.headers["X-Frame-Theme"] = theme
+    return resp
 
 @app.get("/v1/random")
 def v1_random():
     device = request.args.get("device") or DEFAULT_DEVICE
     theme = request.args.get("theme")
-    if not theme:
-        base = f"images/current/"
-        themes = sorted({b.name.split("/")[2] for b in storage_client.list_blobs(GCS_BUCKET, prefix=base)
-                         if len(b.name.split("/")) > 2})
-        theme = random.choice(themes) if themes else DEFAULT_THEME
 
-    blobs = list(storage_client.list_blobs(GCS_BUCKET, prefix=f"images/current/{theme}/"))
+    # choose theme if not provided
+    if not theme:
+        themes = _themes_under_current()
+        theme = random.choice(themes) if themes else None
+
+    blobs: List[storage.Blob] = []
+    if theme:
+        blobs = _list_image_blobs(f"images/current/{theme}/")
+
+    # Fallback: any images directly under images/current/ (no theme folder)
     if not blobs:
-        return jsonify({"error": f"no cached images for {theme}"}), 404
+        blobs = [b for b in storage_client.list_blobs(GCS_BUCKET, prefix="images/current/")
+                 if (b.name.lower().endswith((".png", ".jpg", ".jpeg"))
+                     and b.name.count("/") == 2)]
+
+    if not blobs:
+        return jsonify({"error": "no cached images in images/current/"}), 404
+
+    # deeper randomness: random.sample over the blobs themselves
+    random.shuffle(blobs)
+    picks = blobs[:min(4, len(blobs))]
 
     layout = _load_layout(device)
-    picks = random.sample(blobs, min(4, len(blobs)))
     frames = []
+    manifest = []
     for b in picks:
         bg = b.download_as_bytes()
+        bg = _fit_to_800x480(bg)
         frames.append(_render_from_layout(bg, layout))
+        manifest.append(b.name)
 
-    manifest = [b.name for b in picks]
     resp = send_file(io.BytesIO(frames[0]), mimetype="image/png")
     resp.headers["X-Random-Manifest"] = json.dumps(manifest)
+    # helpful header if theme was auto-picked
+    if theme:
+        resp.headers["X-Random-Theme"] = theme
     return resp
 
 # ──────────────────────────────────────────────────────────────────────────────
