@@ -1,34 +1,41 @@
 import os
-import datetime
+import datetime as dt
 from typing import Optional
+from zoneinfo import ZoneInfo
 
-from fastapi import FastAPI, Response, HTTPException, Query
+from fastapi import FastAPI, Query, HTTPException, Response
 from fastapi.responses import JSONResponse, HTMLResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from playwright.sync_api import sync_playwright
 
-# ── ENV ────────────────────────────────────────────────────────────────────────
-BUCKET = os.getenv("GCS_BUCKET", "")                # e.g. family-display-packs
-ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "adm_demo")  # change in prod
+# ── Service imports ───────────────────────────────────────────────────────────
+from services.weather import get_weather
+from services.pexels import ensure_cached_from_pexels, pick_curated_key
+
+# ── ENVIRONMENT ───────────────────────────────────────────────────────────────
+BUCKET = os.getenv("GCS_BUCKET", "")
+ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "adm_demo")
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "http://127.0.0.1:8080")
 DEFAULT_DEVICE_ID = os.getenv("DEFAULT_DEVICE_ID", "familydisplay")
 DEFAULT_CITY = os.getenv("DEFAULT_CITY", "Darwin, AU")
 DEFAULT_UNITS = os.getenv("DEFAULT_UNITS", "metric")
 TIMEZONE = os.getenv("TIMEZONE", "Australia/Adelaide")
 
-# ── App ────────────────────────────────────────────────────────────────────────
-app = FastAPI(title="Family Display - HTML Renderer", version="1.0")
+# ── INIT FASTAPI APP ─────────────────────────────────────────────────────────
+app = FastAPI(title="Family Display Backend", version="2.1")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], allow_credentials=True,
-    allow_methods=["*"], allow_headers=["*"],
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-# ── Storage: GCS if configured, else local-only ───────────────────────────────
+# ── GOOGLE CLOUD STORAGE (optional) ───────────────────────────────────────────
 storage_enabled = False
 try:
-    from google.cloud import storage as gcs_storage  # type: ignore
+    from google.cloud import storage as gcs_storage
     if BUCKET:
         _gcs_client = gcs_storage.Client()
         _gcs_bucket = _gcs_client.bucket(BUCKET)
@@ -38,39 +45,118 @@ except Exception:
     _gcs_client = None
     _gcs_bucket = None
 
+
 def gcs_exists(key: str) -> bool:
-    if not storage_enabled: return False
+    if not storage_enabled:
+        return False
     return _gcs_bucket.blob(key).exists()
+
 
 def gcs_read_bytes(key: str) -> bytes:
     return _gcs_bucket.blob(key).download_as_bytes()
+
 
 def gcs_write_bytes(key: str, data: bytes, content_type: str, cache: str = "public, max-age=60"):
     b = _gcs_bucket.blob(key)
     b.cache_control = cache
     b.upload_from_string(data, content_type=content_type)
 
-# ── Data API (Stage 1 stub; wire real providers later) ────────────────────────
-@app.get("/v1/render_data")
-def v1_render_data(
-    device: Optional[str] = Query(None),
-    theme: str = Query("abstract")
-):
-    device = device or DEFAULT_DEVICE_ID
-    today = datetime.date.today().isoformat()
-    return JSONResponse({
-        "date": today,
-        "city": DEFAULT_CITY,
-        "timezone": TIMEZONE,
-        "weather": {"min": 27, "max": 34, "desc": "Sunny", "icon": "01d", "provider": "openweather"},
-        "dad_joke": "I told my wife she should embrace her mistakes — she gave me a hug.",
-        "pexels_bg_url": "/images/preview/abstract_v0.png",
-        "theme": theme,
-        "units": DEFAULT_UNITS,
-        "device": device
-    })
 
-# ── Serve a local layout (Stage-1 example) ─────────────────────────────────────
+def cache_read_bytes(key: str) -> Optional[bytes]:
+    try:
+        if storage_enabled and gcs_exists(key):
+            return gcs_read_bytes(key)
+    except Exception:
+        pass
+    return None
+
+
+def cache_write_bytes(key: str, data: bytes, content_type: str, cache: str):
+    if storage_enabled:
+        gcs_write_bytes(key, data, content_type, cache)
+
+
+# ── STATIC ASSETS PROXY (serves images from GCS) ──────────────────────────────
+@app.get("/assets/{path:path}")
+def assets_proxy(path: str):
+    key = path
+    if not storage_enabled or not gcs_exists(key):
+        raise HTTPException(404, "Asset not found")
+    data = gcs_read_bytes(key)
+    ct = "image/png" if key.endswith(".png") else (
+        "image/jpeg" if key.endswith(".jpg") or key.endswith(".jpeg") else "application/octet-stream"
+    )
+    return Response(content=data, media_type=ct, headers={"Cache-Control": "public, max-age=86400"})
+
+
+# ── /v1/render_data  →  weather + joke + bg image ─────────────────────────────
+@app.get("/v1/render_data")
+def v1_render_data(device: Optional[str] = Query(None), theme: Optional[str] = Query(None)):
+    device = device or DEFAULT_DEVICE_ID
+    theme = theme or os.getenv("THEME_DEFAULT", "abstract")
+    tz = ZoneInfo(TIMEZONE)
+    today = dt.datetime.now(tz).date()
+
+    # WEATHER
+    ow_key = os.getenv("OPENWEATHER_API_KEY", "")
+    weather = {"min": 27, "max": 34, "desc": "Sunny", "icon": "01d", "provider": "stub"}
+    if ow_key:
+        try:
+            weather = get_weather(
+                DEFAULT_CITY,
+                DEFAULT_UNITS,
+                ow_key,
+                cache_read_bytes,
+                lambda k, d, ct, cache: cache_write_bytes(k, d, ct, cache),
+            )
+        except Exception:
+            pass
+
+    # BACKGROUND
+    enable_pexels = os.getenv("ENABLE_PEXELS", "false").lower() == "true"
+    per_theme = int(os.getenv("PER_THEME_COUNT", "8") or "8")
+    bg_key = None
+    if enable_pexels and os.getenv("PEXELS_API_KEY"):
+        bg_key = ensure_cached_from_pexels(
+            theme,
+            os.getenv("PEXELS_API_KEY"),
+            today,
+            cache_read_bytes,
+            lambda k, d, ct, cache: cache_write_bytes(k, d, ct, cache),
+        )
+    if not bg_key:
+        candidate = pick_curated_key(today, theme, per_theme)
+        if storage_enabled and gcs_exists(candidate):
+            bg_key = candidate
+        else:
+            bg_key = "images/preview/abstract_v0.png"
+
+    # DAD JOKE
+    jokes = [
+        "I told my wife she should embrace her mistakes — she gave me a hug.",
+        "I’m reading a book on anti-gravity. It’s impossible to put down.",
+        "Why don’t scientists trust atoms? Because they make up everything!",
+        "Parallel lines have so much in common. It’s a shame they’ll never meet.",
+    ]
+    day_index = (int(today.strftime("%j")) + hash(device)) % len(jokes)
+    dad_joke = jokes[day_index]
+
+    return JSONResponse(
+        {
+            "date": today.isoformat(),
+            "city": DEFAULT_CITY,
+            "timezone": TIMEZONE,
+            "weather": weather,
+            "dad_joke": dad_joke,
+            "pexels_bg_url": f"/assets/{bg_key}",
+            "theme": theme,
+            "units": DEFAULT_UNITS,
+            "device": device,
+        }
+    )
+
+
+# ── Serve local layout for preview ────────────────────────────────────────────
 @app.get("/web/layouts/{name}.html")
 def get_layout_html(name: str):
     here = os.path.dirname(__file__)
@@ -80,32 +166,33 @@ def get_layout_html(name: str):
     with open(path, "r", encoding="utf-8") as f:
         return HTMLResponse(f.read())
 
-# ── Render Now: headless Chromium → screenshot #canvas ─────────────────────────
+
+# ── HTML → PNG renderer using headless Chromium ───────────────────────────────
 @app.get("/admin/render_now")
 def admin_render_now(
-    device: Optional[str] = Query(None, description="Device ID (defaults to DEFAULT_DEVICE_ID)"),
-    layout: str = Query("base", description="Layout file name in web/layouts/ (without .html)"),
-    token: str = Query(..., description="Admin token")
+    device: Optional[str] = Query(None),
+    layout: str = Query("base"),
+    token: str = Query(...),
 ):
     if token != ADMIN_TOKEN:
         raise HTTPException(status_code=401, detail="Invalid token")
 
     device = device or DEFAULT_DEVICE_ID
     layout_url = (
-        f"{PUBLIC_BASE_URL}/web/layouts/{layout}.html"
-        f"?mode=render&device={device}&backend={PUBLIC_BASE_URL}"
+        f"{PUBLIC_BASE_URL}/web/layouts/{layout}.html?mode=render&device={device}&backend={PUBLIC_BASE_URL}"
     )
     png = _take_element_screenshot(layout_url, selector="#canvas", width=800, height=480)
 
-    today = datetime.date.today().strftime("%Y-%m-%d")
+    today = dt.date.today().strftime("%Y-%m-%d")
     latest_key = f"renders/{device}/latest.png"
-    dated_key  = f"renders/{device}/{today}/v_0.png"
+    dated_key = f"renders/{device}/{today}/v_0.png"
 
     if storage_enabled:
         gcs_write_bytes(latest_key, png, "image/png", cache="no-cache")
-        gcs_write_bytes(dated_key,  png, "image/png", cache="public, max-age=31536000")
+        gcs_write_bytes(dated_key, png, "image/png", cache="public, max-age=31536000")
 
     return Response(content=png, media_type="image/png")
+
 
 def _take_element_screenshot(url: str, selector: str, width: int, height: int) -> bytes:
     with sync_playwright() as p:
@@ -121,7 +208,8 @@ def _take_element_screenshot(url: str, selector: str, width: int, height: int) -
         browser.close()
         return png
 
-# ── Device endpoint: returns latest PNG ────────────────────────────────────────
+
+# ── /v1/frame → serves latest rendered PNG ───────────────────────────────────
 @app.get("/v1/frame")
 def v1_frame(device: Optional[str] = Query(None)):
     device = device or DEFAULT_DEVICE_ID
@@ -129,8 +217,6 @@ def v1_frame(device: Optional[str] = Query(None)):
     if storage_enabled and gcs_exists(key):
         data = gcs_read_bytes(key)
         return Response(content=data, media_type="image/png", headers={"Cache-Control": "no-cache"})
-
-    # Local dev fallback
     here = os.path.dirname(__file__)
     local_sample = os.path.join(here, "web", "layouts", "sample.png")
     if os.path.exists(local_sample):
