@@ -1,66 +1,103 @@
-<!doctype html>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Kin:D Base Layout</title>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=800,height=480" />
+<title>Family Display</title>
 <style>
-  html,body { margin:0; background:#000; }
-  #canvas { position:relative; width:800px; height:480px; margin:0 auto; background:#111; overflow:hidden; }
-  #bg { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
-  body[data-mode="render"] .ui-only { display:none !important; }
-
-  .card {
-    position:absolute; border-radius:18px;
-    background:rgba(255,255,255,0.22);
-    border:1px solid rgba(255,255,255,0.45);
-    padding:12px 16px; color:#000;
-    display:flex; align-items:center; justify-content:center; line-height:1.1;
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 800px;
+    height: 480px;
+    background: #222;
+    color: #000;
+    font-family: "Roboto", sans-serif;
+    overflow: hidden;
   }
-  .chip {
-    position:absolute; border-radius:999px;
-    background:rgba(255,255,255,0.25);
-    border:1px solid rgba(255,255,255,0.5);
-    padding:6px 12px; color:#000; font-weight:700;
-    display:flex; align-items:center; justify-content:center;
+  #canvas {
+    position: relative;
+    width: 800px;
+    height: 480px;
+    overflow: hidden;
+  }
+  #bg {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    z-index: 0;
+    opacity: 0.95;
+  }
+  .card {
+    position: absolute;
+    background: rgba(255,255,255,0.85);
+    border-radius: 16px;
+    padding: 14px 18px;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 0 6px rgba(0,0,0,0.3);
+  }
+  #dateChip {
+    top: 16px;
+    right: 16px;
+    font-weight: 700;
+    font-size: 18px;
+    background: rgba(255,255,255,0.8);
+    padding: 6px 12px;
+    border-radius: 12px;
+  }
+  #weather {
+    left: 16px;
+    bottom: 16px;
+    width: 360px;
+    font-size: 22px;
+    font-weight: 600;
+  }
+  #joke {
+    right: 16px;
+    bottom: 16px;
+    width: 360px;
+    font-size: 18px;
+    font-weight: 500;
   }
 </style>
+</head>
 <body>
 <div id="canvas">
-  <img id="bg" alt="">
-  <div id="cardWeather" class="card" style="left:40px; top:340px; width:340px; height:110px; font-size:28px;">--</div>
-  <div id="chipDate" class="chip" style="left:620px; top:24px; font-size:18px;">--</div>
-  <div id="cardJoke" class="card" style="left:420px; top:340px; width:340px; height:110px; font-size:18px; padding:16px;">--</div>
+  <img id="bg" src="" alt="background" />
+  <div id="dateChip" class="card"></div>
+  <div id="weather" class="card"></div>
+  <div id="joke" class="card"></div>
 </div>
 
 <script>
-  const params = new URLSearchParams(location.search);
-  if (params.get('mode') === 'render') document.body.dataset.mode = 'render';
+(async () => {
+  const params = new URLSearchParams(window.location.search);
+  const backend = params.get("backend") || window.location.origin;
+  const device = params.get("device") || "familydisplay";
+  const theme = params.get("theme") || "abstract";
 
-  const backend = params.get('backend') || location.origin;
-  const device  = params.get('device')  || 'familydisplay';
-  const theme   = params.get('theme')   || 'abstract';
+  const resp = await fetch(`${backend}/v1/render_data?device=${device}&theme=${theme}`);
+  const d = await resp.json();
 
-  async function hydrate(){
-    const r = await fetch(`${backend}/v1/render_data?device=${encodeURIComponent(device)}&theme=${encodeURIComponent(theme)}`, {cache:'no-store'});
-    const d = await r.json();
+  const bg = document.getElementById("bg");
+  bg.src = d.pexels_bg_url.startsWith("http") ? d.pexels_bg_url : `${backend}${d.pexels_bg_url}`;
 
-    // background
-    const bg = document.getElementById('bg');
-    const bgUrl = d.pexels_bg_url || '';
-    bg.src = bgUrl.startsWith('http') ? bgUrl : `${backend}${bgUrl}`;
+  const dateChip = document.getElementById("dateChip");
+  const date = new Date(d.date);
+  const opts = { weekday: "short", day: "numeric", month: "short" };
+  dateChip.textContent = date.toLocaleDateString("en-AU", opts);
 
-    // date chip
-    const dt = new Date(d.date || Date.now());
-    document.getElementById('chipDate').textContent =
-      dt.toLocaleDateString(undefined, { weekday:'short', day:'2-digit', month:'short' });
+  const w = d.weather;
+  const weather = document.getElementById("weather");
+  weather.innerHTML = `${d.city} • ${w.min}° / ${w.max}°<br>(${w.desc})`;
 
-    // weather card
-    const w = d.weather || {};
-    document.getElementById('cardWeather').textContent =
-      `${d.city || '—'} • ${w.min ?? '–'}° / ${w.max ?? '–'}° ${w.desc ? '('+w.desc+')' : ''}`;
+  const joke = document.getElementById("joke");
+  joke.textContent = d.dad_joke || "No joke today.";
 
-    // joke
-    document.getElementById('cardJoke').textContent = d.dad_joke || '';
-  }
-  hydrate();
+  // Hide while loading
+  bg.onload = () => { document.body.style.background = "#000"; };
+})();
 </script>
 </body>
+</html>
