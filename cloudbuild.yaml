@@ -18,3 +18,5 @@ steps:
 images:
   - 'gcr.io/$PROJECT_ID/family-display-backend'
 timeout: 1800s
+options:
+  logging: CLOUD_LOGGING_ONLY
