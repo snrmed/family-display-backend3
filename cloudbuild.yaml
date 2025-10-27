@@ -14,7 +14,6 @@ steps:
       - '--region=australia-southeast1'
       - '--platform=managed'
       - '--allow-unauthenticated'
-      - '--update-env-vars=GCS_BUCKET=family-display-packs,ADMIN_TOKEN=adm_860510,PUBLIC_BASE_URL=https://family-display-backend-867804884116.australia-southeast1.run.app,DEFAULT_DEVICE_ID=familydisplay,DEFAULT_CITY=Darwin AU,DEFAULT_UNITS=metric,TIMEZONE=Australia/Adelaide'
 images:
   - 'australia-southeast1-docker.pkg.dev/$PROJECT_ID/family-display/backend'
 timeout: 1800s
