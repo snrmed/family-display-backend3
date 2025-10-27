@@ -1,0 +1,16 @@
+gcloud run deploy family-display-backend \
+  --source . \
+  --region australia-southeast1 \
+  --platform managed \
+  --allow-unauthenticated \
+  --dockerfile Dockerfile \
+  --set-env-vars "GCS_BUCKET=family-display-packs,ADMIN_TOKEN=adm_860510,PUBLIC_BASE_URL=https://family-display-backend-867804884116.australia-southeast1.run.app,DEFAULT_DEVICE_ID=familydisplay,DEFAULT_CITY=Darwin AU,DEFAULT_UNITS=metric,TIMEZONE=Australia/Adelaide"
+```
+
+The key addition is `--dockerfile Dockerfile` which forces it to use your Dockerfile instead of buildpacks.
+
+## Option 2: Create a Procfile
+
+Create a file called `Procfile` (no extension) in your project root:
+```
+web: cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT
