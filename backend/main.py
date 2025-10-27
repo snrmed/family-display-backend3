@@ -1,206 +1,110 @@
+# backend/main.py
 import os
+import io
+import json
+import random
 import datetime as dt
-from typing import Optional
-from zoneinfo import ZoneInfo
+from typing import Optional, List, Dict
 
-from fastapi import FastAPI, Query, HTTPException, Response
-from fastapi.responses import JSONResponse, HTMLResponse, FileResponse
+import httpx
+from fastapi import FastAPI, Query, HTTPException, Response, Request, Path
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from playwright.sync_api import sync_playwright
 
-# ── Service imports ──────────────────────────────────────────────────────
-from services.weather import get_weather
-from services.pexels import prefetch_weekly_set, pick_random_key
-
-# ── ENVIRONMENT ─────────────────────────────────────────────────────────
-BUCKET = os.getenv("GCS_BUCKET", "")
-ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "adm_demo")
-PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "http://127.0.0.1:8080")
+# ---------- ENV / CONFIG ----------
+PROJECT_NAME = "Kin:D / Family Display Backend"
 DEFAULT_DEVICE_ID = os.getenv("DEFAULT_DEVICE_ID", "familydisplay")
+
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").rstrip("/")
+if not PUBLIC_BASE_URL:
+    # Try to infer from Cloud Run injected var (for local dev you can leave blank)
+    PUBLIC_BASE_URL = os.getenv("K_SERVICE_URL", "").rstrip("/") or "http://localhost:8000"
+
+TIMEZONE = os.getenv("TIMEZONE", "Australia/Adelaide")
 DEFAULT_CITY = os.getenv("DEFAULT_CITY", "Darwin, AU")
 DEFAULT_UNITS = os.getenv("DEFAULT_UNITS", "metric")
-TIMEZONE = os.getenv("TIMEZONE", "Australia/Adelaide")
 
-# ── INIT FASTAPI APP ────────────────────────────────────────────────────
-app = FastAPI(title="Kin:D / Family Display Backend", version="2.2")
+ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "adm_860510")
+PEXELS_API_KEY = os.getenv("PEXELS_API_KEY", "")
+THEMES = os.getenv("THEMES", "abstract,geometric,paper-collage,kids-shapes,minimal")
+PER_THEME_COUNT = int(os.getenv("PER_THEME_COUNT", "8"))
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+GCS_BUCKET = os.getenv("GCS_BUCKET", "")
+FONT_DIR = os.getenv("FONT_DIR", "./backend/web/designer/fonts")
 
-# ── GOOGLE CLOUD STORAGE ────────────────────────────────────────────────
+# ---------- OPTIONAL GCS ----------
 storage_enabled = False
+bucket = None
 try:
-    from google.cloud import storage as gcs_storage
-    if BUCKET:
-        _gcs_client = gcs_storage.Client()
-        _gcs_bucket = _gcs_client.bucket(BUCKET)
+    if GCS_BUCKET:
+        from google.cloud import storage as gcs
+
+        gcs_client = gcs.Client()
+        bucket = gcs_client.bucket(GCS_BUCKET)
         storage_enabled = True
 except Exception:
     storage_enabled = False
-    _gcs_client = None
-    _gcs_bucket = None
+    bucket = None
 
+def gcs_write_bytes(key: str, data: bytes, content_type: str, cache: str = "public, max-age=3600"):
+    if not storage_enabled:
+        return
+    blob = bucket.blob(key)
+    blob.cache_control = cache
+    blob.upload_from_string(data, content_type=content_type)
+
+def gcs_read_bytes(key: str) -> bytes:
+    if not storage_enabled:
+        raise HTTPException(500, "Storage not configured")
+    blob = bucket.blob(key)
+    if not blob.exists():
+        raise HTTPException(404, f"Asset not found: {key}")
+    return blob.download_as_bytes()
 
 def gcs_exists(key: str) -> bool:
     if not storage_enabled:
         return False
-    return _gcs_bucket.blob(key).exists()
+    return bucket.blob(key).exists()
 
+def gcs_list(prefix: str) -> List[str]:
+    if not storage_enabled:
+        return []
+    return [b.name for b in bucket.list_blobs(prefix=prefix)]
 
-def gcs_read_bytes(key: str) -> bytes:
-    return _gcs_bucket.blob(key).download_as_bytes()
+def gcs_copy(src: str, dst: str):
+    if not storage_enabled:
+        return
+    sb = bucket.blob(src)
+    if sb.exists():
+        bucket.copy_blob(sb, bucket, dst)
 
+def gcs_delete_prefix(prefix: str):
+    if not storage_enabled:
+        return
+    for b in bucket.list_blobs(prefix=prefix):
+        b.delete()
 
-def gcs_write_bytes(key: str, data: bytes, content_type: str, cache: str = "public, max-age=60"):
-    b = _gcs_bucket.blob(key)
-    b.cache_control = cache
-    b.upload_from_string(data, content_type=content_type)
-
-
-def cache_read_bytes(key: str) -> Optional[bytes]:
-    try:
-        if storage_enabled and gcs_exists(key):
-            return gcs_read_bytes(key)
-    except Exception:
-        pass
-    return None
-
-
-def cache_write_bytes(key: str, data: bytes, content_type: str, cache: str):
-    if storage_enabled:
-        gcs_write_bytes(key, data, content_type, cache)
-
-
-# ── STATIC ASSET PROXY ──────────────────────────────────────────────────
-@app.get("/assets/{path:path}")
-def assets_proxy(path: str):
-    key = path
-    if not storage_enabled or not gcs_exists(key):
-        raise HTTPException(404, "Asset not found")
-    data = gcs_read_bytes(key)
-    ct = "image/png" if key.endswith(".png") else (
-        "image/jpeg" if key.endswith(".jpg") or key.endswith(".jpeg") else "application/octet-stream"
-    )
-    return Response(content=data, media_type=ct, headers={"Cache-Control": "public, max-age=86400"})
-
-
-# ── /v1/render_data  →  weather + joke + pexels bg ───────────────────────
-@app.get("/v1/render_data")
-def v1_render_data(device: Optional[str] = Query(None), theme: Optional[str] = Query(None)):
-    device = device or DEFAULT_DEVICE_ID
-    theme = theme or os.getenv("THEME_DEFAULT", "abstract")
-    tz = ZoneInfo(TIMEZONE)
-    today = dt.datetime.now(tz).date()
-
-    # WEATHER
-    ow_key = os.getenv("OPENWEATHER_API_KEY", "")
-    weather = {"min": 27, "max": 34, "desc": "Sunny", "icon": "01d", "provider": "stub"}
-    if ow_key:
-        try:
-            weather = get_weather(
-                DEFAULT_CITY,
-                DEFAULT_UNITS,
-                ow_key,
-                cache_read_bytes,
-                lambda k, d, ct, cache: cache_write_bytes(k, d, ct, cache),
-            )
-        except Exception:
-            pass
-
-    # BACKGROUND (dual folder randomization)
-    enable_pexels = os.getenv("ENABLE_PEXELS", "false").lower() == "true"
-    per_theme = int(os.getenv("PER_THEME_COUNT", "8") or "8")
-    bg_key = None
-    if enable_pexels:
-        candidate = pick_random_key(theme, per_theme, rand_ratio=0.1)
-        if storage_enabled and gcs_exists(candidate):
-            bg_key = candidate
-    if not bg_key:
-        bg_key = "images/preview/abstract_v0.png"
-
-    # DAD JOKE
-    jokes = [
-        "I told my wife she should embrace her mistakes — she gave me a hug.",
-        "I'm reading a book on anti-gravity. It's impossible to put down.",
-        "Why don’t scientists trust atoms? Because they make up everything!",
-        "Parallel lines have so much in common. It’s a shame they’ll never meet.",
-    ]
-    day_index = (int(today.strftime("%j")) + hash(device)) % len(jokes)
-    dad_joke = jokes[day_index]
-
-    return JSONResponse(
-        {
-            "date": today.isoformat(),
-            "city": DEFAULT_CITY,
-            "timezone": TIMEZONE,
-            "weather": weather,
-            "dad_joke": dad_joke,
-            "pexels_bg_url": f"/assets/{bg_key}",
-            "theme": theme,
-            "units": DEFAULT_UNITS,
-            "device": device,
-        }
-    )
-
-
-# ── HTML Layout Preview ─────────────────────────────────────────────────
-@app.get("/web/layouts/{name}.html")
-def get_layout_html(name: str):
-    here = os.path.dirname(__file__)
-    path = os.path.join(here, "web", "layouts", f"{name}.html")
-    if not os.path.exists(path):
-        raise HTTPException(404, f"Layout {name}.html not found")
-    with open(path, "r", encoding="utf-8") as f:
-        return HTMLResponse(f.read())
-
-
-# ── Screenshot renderer ─────────────────────────────────────────────────
-@app.get("/admin/render_now")
-def admin_render_now(
-    device: Optional[str] = Query(None),
-    layout: str = Query("base"),
-    token: str = Query(...),
-):
-    if token != ADMIN_TOKEN:
-        raise HTTPException(status_code=401, detail="Invalid token")
-
-    device = device or DEFAULT_DEVICE_ID
-    layout_url = (
-        f"{PUBLIC_BASE_URL}/web/layouts/{layout}.html?mode=render&device={device}&backend={PUBLIC_BASE_URL}"
-    )
-    png = _take_element_screenshot(layout_url, selector="#canvas", width=800, height=480)
-
-    today = dt.date.today().strftime("%Y-%m-%d")
-    latest_key = f"renders/{device}/latest.png"
-    dated_key = f"renders/{device}/{today}/v_0.png"
-
-    if storage_enabled:
-        gcs_write_bytes(latest_key, png, "image/png", cache="no-cache")
-        gcs_write_bytes(dated_key, png, "image/png", cache="public, max-age=31536000")
-
-    return Response(content=png, media_type="image/png")
-
+# ---------- PLAYWRIGHT (headless Chromium) ----------
+from playwright.sync_api import sync_playwright
 
 def _take_element_screenshot(url: str, selector: str, width: int, height: int) -> bytes:
     with sync_playwright() as p:
         browser = p.chromium.launch(args=["--no-sandbox"])
-        page = browser.new_page(viewport={"width": width, "height": height}, device_scale_factor=1)
+        page = browser.new_page(
+            viewport={"width": width, "height": height},
+            device_scale_factor=1,
+        )
         page.goto(url, wait_until="networkidle")
         page.wait_for_selector(selector, state="visible", timeout=15_000)
         element = page.query_selector(selector)
-        if element is None:
+        if not element:
             browser.close()
             raise HTTPException(500, f"Selector not found: {selector}")
-        png = element.screenshot(type="png")
+        data = element.screenshot(type="png")
         browser.close()
-        return png
+        return data
 
-# --- Helper: render & save the latest image ---
+# ---------- RENDER + STORE LATEST (helper used by admin endpoints) ----------
 def _render_and_store_latest(device: str, layout: str = "base") -> bytes:
     layout_url = (
         f"{PUBLIC_BASE_URL}/web/layouts/{layout}.html"
@@ -212,48 +116,228 @@ def _render_and_store_latest(device: str, layout: str = "base") -> bytes:
         gcs_write_bytes(latest_key, png, "image/png", cache="no-cache")
     return png
 
+# ---------- FASTAPI ----------
+app = FastAPI(title=PROJECT_NAME, version="2.2")
 
-# ── /v1/frame  → serve latest PNG for device ────────────────────────────
-@app.get("/v1/frame")
-def v1_frame(device: Optional[str] = Query(None)):
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ---------- SIMPLE DATA PROVIDERS (weather / joke) ----------
+async def get_weather(city: str, units: str) -> Dict:
+    """Very small OpenWeather wrapper with a friendly fallback."""
+    api = os.getenv("OPENWEATHER_API_KEY", "")
+    if not api:
+        # Fallback / stub (keeps layout working)
+        return {
+            "provider": "stub",
+            "city": city,
+            "units": units,
+            "temp_min": 27,
+            "temp_max": 34,
+            "condition": "Sunny",
+            "icon": "01d",
+        }
+    params = {"q": city, "appid": api, "units": units}
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        r = await client.get("https://api.openweathermap.org/data/2.5/weather", params=params)
+        r.raise_for_status()
+        j = r.json()
+    main = j.get("main", {})
+    weather0 = (j.get("weather") or [{}])[0]
+    return {
+        "provider": "openweather",
+        "city": city,
+        "units": units,
+        "temp_min": int(main.get("temp_min", 0)),
+        "temp_max": int(main.get("temp_max", 0)),
+        "condition": weather0.get("main", "—"),
+        "icon": weather0.get("icon", "01d"),
+    }
+
+async def get_joke() -> str:
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.get("https://icanhazdadjoke.com/", headers={"Accept": "text/plain"})
+            if r.status_code == 200 and r.text:
+                return r.text.strip()
+    except Exception:
+        pass
+    return "I told my wife she should embrace her mistakes — she gave me a hug."
+
+# ---------- PEXELS UTILS ----------
+PEXELS_THEME_QUERIES = {
+    "abstract": ["abstract texture", "fluid gradient", "colorful shapes"],
+    "geometric": ["geometric pattern", "polygon background", "line pattern"],
+    "paper-collage": ["paper collage background", "ripped paper texture"],
+    "kids-shapes": ["colorful shapes background", "playful blobs"],
+    "minimal": ["minimal gradient background", "soft gradient"],
+}
+
+def pexels_pick(theme: str) -> Optional[str]:
+    """Return a GCS key to a random image, preferring current over cache."""
+    choices = []
+    cur = gcs_list(f"pexels/current/{theme}/")
+    if cur:
+        choices.extend(cur)
+    cache = gcs_list(f"pexels/cache/{theme}/")
+    if cache:
+        # small probability from cache for variety
+        choices.extend(cache[: max(1, len(cache)//5)])
+    choices = [k for k in choices if k.endswith(".jpg")]
+    if not choices:
+        return None
+    return random.choice(choices)
+
+def rotate_current_to_cache(theme: str):
+    # wipe old cache
+    gcs_delete_prefix(f"pexels/cache/{theme}/")
+    # copy current → cache
+    for k in gcs_list(f"pexels/current/{theme}/"):
+        if k.endswith(".jpg"):
+            dst = k.replace("pexels/current/", "pexels/cache/")
+            gcs_copy(k, dst)
+    # wipe current for refill
+    gcs_delete_prefix(f"pexels/current/{theme}/")
+
+def prefetch_weekly_set(theme: str, api_key: str, per_theme: int,
+                        exists_cb, write_cb) -> List[str]:
+    """Fetch randomized set from Pexels and store under pexels/current/<theme>/v_#.jpg"""
+    if not storage_enabled:
+        return []
+    q_choices = PEXELS_THEME_QUERIES.get(theme, [theme])
+    query = random.choice(q_choices)
+    page = random.randint(1, 30)
+    headers = {"Authorization": api_key}
+    params = {"query": query, "orientation": "landscape", "size": "large", "per_page": 40, "page": page}
+
+    keys: List[str] = []
+    try:
+        with httpx.Client(timeout=20.0) as client:
+            r = client.get("https://api.pexels.com/v1/search", headers=headers, params=params)
+            r.raise_for_status()
+            photos = r.json().get("photos", [])
+            random.shuffle(photos)
+            picked = photos[:per_theme]
+            for i, p in enumerate(picked):
+                src = (p.get("src") or {}).get("large")
+                if not src:
+                    continue
+                k = f"pexels/current/{theme}/v_{i}.jpg"
+                if exists_cb(k):
+                    keys.append(k)
+                    continue
+                img = client.get(src).content
+                write_cb(k, img, "image/jpeg", "public, max-age=31536000")
+                keys.append(k)
+    except Exception:
+        # swallow; return what we have
+        pass
+    return keys
+
+# ---------- ROUTES ----------
+@app.get("/assets/{path:path}", summary="Assets Proxy")
+def assets_proxy(path: str = Path(...)):
+    """Serve any GCS asset by key (read-only). Example: /assets/pexels/current/abstract/v_0.jpg"""
+    if not storage_enabled:
+        raise HTTPException(404, "Storage not configured")
+    data = gcs_read_bytes(path)
+    if path.endswith(".png"):
+        return Response(content=data, media_type="image/png")
+    if path.endswith(".jpg") or path.endswith(".jpeg"):
+        return Response(content=data, media_type="image/jpeg")
+    return Response(content=data, media_type="application/octet-stream")
+
+@app.get("/web/layouts/{name}.html", response_class=HTMLResponse, summary="Get Layout Html")
+def get_layout_html(name: str):
+    """
+    Serves the static HTML for a layout from the repo (backend/web/layouts/{name}.html).
+    This HTML is what Chromium renders to produce latest.png.
+    """
+    fp = os.path.join(os.path.dirname(__file__), "web", "layouts", f"{name}.html")
+    if not os.path.exists(fp):
+        raise HTTPException(404, f"Layout not found: {name}")
+    with open(fp, "r", encoding="utf-8") as f:
+        return HTMLResponse(f.read())
+
+@app.get("/v1/render_data", summary="V1 Render Data")
+async def v1_render_data(
+    device: Optional[str] = Query(None),
+    city: Optional[str] = Query(None),
+    units: Optional[str] = Query(None),
+    theme: Optional[str] = Query(None),
+    debug: Optional[int] = Query(0)
+):
+    device = device or DEFAULT_DEVICE_ID
+    theme = (theme or THEMES.split(",")[0]).strip()
+    city = city or DEFAULT_CITY
+    units = units or DEFAULT_UNITS
+
+    weather = await get_weather(city, units)
+    joke = await get_joke()
+
+    # background selection
+    bg_key = None
+    if storage_enabled:
+        bg_key = pexels_pick(theme)
+    bg_url = f"{PUBLIC_BASE_URL}/assets/{bg_key}" if bg_key else None
+
+    payload = {
+        "device": device,
+        "city": city,
+        "units": units,
+        "theme": theme,
+        "tz": TIMEZONE,
+        "now": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "bg_key": bg_key,
+        "bg_url": bg_url,
+        "weather": weather,
+        "joke": joke,
+    }
+    if debug:
+        payload["source"] = {"has_storage": storage_enabled}
+    return JSONResponse(payload)
+
+@app.api_route("/admin/render_now", methods=["GET", "POST"], summary="Admin Render Now")
+def admin_render_now(
+    token: str = Query(...),
+    device: Optional[str] = Query(None),
+    layout: str = Query("base")
+):
+    if token != ADMIN_TOKEN:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    device = device or DEFAULT_DEVICE_ID
+    png = _render_and_store_latest(device=device, layout=layout)
+    return Response(content=png, media_type="image/png")
+
+@app.get("/v1/frame", summary="V1 Frame")
+def v1_frame(
+    device: Optional[str] = Query(None),
+):
     device = device or DEFAULT_DEVICE_ID
     key = f"renders/{device}/latest.png"
     if storage_enabled and gcs_exists(key):
         data = gcs_read_bytes(key)
         return Response(content=data, media_type="image/png", headers={"Cache-Control": "no-cache"})
-    here = os.path.dirname(__file__)
-    local_sample = os.path.join(here, "web", "layouts", "sample.png")
-    if os.path.exists(local_sample):
-        return FileResponse(local_sample, media_type="image/png")
-    raise HTTPException(404, f"No render available for device '{device}'")
 
+    # Not present → tell caller how to regenerate (secure flow uses Scheduler or admin)
+    headers = {
+        "Cache-Control": "no-store",
+        "X-Render-Required": "true",
+        "X-Render-Endpoint": f"/admin/ensure_latest?device={device}&layout=base",
+    }
+    raise HTTPException(status_code=404, detail="No latest frame found", headers=headers)
 
-# ── Utility: rotate pexels folders ───────────────────────────────────────
-def rotate_current_to_cache(theme: str):
-    """
-    Moves /pexels/current/<theme>/ → /pexels/cache/<theme>/ in GCS.
-    Deletes old cache first.
-    """
-    if not storage_enabled:
-        return
-    # delete old cache
-    cache_prefix = f"pexels/cache/{theme}/"
-    for blob in _gcs_client.list_blobs(BUCKET, prefix=cache_prefix):
-        blob.delete()
-    # copy current → cache
-    current_prefix = f"pexels/current/{theme}/"
-    for blob in _gcs_client.list_blobs(BUCKET, prefix=current_prefix):
-        new_key = blob.name.replace("pexels/current/", "pexels/cache/", 1)
-        _gcs_bucket.copy_blob(blob, _gcs_bucket, new_key)
-        blob.delete()
-
-
-# ── Admin prefetch: deep randomized dual-folder Pexels system ────────────
-@app.get("/admin/prefetch")
+# ---- Admin prefetch: deep randomized dual-folder Pexels system ----
+@app.get("/admin/prefetch", summary="Admin Prefetch")
 def admin_prefetch(
     token: str = Query(...),
     themes: Optional[str] = Query(None),
-    count: Optional[int] = Query(None)
+    count: Optional[int] = Query(None),
 ):
     if token != ADMIN_TOKEN:
         raise HTTPException(401, "Invalid token")
@@ -261,14 +345,12 @@ def admin_prefetch(
     if not api_key:
         raise HTTPException(400, "PEXELS_API_KEY not configured")
 
-    theme_list = [t.strip() for t in (themes or os.getenv("THEMES", "abstract,geometric,paper-collage,kids-shapes,minimal")).split(",") if t.strip()]
+    theme_list = [t.strip() for t in (themes or os.getenv("THEMES", "abstract,geometric,paper-collage,kids-shapes,minimal")).split(",")]
     per_theme = int(count or os.getenv("PER_THEME_COUNT", "8") or "8")
 
     written = {}
     for theme in theme_list:
-        # rotate old -> cache
         rotate_current_to_cache(theme)
-        # fetch new randomized set
         keys = prefetch_weekly_set(
             theme,
             api_key,
@@ -280,8 +362,8 @@ def admin_prefetch(
 
     return JSONResponse({"themes": theme_list, "result": written})
 
-# --- Endpoint: ensure latest render exists ---
-@app.api_route("/admin/ensure_latest", methods=["POST", "GET"])
+# --- Endpoint: ensure latest render exists (for Scheduler / secure manual) ---
+@app.api_route("/admin/ensure_latest", methods=["POST", "GET"], summary="Admin Ensure Latest")
 def admin_ensure_latest(
     request: Request,
     token: str = Query(...),
