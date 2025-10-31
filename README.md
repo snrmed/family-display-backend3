@@ -1,176 +1,118 @@
-# 🧠 Kin:D / Family Display Backend
+# 🖼️ kin;D Family Display Backend
 
-A cloud-based backend for the **Kin:D / Family Display** project — a family-friendly e-ink / smart-display platform that shows daily art, weather, jokes, and calendar info on a low-power device such as an ESP32 or Raspberry Pi Pico with an e-paper screen.
+This repository contains the **backend service** powering the **kin;D Family Display** — a smart, cloud-connected e-ink display that brings art, weather, jokes, and inspiration to your home every day.  
 
-Built with **FastAPI + Playwright** and deployed to **Google Cloud Run**, this backend provides:
-- Dynamic daily content (images, weather, jokes)
-- A browser-based **Designer** to visually create and save layouts
-- Font, preset, and SVG asset hosting
-- Scheduled image prefetch from **Pexels**
-- PNG rendering pipeline via headless Chromium
-- Storage in **Google Cloud Storage (GCS)** for layouts and assets
+The backend runs on **Google Cloud Run**, uses **FastAPI**, and renders visual layouts using **Playwright (Chromium)** with dynamic data from APIs like **Pexels**, **OpenWeather**, and **icanhazdadjoke**.
 
 ---
 
-## 🏗️ Repository structure
+## 🚀 Features
+
+- 🌤️ **Live Data Providers** — Weather, jokes, and more (modular architecture)  
+- 🧱 **Dynamic Layouts** — Designed via the Kin;D Designer HTML tool  
+- ☁️ **Cloud Storage** — All layouts, renders, and presets are stored in GCS  
+- 🧠 **Headless Rendering** — Uses Playwright to render PNG frames from HTML templates  
+- 👨‍👩‍👧‍👦 **Multi-User Ready** — Optional email + device hierarchy system  
+- 🪶 **Lightweight API** — Optimized for Cloud Run and ESP32/pico clients  
+- 🎨 **Themed Visuals** — Fetches curated images from Pexels (weekly rotation)  
+
+---
+
+## 🧩 System Overview
 
 ```
-family-display-backend3/
-├── Dockerfile                # Playwright-enabled container build
-├── cloudbuild.yaml           # Cloud Build → Artifact Registry → Cloud Run
-├── README.md
-└── backend/
-    ├── main.py               # Unified FastAPI app
-    ├── requirements.txt
-    └── web/
-        ├── designer/
-        │   ├── overlay_designer_v3_full.html
-        │   ├── presets/      # 10 themed + 2 custom layouts
-        │   └── svgs/         # Cleaned icon pack
-        ├── fonts/
-        │   ├── fonts.css
-        │   ├── fetch_fonts.sh
-        │   └── <OFL .ttf families>
-        └── layouts/
-            └── base.html     # Renderer template (used by Playwright)
+[ Designer HTML ]
+       ↓
+Save JSON Layouts → [ Google Cloud Storage ]
+       ↓
+Build Render Data → [ FastAPI Backend ]
+       ↓
+Chromium → Render PNG Frame
+       ↓
+[ Family Display Device ]
 ```
 
 ---
 
-## ✨ Features
+## ⚙️ Environment Variables
 
-### 🎨 Visual Designer
-- Served at `/designer/`
-- Drag-and-drop overlay editor for cards, icons, and text
-- Loads/saves layouts directly from GCS
-- Uses bundled SVGs, fonts, and presets for fast prototyping
+See the full list and explanations in  
+[`backend/docs/KIN_D_BACKEND_FEATURES_AND_CONFIG_FULL.md`](backend/docs/KIN_D_BACKEND_FEATURES_AND_CONFIG_FULL.md).
 
-### 🖼️ Rendering
-- Headless Chromium via **Playwright**
-- Template: `backend/web/layouts/base.html`
-- Merges live data (`/v1/render_data`) + saved layout → PNG
-- Outputs stored in `renders/<device>/<date>/frame.png`
+Key variables include:
 
-### 🌅 Image Source & Fallback
-1. `pexels/current/` (latest prefetch)
-2. `pexels/cache/<date>/` (previous week)
-3. `images/current/`
-4. `images/backup/`
-5. 1×1 PNG placeholder
-
-### 📦 Prefetch Scheduler
-- Endpoint: `/admin/prefetch?token=<ADMIN_TOKEN>`
-- Rolls over old `pexels/current/` → `pexels/cache/<date>/`
-- Fetches new themed images via **Pexels API**
-- Typically triggered daily/weekly by **Cloud Scheduler**
-
-### 🃏 Jokes & Data
-- Endpoint: `/v1/render_data`
-- Tries `content/jokes.json` in GCS → else picks from local list
-- Returns weather, date, and a dad joke
-
-### 🔤 Fonts
-- All **OFL-licensed**: Inter, Roboto, Atkinson Hyperlegible, Source Sans 3, Public Sans, Manrope, Space Grotesk, Outfit, Plus Jakarta Sans, Merriweather, Noto Sans
-- Served from `/fonts/fonts.css`
-- Shared between Designer and Renderer
+| Variable | Description |
+|-----------|--------------|
+| `ENABLE_RENDERING` | Enable Playwright rendering |
+| `ENABLE_EMAIL_USERS` | Hierarchical user/device storage |
+| `ENABLE_PEXELS` | Pexels integration for themed backgrounds |
+| `ENABLE_OPENWEATHER` | Weather provider toggle |
+| `ENABLE_JOKES_API` | Dad joke provider toggle |
+| `CITY_MODE` | “default” (static) or “fetch” (from layout JSON) |
+| `DEFAULT_CITY` | Fallback city name |
+| `GCS_BUCKET` | Target Cloud Storage bucket |
+| `ADMIN_TOKEN` | Admin key for render/prefetch routes |
 
 ---
 
-## ☁️ Deployment on Google Cloud Run
+## 🧰 Development
 
-### 1. Prerequisites
-- **Google Cloud SDK** configured
-- **Artifact Registry** repo:  
-  `australia-southeast1-docker.pkg.dev/<PROJECT_ID>/family-display/backend`
-- **GCS bucket** (e.g. `family-display-packs`)
-- Optional **Cloud Scheduler** job hitting `/admin/prefetch`
+### Local Run
 
-### 2. Environment variables (set in Cloud Run → Variables & Secrets)
-
-| Key | Example | Description |
-|-----|----------|-------------|
-| `GCS_BUCKET` | `family-display-packs` | bucket for assets & layouts |
-| `ADMIN_TOKEN` | `adm_860510` | auth for admin routes |
-| `PEXELS_API_KEY` | `pexels_...` | Pexels API token |
-| `THEMES` | `abstract,geometric,kids,photo` | image theme rotation |
-
-### 3. Build & deploy
-
-Automatic via GitHub → Cloud Build trigger using `cloudbuild.yaml`.
-
----
-
-## 🧪 Local development
-
-### 1. Build container
 ```bash
-docker build -t family-display .
+uvicorn main:app --host 0.0.0.0 --port 8080 --reload
 ```
 
-### 2. Run
-```bash
-docker run -p 8080:8080   -e GCS_BUCKET=family-display-packs   -e ADMIN_TOKEN=adm_860510   family-display
-```
-Visit [http://localhost:8080/designer/](http://localhost:8080/designer/)
+### Deploy to Cloud Run
 
-### 3. Test endpoints
-```bash
-curl http://localhost:8080/v1/render_data
-curl http://localhost:8080/v1/frame --output frame.png
+The repository includes a ready-to-use `Dockerfile` and `cloudbuild.yaml`.  
+Deploy from GitHub using **Cloud Build** and link to **Cloud Run** in your chosen region.
+
+---
+
+## 📦 Folder Structure
+
+```
+backend/
+├── main.py                     # FastAPI backend
+├── web/
+│   ├── designer/overlay_designer_v3_full.html
+│   ├── layouts/base.html
+│   ├── fonts/
+│   ├── presets/
+│   └── svgs/
+└── docs/
+    └── KIN_D_BACKEND_FEATURES_AND_CONFIG_FULL.md
 ```
 
 ---
 
-## 🔗 API summary
+## 💡 Quick Testing
 
-| Method | Path | Purpose |
-|---------|------|----------|
-| `GET` | `/designer/` | Load the visual layout designer |
-| `GET` | `/presets/{name}.json` | Fetch preset layouts |
-| `GET` | `/svgs/{name}` | Fetch SVG icon |
-| `GET` | `/fonts/{subpath}` | Serve fonts or CSS |
-| `GET` | `/layouts/{device}` | Load saved layout |
-| `POST` | `/admin/layouts/{device}` | Save layout to GCS (requires admin token) |
-| `GET` | `/v1/render_data` | Return live data JSON (weather, joke, date) |
-| `GET` | `/v1/frame` | Return rendered PNG |
-| `GET` | `/admin/prefetch` | Refresh Pexels image cache (requires admin token) |
+After deployment:
 
----
+- View Designer UI:  
+  👉 `https://<your-cloudrun-url>/designer/`
 
-## 🧰 Maintenance
+- Render current frame:  
+  👉 `https://<your-cloudrun-url>/v1/frame?device=familydisplay`
 
-### Backups
-Layouts and content are stored in your GCS bucket:
-```
-family-display-packs/
-├── layouts/<device>/current.json
-├── pexels/current/
-├── pexels/cache/<date>/
-├── images/backup/
-└── renders/<device>/<date>/frame.png
-```
-
-### Logs
-All requests and build output appear in:
-- **Cloud Run → Logs**
-- **Cloud Build → History**
-
-### Updating fonts
-If fonts are missing, run:
-```bash
-cd backend/web/fonts
-bash fetch_fonts.sh
-```
+- Admin Prefetch (Pexels):  
+  👉 `https://<your-cloudrun-url>/admin/prefetch?token=adm_860510`
 
 ---
 
-## 🧑‍💻 Credits & License
+## 🧠 Developer Documentation
 
-- **Author:** Snrmed  
-- **Project name:** *Kin:D – Family Display*  
-- Fonts under **OFL 1.1** license  
-- Backend code under **MIT License**
+Full backend reference, environment variable matrix, and modular provider architecture are detailed in:  
+👉 [**KIN_D_BACKEND_FEATURES_AND_CONFIG_FULL.md**](backend/docs/KIN_D_BACKEND_FEATURES_AND_CONFIG_FULL.md)
 
 ---
 
-> *Kin:D brings together art, weather, and family smiles — one e-ink frame at a time.*
+## 🌞 kin;D — Make a Smile ;D
+
+Welcome to **kin;D**, the creative, cloud-powered family display that turns your wall or fridge into a living canvas of smiles.  
+From weather and dad jokes to curated art and family reminders — kin;D makes every glance a little brighter.  
+
+> **kin;D — Make a Smile ;D**  
+> A smart display for families, built to share joy.
