@@ -312,8 +312,20 @@ async def v1_render_data(username: Optional[str] = Query(None), device: Optional
             key = f"layouts/{device}.json"
         if gcs_exists(key):
             layout_json = json.loads(gcs_read_bytes(key))
-    except Exception as e:
-        logger.debug(f"Failed to load layout JSON for render_data: {e}")
+        # if GCS layout not found, use Theme 1 preset as default
+        if layout_json is None:
+            default_preset_path = "backend/web/designer/presets/Theme 1.json"
+            try:
+                if os.path.exists(default_preset_path):
+                    with open(default_preset_path, "r", encoding="utf-8") as f:
+                        layout_json = json.load(f)
+                    logger.info("Using default preset: Theme 1.json")
+                else:
+                    logger.warning("Default preset not found at expected path.")
+            except Exception as e:
+                logger.error(f"Default preset fallback failed: {e}")
+            except Exception as e:
+                logger.debug(f"Failed to load layout JSON for render_data: {e}")
 
     payload = await build_render_data(username, device, layout_json)
     return JSONResponse(payload)
@@ -335,6 +347,21 @@ async def v1_frame(username: Optional[str] = Query(None), device: Optional[str] 
                 key = f"layouts/{device}.json"
             if gcs_exists(key):
                 layout_json = json.loads(gcs_read_bytes(key))
+            # if GCS layout not found, use Theme 1 preset as default
+        if layout_json is None:
+            default_preset_path = "backend/web/designer/presets/Theme 1.json"
+            try:
+                if os.path.exists(default_preset_path):
+                    with open(default_preset_path, "r", encoding="utf-8") as f:
+                        layout_json = json.load(f)
+                    logger.info("Using default preset: Theme 1.json")
+                else:
+                    logger.warning("Default preset not found at expected path.")
+            except Exception as e:
+                logger.error(f"Default preset fallback failed: {e}")
+            except Exception as e:
+                logger.debug(f"Failed to load layout JSON for render_data: {e}")
+
         except Exception as e:
             logger.warning(f"Layout load failed for frame: {e}")
 
