@@ -14,26 +14,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libcairo2 libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# Set environment variable to skip Playwright browser download during pip install
+# avoid playwright trying to download at pip time
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+ENV PYTHONUNBUFFERED=1
 
-# Copy requirements and install Python packages
 WORKDIR /app
+
+# install python deps
 COPY backend/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
-# Install Chromium for Playwright (without --with-deps)
-RUN playwright install chromium
+# install browser
+RUN playwright install --with-deps chromium || playwright install chromium
 
-# Verify Playwright installation
-RUN playwright --version
-
-# Copy the repo
+# copy the rest
 COPY . /app
 
-# Run from backend/ where main.py is
+# run from backend/
 WORKDIR /app/backend
 
-# Cloud Run expects the server on $PORT
 ENV PORT=8080
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
