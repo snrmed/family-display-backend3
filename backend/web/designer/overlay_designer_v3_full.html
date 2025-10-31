@@ -2527,6 +2527,17 @@ document.getElementById('toggleLiveData').addEventListener('change', e => {
     setStatus('Live Preview OFF', 1500);
   }
 });
+
+// ====== AUTO-ENABLE LIVE PREVIEW ON LOAD ======
+window.addEventListener('DOMContentLoaded', () => {
+  const toggle = document.getElementById('toggleLiveData');
+  if (toggle) {
+    toggle.checked = true;  // visually tick the box
+    fetchLiveData();        // fetch immediately
+    liveTimer = setInterval(fetchLiveData, 60000);
+    setStatus('🌤 Live Preview Auto-ON', 2000);
+  }
+});
   
 document.getElementById('btnExportJSON').addEventListener('click', () => {
   const layout = {
