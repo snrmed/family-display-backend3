@@ -324,9 +324,7 @@ async def v1_render_data(username: Optional[str] = Query(None), device: Optional
                     logger.warning("Default preset not found at expected path.")
             except Exception as e:
                 logger.error(f"Default preset fallback failed: {e}")
-            except Exception as e:
-                logger.debug(f"Failed to load layout JSON for render_data: {e}")
-
+            
     payload = await build_render_data(username, device, layout_json)
     return JSONResponse(payload)
 
@@ -359,9 +357,7 @@ async def v1_frame(username: Optional[str] = Query(None), device: Optional[str] 
                     logger.warning("Default preset not found at expected path.")
             except Exception as e:
                 logger.error(f"Default preset fallback failed: {e}")
-            except Exception as e:
-                logger.debug(f"Failed to load layout JSON for render_data: {e}")
-
+            
         except Exception as e:
             logger.warning(f"Layout load failed for frame: {e}")
 
