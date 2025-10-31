@@ -1,122 +1,133 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=800,height=480" />
-<title>Family Display</title>
-<style>
-  html, body {
-    margin: 0;
-    padding: 0;
-    width: 800px;
-    height: 480px;
-    background: #222;     /* fallback if no bg image */
-    color: #000;
-    font-family: "Roboto", system-ui, -apple-system, Segoe UI, Arial, sans-serif;
-    overflow: hidden;
-  }
-  #canvas {
-    position: relative;
-    width: 800px;
-    height: 480px;
-    overflow: hidden;
-  }
-  #bg {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    z-index: 0;
-    opacity: 0.95;
-    background: #111;     /* prevents flash while loading */
-  }
-  .card {
-    position: absolute;
-    background: rgba(255,255,255,0.85);
-    border-radius: 16px;
-    padding: 14px 18px;
-    backdrop-filter: blur(8px);
-    box-shadow: 0 0 6px rgba(0,0,0,0.3);
-    z-index: 5;
-  }
-  #dateChip {
-    top: 16px;
-    right: 16px;
-    font-weight: 700;
-    font-size: 18px;
-    background: rgba(255,255,255,0.85);
-    padding: 6px 12px;
-    border-radius: 12px;
-  }
-  #weather {
-    left: 16px;
-    bottom: 16px;
-    width: 360px;
-    font-size: 22px;
-    font-weight: 600;
-  }
-  #joke {
-    right: 16px;
-    bottom: 16px;
-    width: 360px;
-    font-size: 18px;
-    font-weight: 500;
-    line-height: 1.25;
-  }
-</style>
+  <meta charset="UTF-8">
+  <title>Kin;D Display Renderer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 800px;
+      height: 480px;
+      overflow: hidden;
+      background: var(--bg, #fff);
+      font-family: "Inter", sans-serif;
+      color: #000;
+    }
+    .el {
+      position: absolute;
+      box-sizing: border-box;
+    }
+    .card {
+      background: rgba(255,255,255,0.8);
+      border-radius: 16px;
+      padding: 10px 14px;
+      font-size: 18px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+    }
+  </style>
 </head>
 <body>
-<div id="canvas">
-  <img id="bg" src="" alt="background" />
-  <div id="dateChip" class="card"></div>
-  <div id="weather" class="card"></div>
-  <div id="joke" class="card"></div>
-</div>
+  <div id="root"></div>
 
-<script>
-(async () => {
-  const qs = new URLSearchParams(location.search);
-  const backend = qs.get("backend") || location.origin;
-  const device  = qs.get("device")  || "familydisplay";
-  const theme   = qs.get("theme")   || ""; // optional
+  <!-- Fallback default cards -->
+  <div id="fallback" style="display:none;">
+    <div id="dateCard" class="card" style="top:20px;left:20px;">Date</div>
+    <div id="weatherCard" class="card" style="top:80px;left:20px;">Weather</div>
+    <div id="jokeCard" class="card" style="bottom:20px;left:20px;right:20px;">Joke</div>
+  </div>
 
-  // fetch render data from backend
-  const url = `${backend}/v1/render_data?device=${encodeURIComponent(device)}${theme ? `&theme=${encodeURIComponent(theme)}` : ""}`;
-  const resp = await fetch(url);
-  const d = await resp.json();
+  <script>
+  async function main() {
+    const params = new URLSearchParams(window.location.search);
+    const device = params.get("device") || "familydisplay";
+    const dataUrl = `/v1/render_data?device=${device}`;
+    const layoutUrl = `/layouts/${device}`;
 
-  // 1) Background
-  const bg = document.getElementById("bg");
-  if (d.bg_url) {
-    // cache-bust to avoid stale chromium cache in repeated renders
-    bg.src = d.bg_url + (d.bg_url.includes("?") ? "&" : "?") + "t=" + Date.now();
+    const [dataRes, layoutRes] = await Promise.allSettled([
+      fetch(dataUrl),
+      fetch(layoutUrl)
+    ]);
+
+    let renderData = {};
+    let layout = null;
+
+    if (dataRes.status === "fulfilled" && dataRes.value.ok) {
+      renderData = await dataRes.value.json();
+    }
+    if (layoutRes.status === "fulfilled" && layoutRes.value.ok) {
+      layout = await layoutRes.value.json();
+    }
+
+    if (layout && layout.elements && layout.elements.length) {
+      renderLayout(layout.elements, renderData);
+    } else {
+      document.getElementById("fallback").style.display = "block";
+      applyFallback(renderData);
+    }
   }
 
-  // 2) Date chip (use server "now" if provided; fallback to client now)
-  const dateChip = document.getElementById("dateChip");
-  const now = d.now ? new Date(d.now) : new Date();
-  const opts = { weekday: "short", day: "2-digit", month: "short" };
-  dateChip.textContent = now.toLocaleDateString("en-AU", opts);
+  function renderLayout(elements, data) {
+    const root = document.getElementById("root");
+    root.innerHTML = "";
+    for (const el of elements) {
+      const div = document.createElement("div");
+      div.classList.add("el");
+      div.style.left = (el.x || 0) + "px";
+      div.style.top = (el.y || 0) + "px";
+      div.style.width = (el.w || 100) + "px";
+      div.style.height = (el.h || 40) + "px";
+      div.style.fontSize = (el.fontSize || 18) + "px";
+      div.style.fontWeight = el.fontWeight || "500";
+      div.style.color = el.color || "#000";
 
-  // 3) Weather
-  const weather = document.getElementById("weather");
-  const w = d.weather || {};
-  const min = (w.temp_min ?? "–");
-  const max = (w.temp_max ?? "–");
-  const cond = (w.condition || "");
-  weather.innerHTML = `${d.city || ""} • ${max}° / ${min}°<br>(${cond})`;
+      if (el.kind === "text") {
+        div.textContent = el.text || "";
+      }
+      else if (el.kind === "date") {
+        div.textContent = data.date || "—";
+      }
+      else if (el.kind === "city") {
+        div.textContent = data.city || "—";
+      }
+      else if (el.kind === "temp") {
+        div.textContent = (data.weather?.temp ?? "--") + "°C";
+      }
+      else if (el.kind === "weather-desc") {
+        div.textContent = data.weather?.desc || "—";
+      }
+      else if (el.kind === "humidity") {
+        div.textContent = "Humidity: " + (data.weather?.humidity ?? "--") + "%";
+      }
+      else if (el.kind === "wind") {
+        const kmh = Math.round((data.weather?.wind ?? 0) * 3.6);
+        div.textContent = "Wind: " + kmh + " km/h";
+      }
+      else if (el.kind === "rain") {
+        const rain = data.weather?.rain ?? 0;
+        div.textContent = rain > 0 ? "Rain: " + rain + " mm" : "";
+      }
+      else if (el.kind === "joke") {
+        div.textContent = data.dad_joke || "";
+      }
 
-  // 4) Dad joke
-  const joke = document.getElementById("joke");
-  joke.textContent = d.joke || "No joke today.";
+      root.appendChild(div);
+    }
+  }
 
-  // signal to Playwright that content is ready
-  document.body.setAttribute("data-ready", "1");
+  function applyFallback(data) {
+    const d = data || {};
+    document.getElementById("dateCard").textContent = d.date || "—";
+    if (d.weather) {
+      const w = d.weather;
+      document.getElementById("weatherCard").textContent =
+        `${w.temp}°C ${w.desc || ""}, humidity ${w.humidity || "--"}%`;
+    }
+    document.getElementById("jokeCard").textContent = d.dad_joke || "";
+  }
 
-  // optional: tidy background once loaded
-  bg.onload = () => { document.body.style.background = "#000"; };
-})();
-</script>
+  main();
+  </script>
 </body>
 </html>
