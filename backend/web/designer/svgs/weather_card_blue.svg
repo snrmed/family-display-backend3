@@ -1,0 +1,24 @@
+<svg xmlns='http://www.w3.org/2000/svg' width='342' height='184' viewBox='0 0 342 184'>
+  <defs>
+    <!-- Base gradient -->
+    <linearGradient id='grad' x1='0%' y1='0%' x2='100%' y2='0%'>
+      <stop offset='0%' stop-color='#3BA9FF'/>
+      <stop offset='100%' stop-color='#0050C8'/>
+    </linearGradient>
+    <!-- Soft drop shadow -->
+    <filter id='shadow' x='-20%' y='-20%' width='140%' height='140%'>
+      <feDropShadow dx='0' dy='6' stdDeviation='6' flood-color='rgba(0,0,0,0.25)'/>
+    </filter>
+    <!-- Cloud arc blur -->
+    <filter id='cloudBlur'>
+      <feGaussianBlur stdDeviation='8'/>
+    </filter>
+  </defs>
+
+  <!-- Card base -->
+  <rect width='342' height='184' rx='40' ry='40' fill='url(#grad)' filter='url(#shadow)'/>
+
+  <!-- Abstract cloud arc -->
+  <path d='M102.6, 147.20000000000002 C171.0, 110.39999999999999, 239.39999999999998, 165.6, 342, 128.79999999999998' 
+        stroke='rgba(255,255,255,0.35)' stroke-width='20' fill='none' filter='url(#cloudBlur)'/>
+</svg>

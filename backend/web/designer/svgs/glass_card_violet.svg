@@ -1,0 +1,44 @@
+<svg xmlns='http://www.w3.org/2000/svg' width='290' height='300' viewBox='0 0 290 300'>
+  <defs>
+    <!-- Base gradient -->
+    <linearGradient id='baseGrad' x1='0%' y1='0%' x2='100%' y2='100%'>
+      <stop offset='0%' stop-color='#cc00ff'/>
+      <stop offset='100%' stop-color='#ff66cc'/>
+    </linearGradient>
+    <!-- Shadow filter -->
+    <filter id='cardShadow' x='-20%' y='-20%' width='140%' height='140%'>
+      <feDropShadow dx='0' dy='10' stdDeviation='10' flood-color='rgba(0,0,0,0.25)'/>
+    </filter>
+    <!-- Glass blur filter -->
+    <filter id='glassBlur' x='-10%' y='-10%' width='120%' height='120%'>
+      <feGaussianBlur stdDeviation='3'/>
+    </filter>
+    <!-- Glow blur for circles -->
+    <filter id='glowBlur'>
+      <feGaussianBlur stdDeviation='8'/>
+    </filter>
+  </defs>
+
+  <!-- Base card with gradient -->
+  <rect width='290' height='300' rx='50' ry='50' fill='url(#baseGrad)' filter='url(#cardShadow)'/>
+
+  <!-- Glass overlay -->
+  <path d='M8,8 H232 Q282,8 282,50 V292 H8 Z' fill='url(#glassGrad)' filter='url(#glassBlur)' opacity='0.5'/>
+
+  <!-- Glass gradient definition -->
+  <defs>
+    <linearGradient id='glassGrad' x1='0%' y1='100%' x2='0%' y2='0%'>
+      <stop offset='0%' stop-color='rgba(255,255,255,0.35)'/>
+      <stop offset='100%' stop-color='rgba(255,255,255,0.8)'/>
+    </linearGradient>
+  </defs>
+
+  <!-- Glow circles in top-right -->
+  <g filter='url(#glowBlur)' opacity='0.4'>
+    <circle cx='200' cy='80' r='60' fill='rgba(255,255,255,0.25)'/>
+    <circle cx='220' cy='70' r='40' fill='rgba(255,255,255,0.3)'/>
+    <circle cx='235' cy='60' r='25' fill='rgba(255,255,255,0.35)'/>
+    <circle cx='245' cy='50' r='15' fill='rgba(255,255,255,0.45)'/>
+    <circle cx='255' cy='40' r='8' fill='rgba(255,255,255,0.6)'/>
+  </g>
+</svg>

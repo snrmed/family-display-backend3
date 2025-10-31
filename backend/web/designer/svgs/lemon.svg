@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="300" viewBox="0 0 200 300">
+  <rect width="200" height="300" rx="8" ry="8" fill="#222" stroke="#333" stroke-width="1"/>
+  <defs>
+    <radialGradient id="glowGradient" cx="50%" cy="50%" r="50%">
+      <stop offset="65%" stop-color="#1e1f1f"/>
+      <stop offset="75%" stop-color="#7fda46"/>
+      <stop offset="83%" stop-color="#c9ff2e"/>
+      <stop offset="90%" stop-color="#ffee55"/>
+      <stop offset="98%" stop-color="#fffbe0"/>
+      <stop offset="100%" stop-color="#fffbe0"/>
+    </radialGradient>
+    <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="12" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <circle cx="100" cy="240" r="100" fill="url(#glowGradient)" filter="url(#softGlow)"/>
+</svg>

@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="350" height="600" viewBox="0 0 350 600" aria-hidden="true">
+
+    <defs>
+      <linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#FFBD3F"/>
+        <stop offset="100%" stop-color="#FFF097"/>
+      </linearGradient>
+      <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#E0D7A4"/>
+        <stop offset="100%" stop-color="#E7C77A"/>
+      </linearGradient>
+      <linearGradient id="g2" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#E0D7A4"/>
+        <stop offset="100%" stop-color="#E7C77A"/>
+      </linearGradient>
+    </defs>
+    
+<rect x="0" y="0" width="350" height="600" fill="url(#grad)"/>
+<rect x="-20" y="400" width="270" height="150" rx="100" fill="url(#g1)" transform="rotate(20 115.0 475.0)" />
+<rect x="-70" y="380" width="500" height="150" rx="100" fill="url(#g2)" transform="rotate(-10 180.0 455.0)" />
+<circle cx="265" cy="215" r="65" fill="#FFDB50" opacity="0.10"/>
+<circle cx="255" cy="205" r="55" fill="#FFDB50" opacity="0.10"/>
+<circle cx="245" cy="195" r="45" fill="#FFDB50" opacity="0.10"/>
+<circle cx="280" cy="230" r="30" fill="#FFDB50"/>
+</svg>
