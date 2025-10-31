@@ -166,7 +166,7 @@ bash fetch_fonts.sh
 
 ## 🧑‍💻 Credits & License
 
-- **Author:** Shekar Roopan  
+- **Author:** Snrmed  
 - **Project name:** *Kin:D – Family Display*  
 - Fonts under **OFL 1.1** license  
 - Backend code under **MIT License**
