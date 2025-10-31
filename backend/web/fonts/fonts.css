@@ -1,0 +1,18 @@
+@font-face { font-family: 'Inter'; src: url('/fonts/Inter/Inter-VariableFont_slnt,wght.ttf') format('truetype'); font-display: swap; }
+@font-face { font-family: 'Roboto'; src: url('/fonts/Roboto/Roboto-Regular.ttf') format('truetype'); font-display: swap; }
+@font-face { font-family: 'Atkinson Hyperlegible'; src: url('/fonts/AtkinsonHyperlegible/AtkinsonHyperlegible-Regular.ttf') format('truetype'); font-display: swap; }
+@font-face { font-family: 'Source Sans 3'; src: url('/fonts/SourceSans3/SourceSans3-VariableFont_wght.ttf') format('truetype'); font-display: swap; }
+@font-face { font-family: 'Public Sans'; src: url('/fonts/PublicSans/PublicSans-VariableFont_wght.ttf') format('truetype'); font-display: swap; }
+@font-face { font-family: 'Manrope'; src: url('/fonts/Manrope/Manrope-VariableFont_wght.ttf') format('truetype'); font-display: swap; }
+@font-face { font-family: 'Space Grotesk'; src: url('/fonts/SpaceGrotesk/SpaceGrotesk-VariableFont_wght.ttf') format('truetype'); font-display: swap; }
+@font-face { font-family: 'Outfit'; src: url('/fonts/Outfit/Outfit-VariableFont_wght.ttf') format('truetype'); font-display: swap; }
+@font-face { font-family: 'Plus Jakarta Sans'; src: url('/fonts/PlusJakartaSans/PlusJakartaSans-VariableFont_wght.ttf') format('truetype'); font-display: swap; }
+@font-face { font-family: 'Merriweather'; src: url('/fonts/Merriweather/Merriweather-Regular.ttf') format('truetype'); font-display: swap; }
+@font-face { font-family: 'Noto Sans'; src: url('/fonts/NotoSans/NotoSans-Regular.ttf') format('truetype'); font-display: swap; }
+
+:root {
+  --font-ui: 'Inter', 'Public Sans', system-ui, -apple-system, 'Noto Sans', sans-serif;
+  --font-display: 'Space Grotesk', 'Outfit', 'Plus Jakarta Sans', 'Inter', sans-serif;
+  --font-readable: 'Atkinson Hyperlegible', 'Source Sans 3', 'Inter', sans-serif;
+  --font-serif: 'Merriweather', serif;
+}
