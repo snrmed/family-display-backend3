@@ -2455,6 +2455,79 @@ async function start() {
 }
 
 start();
+  
+// ====== LIVE DATA PREVIEW ======
+let liveData = null;
+let liveTimer = null;
+
+async function fetchLiveData() {
+  try {
+    const device = storedDeviceId || 'familydisplay';
+    const resp = await fetch(`/v1/render_data?device=${encodeURIComponent(device)}`);
+    if (resp.ok) {
+      liveData = await resp.json();
+      console.log('🌤 Live data loaded', liveData);
+      updateLiveText();
+    }
+  } catch (e) {
+    console.warn('Live data fetch failed', e);
+  }
+}
+
+function updateLiveText() {
+  if (!liveData) return;
+  canvas.querySelectorAll('.el.text, .el.icon').forEach(el => {
+    const t = (el.dataset.type || '').toUpperCase();
+    const content = el.querySelector('.el-content');
+    if (!content) return;
+
+    switch (t) {
+      case 'DATE':
+        content.textContent = liveData.date || '—';
+        break;
+      case 'CITY':
+        content.textContent = liveData.city || '—';
+        break;
+      case 'TEMP':
+        content.textContent = (liveData.weather?.temp ?? '--') + '°C';
+        break;
+      case 'WEATHER_DESC':
+        content.textContent = liveData.weather?.desc || '—';
+        break;
+      case 'HUMIDITY':
+        content.textContent = 'Humidity: ' + (liveData.weather?.humidity ?? '--') + '%';
+        break;
+      case 'WIND':
+        const kmh = Math.round((liveData.weather?.wind ?? 0) * 3.6);
+        content.textContent = 'Wind: ' + kmh + ' km/h';
+        break;
+      case 'RAIN':
+        const rain = liveData.weather?.rain ?? 0;
+        content.textContent = rain > 0 ? 'Rain: ' + rain + ' mm' : 'No rain';
+        break;
+      case 'JOKE':
+        content.textContent = liveData.dad_joke || '';
+        break;
+      default:
+        // Leave custom text unchanged
+        break;
+    }
+  });
+}
+
+// ====== LIVE PREVIEW TOGGLE ======
+document.getElementById('toggleLiveData').addEventListener('change', e => {
+  if (e.target.checked) {
+    fetchLiveData();
+    liveTimer = setInterval(fetchLiveData, 60000); // refresh every minute
+    setStatus('🌤 Live Preview ON', 1500);
+  } else {
+    clearInterval(liveTimer);
+    liveData = null;
+    setStatus('Live Preview OFF', 1500);
+  }
+});
+  
 document.getElementById('btnExportJSON').addEventListener('click', () => {
   const layout = {
     name: presetNameInput.value.trim() || 'custom_layout',
