@@ -163,23 +163,37 @@ LOCAL_JOKES = [
 
 
 async def get_weather(city: str) -> Dict[str, Any]:
-    """Fetch current weather from OpenWeather (metric °C)."""
+    """Fetch current weather from OpenWeather (metric °C). Includes humidity, wind, rain."""
     if not ENABLE_OPENWEATHER or not OPENWEATHER_KEY:
-        return {"temp": 33, "icon": "01d", "desc": "Sunny"}
+        return {"temp": 33, "feels_like": 33, "humidity": 45, "rain": 0, "wind": 5, "icon": "01d", "desc": "Sunny"}
+
     try:
         url = f"https://api.openweathermap.org/data/2.5/weather?q={city}&appid={OPENWEATHER_KEY}&units=metric"
         async with httpx.AsyncClient(timeout=8) as client:
             r = await client.get(url)
+
         if r.status_code == 200:
             j = r.json()
+            rain = 0
+            if "rain" in j and "1h" in j["rain"]:
+                rain = j["rain"]["1h"]
+
             return {
                 "temp": round(j["main"]["temp"]),
+                "feels_like": round(j["main"]["feels_like"]),
+                "humidity": j["main"]["humidity"],
+                "wind": round(j["wind"]["speed"], 1),
+                "rain": rain,
                 "icon": j["weather"][0]["icon"],
                 "desc": j["weather"][0]["description"].title(),
             }
+
+        logger.warning(f"Weather fetch failed {r.status_code}: {r.text[:100]}")
+
     except Exception as e:
         logger.error(f"Weather error: {e}")
-    return {"temp": 33, "icon": "01d", "desc": "Sunny"}
+
+    return {"temp": 33, "feels_like": 33, "humidity": 45, "rain": 0, "wind": 5, "icon": "01d", "desc": "Sunny"}
 
 
 async def get_joke() -> str:
