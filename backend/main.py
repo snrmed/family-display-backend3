@@ -467,7 +467,7 @@ def root():
 # ---------------------------------------------------------------
 @app.get("/designer/", response_class=HTMLResponse)
 def get_designer():
-    path = "backend/web/designer/overlay_designer_v3_full.html"
+    path = "web/designer/overlay_designer_v3_full.html"
     if os.path.exists(path):
         with open(path, "r", encoding="utf-8") as f:
             return f.read()
