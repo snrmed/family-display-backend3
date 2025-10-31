@@ -1,6 +1,6 @@
 # ================================================================
 # Kin:D / Family Display Backend
-# Production Build - Cloud Run / GCS / Playwright / Pexels / APIs
+# Production Build - Cloud Run / GCS / Playwright (async) / Pexels / Forecast
 # ================================================================
 
 import os
@@ -9,7 +9,7 @@ import json
 import random
 import logging
 import datetime as dt
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request, Query
@@ -18,7 +18,6 @@ from fastapi.responses import JSONResponse, HTMLResponse, Response
 # ================================================================
 # Logging / Configuration
 # ================================================================
-
 LOG_LEVEL = os.getenv("LOG_LEVEL", "info").upper()
 logging.basicConfig(level=LOG_LEVEL, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("kind-backend")
@@ -27,7 +26,7 @@ PORT = int(os.getenv("PORT", "8080"))
 GCS_BUCKET = os.getenv("GCS_BUCKET", "")
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "adm_860510")
 
-# Feature toggles
+# Feature toggles (env driven)
 ENABLE_EMAIL_USERS = os.getenv("ENABLE_EMAIL_USERS", "false").lower() == "true"
 ENABLE_RENDERING = os.getenv("ENABLE_RENDERING", "true").lower() == "true"
 ENABLE_RENDER_NOW = os.getenv("ENABLE_RENDER_NOW", "true").lower() == "true"
@@ -36,7 +35,7 @@ ENABLE_OPENWEATHER = os.getenv("ENABLE_OPENWEATHER", "true").lower() == "true"
 ENABLE_JOKES_API = os.getenv("ENABLE_JOKES_API", "true").lower() == "true"
 
 # City behaviour
-CITY_MODE = os.getenv("CITY_MODE", "default").lower()
+CITY_MODE = os.getenv("CITY_MODE", "default").lower()  # "default" or "fetch"
 DEFAULT_CITY = os.getenv("DEFAULT_CITY", "Darwin")
 
 # External keys
@@ -68,7 +67,7 @@ except Exception as e:
 
 
 def safe_email(email: Optional[str]) -> Optional[str]:
-    """Sanitize email for safe GCS pathing"""
+    """Sanitize email for safe GCS pathing."""
     if not email:
         return None
     return email.replace("@", "_at_").replace(".", "_")
@@ -95,62 +94,22 @@ def gcs_write_bytes(key: str, data: bytes, content_type: str = "application/octe
 
 
 # ================================================================
-# Default preset loader
+# Playwright (ASYNC) - initialised on startup
 # ================================================================
-def load_default_preset() -> Optional[Dict[str, Any]]:
-    """Load Theme 1 preset from local path."""
-    default_preset_path = "backend/web/designer/presets/Theme 1.json"
-    try:
-        if os.path.exists(default_preset_path):
-            with open(default_preset_path, "r", encoding="utf-8") as f:
-                logger.info("Using default preset: Theme 1.json")
-                return json.load(f)
-        else:
-            logger.warning("Default preset not found at backend/web/designer/presets/Theme 1.json")
-    except Exception as e:
-        logger.error(f"Default preset fallback failed: {e}")
-    return None
+# Important: we must use async_playwright in FastAPI to avoid:
+# "It looks like you are using Playwright Sync API inside the asyncio loop."
+from playwright.async_api import async_playwright
 
-
-# ================================================================
-# Playwright Renderer
-# ================================================================
+playwright_app = None
 playwright_browser = None
-if ENABLE_RENDERING:
-    try:
-        from playwright.sync_api import sync_playwright
-        pw = sync_playwright().start()
-        playwright_browser = pw.chromium.launch(args=["--no-sandbox"])
-        logger.info("Chromium renderer initialised.")
-    except Exception as e:
-        logger.error(f"Playwright init failed: {e}")
-        ENABLE_RENDERING = False
-
-
-def render_html_to_png(html_path: str, out_bytes: io.BytesIO, context: Dict[str, Any]):
-    """Render the base.html with injected JSON data and snapshot as PNG"""
-    if not ENABLE_RENDERING or playwright_browser is None:
-        raise RuntimeError("Rendering disabled")
-    try:
-        page = playwright_browser.new_page(viewport={"width": RENDER_WIDTH, "height": RENDER_HEIGHT})
-        encoded = json.dumps(context)
-        url = f"file://{os.path.abspath(html_path)}?data={encoded}"
-        page.goto(url)
-        page.wait_for_timeout(2000)
-        out_bytes.write(page.screenshot(type="png"))
-        page.close()
-        logger.info("Render complete via Playwright.")
-    except Exception as e:
-        logger.error(f"Render failed: {e}")
-        raise
 
 # ================================================================
-# FastAPI App Init
+# FastAPI app
 # ================================================================
 app = FastAPI(title="Kin:D Family Display Backend", version="2.0.0")
 
 # ================================================================
-# Information Providers (Weather / Joke / Future-ready)
+# Local fallback jokes
 # ================================================================
 LOCAL_JOKES = [
     "I told my wife she should embrace her mistakes — she gave me a hug.",
@@ -161,11 +120,60 @@ LOCAL_JOKES = [
     "I asked my dog what’s two minus two. He said nothing.",
 ]
 
+# ================================================================
+# Startup / Shutdown
+# ================================================================
+@app.on_event("startup")
+async def startup_event():
+    global playwright_app, playwright_browser, ENABLE_RENDERING
+    if not ENABLE_RENDERING:
+        logger.info("Rendering disabled via env, skipping Playwright init.")
+        return
+    try:
+        playwright_app = await async_playwright().start()
+        playwright_browser = await playwright_app.chromium.launch(
+            args=[
+                "--no-sandbox",
+                "--disable-gpu",
+                "--disable-dev-shm-usage",
+                "--disable-setuid-sandbox",
+            ]
+        )
+        logger.info("Chromium renderer initialised (async).")
+    except Exception as e:
+        logger.error(f"Playwright async init failed: {e}")
+        # disable so /v1/frame returns 503 instead of exploding
+        ENABLE_RENDERING = False
 
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    global playwright_app, playwright_browser
+    try:
+        if playwright_browser:
+            await playwright_browser.close()
+        if playwright_app:
+            await playwright_app.stop()
+        logger.info("Playwright renderer closed.")
+    except Exception as e:
+        logger.warning(f"Playwright close error: {e}")
+
+
+# ================================================================
+# Providers
+# ================================================================
 async def get_weather(city: str) -> Dict[str, Any]:
     """Fetch current weather from OpenWeather (metric °C). Includes humidity, wind, rain."""
     if not ENABLE_OPENWEATHER or not OPENWEATHER_KEY:
-        return {"temp": 33, "feels_like": 33, "humidity": 45, "rain": 0, "wind": 5, "icon": "01d", "desc": "Sunny"}
+        return {
+            "temp": 33,
+            "feels_like": 33,
+            "humidity": 45,
+            "rain": 0,
+            "wind": 5,
+            "icon": "01d",
+            "desc": "Sunny",
+        }
 
     try:
         url = f"https://api.openweathermap.org/data/2.5/weather?q={city}&appid={OPENWEATHER_KEY}&units=metric"
@@ -193,23 +201,29 @@ async def get_weather(city: str) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Weather error: {e}")
 
-    return {"temp": 33, "feels_like": 33, "humidity": 45, "rain": 0, "wind": 5, "icon": "01d", "desc": "Sunny"}
+    # fallback
+    return {
+        "temp": 33,
+        "feels_like": 33,
+        "humidity": 45,
+        "rain": 0,
+        "wind": 5,
+        "icon": "01d",
+        "desc": "Sunny",
+    }
 
-async def get_forecast(city: str, days: int = 2) -> list[dict]:
+
+async def get_forecast(city: str, days: int = 2) -> List[Dict[str, Any]]:
     """
     Fetch a simple forecast (next N days) from OpenWeather 5-day/3h endpoint.
-    We skip 'today' (since we already have current weather) and return e.g.
-    [
-      {"date": "2025-11-02", "tmin": 25, "tmax": 33, "desc": "Scattered Clouds", "icon": "03d"},
-      {"date": "2025-11-03", "tmin": 26, "tmax": 34, "desc": "Light Rain", "icon": "10d"},
-    ]
+    Skips today, returns at most `days` entries.
     """
     if not ENABLE_OPENWEATHER or not OPENWEATHER_KEY:
         return []
 
     try:
         url = (
-            f"https://api.openweathermap.org/data/2.5/forecast"
+            "https://api.openweathermap.org/data/2.5/forecast"
             f"?q={city}&appid={OPENWEATHER_KEY}&units=metric"
         )
         async with httpx.AsyncClient(timeout=10) as client:
@@ -224,21 +238,22 @@ async def get_forecast(city: str, days: int = 2) -> list[dict]:
             return []
 
         today_str = dt.date.today().isoformat()
-        # group entries by date
-        per_day: dict[str, list[dict]] = {}
+        per_day: Dict[str, List[Dict[str, Any]]] = {}
+
         for item in raw_list:
-            dt_txt = item.get("dt_txt")  # "2025-11-02 12:00:00"
+            dt_txt = item.get("dt_txt")
             if not dt_txt:
                 continue
             date_only = dt_txt.split(" ")[0]
             if date_only == today_str:
-                # skip today – we already have current weather
+                # skip today; we already have current weather
                 continue
 
             main = item.get("main", {})
             weather_arr = item.get("weather", [])
             if not weather_arr:
                 continue
+
             w0 = weather_arr[0]
             entry = {
                 "temp": main.get("temp"),
@@ -247,8 +262,7 @@ async def get_forecast(city: str, days: int = 2) -> list[dict]:
             }
             per_day.setdefault(date_only, []).append(entry)
 
-        # now flatten to daily min/max + pick middle desc
-        out = []
+        out: List[Dict[str, Any]] = []
         for day, entries in per_day.items():
             temps = [e["temp"] for e in entries if e.get("temp") is not None]
             if not temps:
@@ -266,13 +280,14 @@ async def get_forecast(city: str, days: int = 2) -> list[dict]:
                 }
             )
 
-        # we only want e.g. 2 days ahead
+        # just return the earliest N days
         out = sorted(out, key=lambda x: x["date"])[:days]
         return out
 
     except Exception as e:
         logger.error(f"Forecast error: {e}")
         return []
+
 
 async def get_joke() -> str:
     """Fetch a dad joke from icanhazdadjoke API with fallback."""
@@ -281,7 +296,10 @@ async def get_joke() -> str:
             async with httpx.AsyncClient(timeout=6) as client:
                 r = await client.get(
                     "https://icanhazdadjoke.com/",
-                    headers={"Accept": "application/json", "User-Agent": "Kin:D Display (https://kind-display.app)"}
+                    headers={
+                        "Accept": "application/json",
+                        "User-Agent": "Kin:D Display (https://kind-display.app)",
+                    },
                 )
             if r.status_code == 200:
                 return r.json().get("joke", random.choice(LOCAL_JOKES))
@@ -291,13 +309,16 @@ async def get_joke() -> str:
 
 
 async def get_calendar() -> Dict[str, Any]:
+    """Placeholder for future calendar events."""
     return {}
 
 
 async def get_sports() -> Dict[str, Any]:
+    """Placeholder for future sports info."""
     return {}
 
 
+# Enabled providers registry
 INFO_PROVIDERS = {
     "weather": ENABLE_OPENWEATHER,
     "joke": ENABLE_JOKES_API,
@@ -306,20 +327,70 @@ INFO_PROVIDERS = {
 }
 
 
-async def build_render_data(username: Optional[str], device: Optional[str], layout_json: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+# ================================================================
+# Helper: load layout from GCS or fallback to local preset
+# ================================================================
+def load_local_preset() -> Optional[Dict[str, Any]]:
+    fallback_path = "backend/web/designer/presets/Theme 1.json"
+    if os.path.exists(fallback_path):
+        try:
+            with open(fallback_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            logger.error(f"Local preset load failed: {e}")
+    return None
+
+
+async def load_layout_for(username: Optional[str], device: Optional[str]) -> Optional[Dict[str, Any]]:
+    """Load layout JSON for a device (and username if enabled)."""
+    if not device:
+        device = "familydisplay"
+
+    if storage_enabled:
+        try:
+            if ENABLE_EMAIL_USERS and username:
+                user_key = safe_email(username)
+                key = f"users/{user_key}/devices/{device}/layouts/current.json"
+            else:
+                key = f"layouts/{device}.json"
+            if gcs_exists(key):
+                return json.loads(gcs_read_bytes(key))
+        except Exception as e:
+            logger.warning(f"GCS layout load failed: {e}")
+
+    # fallback to local preset
+    preset = load_local_preset()
+    if preset:
+        logger.info("Using local preset: Theme 1.json")
+    return preset
+
+
+# ================================================================
+# Build render payload
+# ================================================================
+async def build_render_data(
+    username: Optional[str],
+    device: Optional[str],
+    layout_json: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
     today = dt.date.today().isoformat()
 
+    # decide city
     if CITY_MODE == "fetch" and layout_json and "city" in layout_json:
         city = layout_json.get("city", DEFAULT_CITY)
     else:
         city = DEFAULT_CITY
 
-    data = {"date": today, "city": city, "username": username, "device": device}
+    data: Dict[str, Any] = {
+        "date": today,
+        "city": city,
+        "username": username,
+        "device": device,
+    }
 
-        # weather + forecast
+    # weather + forecast
     if INFO_PROVIDERS["weather"]:
         current_weather = await get_weather(city)
-        # next 2 days
         forecast = await get_forecast(city, days=2)
         data["weather"] = current_weather
         data["forecast"] = forecast
@@ -334,12 +405,14 @@ async def build_render_data(username: Optional[str], device: Optional[str], layo
             "desc": "Sunny",
         }
         data["forecast"] = []
-        
+
+    # joke
     if INFO_PROVIDERS["joke"]:
         data["dad_joke"] = await get_joke()
     else:
         data["dad_joke"] = random.choice(LOCAL_JOKES)
 
+    # future stubs
     if INFO_PROVIDERS.get("calendar"):
         data["calendar"] = await get_calendar()
     if INFO_PROVIDERS.get("sports"):
@@ -348,8 +421,32 @@ async def build_render_data(username: Optional[str], device: Optional[str], layo
     data["theme"] = random.choice(THEMES)
     return data
 
+
 # ================================================================
-# Core Routes
+# Async renderer
+# ================================================================
+async def render_html_to_png(html_path: str, context: Dict[str, Any]) -> bytes:
+    """Render the base.html with injected JSON data and snapshot as PNG (async)."""
+    if not ENABLE_RENDERING or playwright_browser is None:
+        raise RuntimeError("Rendering disabled")
+
+    page = await playwright_browser.new_page(
+        viewport={"width": RENDER_WIDTH, "height": RENDER_HEIGHT}
+    )
+
+    encoded = json.dumps(context)
+    url = f"file://{os.path.abspath(html_path)}?data={encoded}"
+
+    await page.goto(url)
+    # allow JS to render / fetch
+    await page.wait_for_timeout(1500)
+    png_bytes = await page.screenshot(type="png")
+    await page.close()
+    return png_bytes
+
+
+# ================================================================
+# Routes
 # ================================================================
 @app.get("/")
 def root():
@@ -365,6 +462,9 @@ def root():
     }
 
 
+# ---------------------------------------------------------------
+# Designer HTML
+# ---------------------------------------------------------------
 @app.get("/designer/", response_class=HTMLResponse)
 def get_designer():
     path = "backend/web/designer/overlay_designer_v3_full.html"
@@ -374,6 +474,9 @@ def get_designer():
     return "<h1>Designer not found</h1>"
 
 
+# ---------------------------------------------------------------
+# Layout management
+# ---------------------------------------------------------------
 @app.get("/layouts/{device_id}")
 def get_layout(device_id: str, username: Optional[str] = Query(None)):
     if not storage_enabled:
@@ -411,79 +514,167 @@ async def save_layout(device_id: str, request: Request, username: Optional[str] 
     else:
         key = f"layouts/{device_id}.json"
 
-    gcs_write_bytes(key, json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8"), content_type="application/json")
+    gcs_write_bytes(
+        key,
+        json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8"),
+        content_type="application/json",
+    )
     return {"ok": True, "device": device_id, "username": username or "default"}
 
 
+# ---------------------------------------------------------------
+# Render data (for Designer Live Preview)
+# ---------------------------------------------------------------
 @app.get("/v1/render_data")
-async def v1_render_data(username: Optional[str] = Query(None), device: Optional[str] = Query(None)):
-    layout_json = None
-    try:
-        if ENABLE_EMAIL_USERS and username:
-            key = f"users/{safe_email(username)}/devices/{device}/layouts/current.json"
-        else:
-            key = f"layouts/{device}.json"
-        if storage_enabled and gcs_exists(key):
-            layout_json = json.loads(gcs_read_bytes(key))
-    except Exception as e:
-        logger.debug(f"Failed to load layout JSON for render_data: {e}")
-
-    if layout_json is None:
-        layout_json = load_default_preset()
-
-    payload = await build_render_data(username, device, layout_json)
+async def v1_render_data(
+    username: Optional[str] = Query(None),
+    device: Optional[str] = Query(None),
+):
+    layout_json = await load_layout_for(username, device or "familydisplay")
+    payload = await build_render_data(username, device or "familydisplay", layout_json)
     return JSONResponse(payload)
 
 
+# ---------------------------------------------------------------
+# Frame renderer
+# ---------------------------------------------------------------
 @app.get("/v1/frame")
-async def v1_frame(username: Optional[str] = Query(None), device: Optional[str] = Query(None)):
+async def v1_frame(
+    username: Optional[str] = Query(None),
+    device: Optional[str] = Query(None),
+):
     if not ENABLE_RENDERING:
         raise HTTPException(status_code=503, detail="Rendering disabled")
 
-    layout_json = None
-    if storage_enabled:
-        try:
-            if ENABLE_EMAIL_USERS and username:
-                key = f"users/{safe_email(username)}/devices/{device}/layouts/current.json"
-            else:
-                key = f"layouts/{device}.json"
-            if gcs_exists(key):
-                layout_json = json.loads(gcs_read_bytes(key))
-        except Exception as e:
-            logger.warning(f"Layout load failed for frame: {e}")
+    layout_json = await load_layout_for(username, device or "familydisplay")
+    render_data = await build_render_data(username, device or "familydisplay", layout_json)
 
-    if layout_json is None:
-        layout_json = load_default_preset()
-
-    render_data = await build_render_data(username, device, layout_json)
-    out = io.BytesIO()
     try:
-        render_html_to_png(RENDER_PATH, out, render_data)
-        png_bytes = out.getvalue()
-        if storage_enabled:
-            if ENABLE_EMAIL_USERS and username:
-                save_key = f"users/{safe_email(username)}/devices/{device}/renders/latest.png"
-            else:
-                save_key = f"renders/{device or 'default'}/latest.png"
-            gcs_write_bytes(save_key, png_bytes, "image/png")
-        return Response(content=png_bytes, media_type="image/png")
+        png_bytes = await render_html_to_png(RENDER_PATH, render_data)
     except Exception as e:
         logger.error(f"Frame render failed: {e}")
         raise HTTPException(status_code=500, detail="render failed")
 
-
-# (Admin render_now + prefetch sections unchanged — keep from your version)
-# ================================================================
-# Shutdown hook
-# ================================================================
-@app.on_event("shutdown")
-def shutdown_event():
-    if ENABLE_RENDERING and playwright_browser:
+    # save to GCS
+    if storage_enabled:
+        if ENABLE_EMAIL_USERS and username:
+            save_key = f"users/{safe_email(username)}/devices/{device or 'default'}/renders/latest.png"
+        else:
+            save_key = f"renders/{device or 'default'}/latest.png"
         try:
-            playwright_browser.close()
-            logger.info("Chromium renderer closed.")
+            gcs_write_bytes(save_key, png_bytes, "image/png")
         except Exception as e:
-            logger.warning(f"Playwright close error: {e}")
+            logger.warning(f"GCS save of rendered frame failed: {e}")
+
+    return Response(content=png_bytes, media_type="image/png")
 
 
+# ---------------------------------------------------------------
+# Manual render trigger
+# ---------------------------------------------------------------
+@app.get("/admin/render_now")
+async def admin_render_now(
+    token: str,
+    username: Optional[str] = Query(None),
+    device: Optional[str] = Query(None),
+):
+    if token != ADMIN_TOKEN:
+        raise HTTPException(status_code=403, detail="invalid admin token")
+    if not ENABLE_RENDER_NOW:
+        raise HTTPException(status_code=403, detail="render_now disabled")
+    if not ENABLE_RENDERING:
+        raise HTTPException(status_code=503, detail="rendering disabled")
+
+    layout_json = await load_layout_for(username, device or "familydisplay")
+    render_data = await build_render_data(username, device or "familydisplay", layout_json)
+
+    try:
+        png_bytes = await render_html_to_png(RENDER_PATH, render_data)
+    except Exception as e:
+        logger.error(f"Manual render failed: {e}")
+        raise HTTPException(status_code=500, detail="manual render failed")
+
+    if storage_enabled:
+        today = dt.date.today().isoformat()
+        if ENABLE_EMAIL_USERS and username:
+            base = f"users/{safe_email(username)}/devices/{device or 'default'}/renders/"
+        else:
+            base = f"renders/{device or 'default'}/"
+        gcs_write_bytes(base + f"{today}.png", png_bytes, "image/png")
+        gcs_write_bytes(base + "latest.png", png_bytes, "image/png")
+
+    return {"ok": True, "bytes": len(png_bytes)}
+
+
+# ---------------------------------------------------------------
+# Pexels prefetch / cache rollover
+# ---------------------------------------------------------------
+async def pexels_fetch_images(theme: str, limit: int = 8) -> list:
+    """Fetch a batch of images from Pexels API."""
+    if not ENABLE_PEXELS or not PEXELS_API_KEY:
+        logger.debug("Pexels disabled or key missing.")
+        return []
+    try:
+        url = f"https://api.pexels.com/v1/search?query={theme}&per_page={limit}"
+        headers = {"Authorization": PEXELS_API_KEY}
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(url, headers=headers)
+        if r.status_code == 200:
+            j = r.json()
+            urls = [p["src"]["large"] for p in j.get("photos", [])]
+            return urls
+        logger.warning(f"Pexels fetch {theme} -> {r.status_code}")
+    except Exception as e:
+        logger.error(f"Pexels error: {e}")
+    return []
+
+
+@app.get("/admin/prefetch")
+async def admin_prefetch(token: str):
+    if token != ADMIN_TOKEN:
+        raise HTTPException(status_code=403, detail="invalid admin token")
+    if not ENABLE_PEXELS:
+        raise HTTPException(status_code=403, detail="pexels disabled")
+
+    today = dt.date.today().isoformat()
+    rolled_over = False
+    saved = 0
+
+    try:
+        # rollover existing current → cache/<today>/
+        if storage_enabled:
+            prefix_current = "pexels/current/"
+            prefix_cache = f"pexels/cache/{today}/"
+            blobs = list(gcs_client.list_blobs(GCS_BUCKET, prefix=prefix_current))
+            if blobs:
+                rolled_over = True
+                for b in blobs:
+                    dest = prefix_cache + b.name.split("/", 2)[-1]
+                    gcs_bucket.copy_blob(b, gcs_bucket, dest)
+                    b.delete()
+                logger.info(f"Rolled over {len(blobs)} images to cache/{today}/")
+
+        # fetch new for each theme
+        for theme in THEMES:
+            urls = await pexels_fetch_images(theme)
+            for idx, url in enumerate(urls):
+                try:
+                    async with httpx.AsyncClient(timeout=10) as client:
+                        img = await client.get(url)
+                    if img.status_code == 200:
+                        key = f"pexels/current/{theme}_{idx}.jpg"
+                        gcs_write_bytes(key, img.content, "image/jpeg")
+                        saved += 1
+                except Exception as e:
+                    logger.debug(f"Image fetch fail {url[:40]}: {e}")
+
+        return {"ok": True, "rolled_over": rolled_over, "saved": saved, "themes": THEMES}
+    except Exception as e:
+        logger.error(f"Prefetch failed: {e}")
+        raise HTTPException(status_code=500, detail="prefetch failed")
+
+
+# ================================================================
+# EOF
+# ================================================================
 logger.info("Kin:D backend loaded successfully.")
