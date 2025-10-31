@@ -195,6 +195,84 @@ async def get_weather(city: str) -> Dict[str, Any]:
 
     return {"temp": 33, "feels_like": 33, "humidity": 45, "rain": 0, "wind": 5, "icon": "01d", "desc": "Sunny"}
 
+async def get_forecast(city: str, days: int = 2) -> list[dict]:
+    """
+    Fetch a simple forecast (next N days) from OpenWeather 5-day/3h endpoint.
+    We skip 'today' (since we already have current weather) and return e.g.
+    [
+      {"date": "2025-11-02", "tmin": 25, "tmax": 33, "desc": "Scattered Clouds", "icon": "03d"},
+      {"date": "2025-11-03", "tmin": 26, "tmax": 34, "desc": "Light Rain", "icon": "10d"},
+    ]
+    """
+    if not ENABLE_OPENWEATHER or not OPENWEATHER_KEY:
+        return []
+
+    try:
+        url = (
+            f"https://api.openweathermap.org/data/2.5/forecast"
+            f"?q={city}&appid={OPENWEATHER_KEY}&units=metric"
+        )
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(url)
+        if r.status_code != 200:
+            logger.warning(f"Forecast fetch failed {r.status_code}: {r.text[:120]}")
+            return []
+
+        j = r.json()
+        raw_list = j.get("list", [])
+        if not raw_list:
+            return []
+
+        today_str = dt.date.today().isoformat()
+        # group entries by date
+        per_day: dict[str, list[dict]] = {}
+        for item in raw_list:
+            dt_txt = item.get("dt_txt")  # "2025-11-02 12:00:00"
+            if not dt_txt:
+                continue
+            date_only = dt_txt.split(" ")[0]
+            if date_only == today_str:
+                # skip today – we already have current weather
+                continue
+
+            main = item.get("main", {})
+            weather_arr = item.get("weather", [])
+            if not weather_arr:
+                continue
+            w0 = weather_arr[0]
+            entry = {
+                "temp": main.get("temp"),
+                "desc": w0.get("description", "").title(),
+                "icon": w0.get("icon"),
+            }
+            per_day.setdefault(date_only, []).append(entry)
+
+        # now flatten to daily min/max + pick middle desc
+        out = []
+        for day, entries in per_day.items():
+            temps = [e["temp"] for e in entries if e.get("temp") is not None]
+            if not temps:
+                continue
+            tmin = round(min(temps))
+            tmax = round(max(temps))
+            mid = entries[len(entries) // 2]
+            out.append(
+                {
+                    "date": day,
+                    "tmin": tmin,
+                    "tmax": tmax,
+                    "desc": mid.get("desc") or "",
+                    "icon": mid.get("icon") or "01d",
+                }
+            )
+
+        # we only want e.g. 2 days ahead
+        out = sorted(out, key=lambda x: x["date"])[:days]
+        return out
+
+    except Exception as e:
+        logger.error(f"Forecast error: {e}")
+        return []
 
 async def get_joke() -> str:
     """Fetch a dad joke from icanhazdadjoke API with fallback."""
