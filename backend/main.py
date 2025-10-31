@@ -316,11 +316,25 @@ async def build_render_data(username: Optional[str], device: Optional[str], layo
 
     data = {"date": today, "city": city, "username": username, "device": device}
 
+        # weather + forecast
     if INFO_PROVIDERS["weather"]:
-        data["weather"] = await get_weather(city)
+        current_weather = await get_weather(city)
+        # next 2 days
+        forecast = await get_forecast(city, days=2)
+        data["weather"] = current_weather
+        data["forecast"] = forecast
     else:
-        data["weather"] = {"temp": 33, "icon": "01d", "desc": "Sunny"}
-
+        data["weather"] = {
+            "temp": 33,
+            "feels_like": 33,
+            "humidity": 45,
+            "rain": 0,
+            "wind": 5,
+            "icon": "01d",
+            "desc": "Sunny",
+        }
+        data["forecast"] = []
+        
     if INFO_PROVIDERS["joke"]:
         data["dad_joke"] = await get_joke()
     else:
