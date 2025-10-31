@@ -1,21 +1,66 @@
+# ============================================================
+# Cloud Build configuration for Family Display / Kin:D backend
+# ============================================================
+
 steps:
+  # ----------------------------------------------------------
+  # 1️⃣ Build container image from Dockerfile
+  # ----------------------------------------------------------
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'australia-southeast1-docker.pkg.dev/$PROJECT_ID/family-display/backend', '-f', 'Dockerfile', '.']
+    args:
+      [
+        'build',
+        '-t',
+        'australia-southeast1-docker.pkg.dev/$PROJECT_ID/family-display/backend',
+        '-f',
+        'Dockerfile',
+        '.'
+      ]
     timeout: 1200s
+
+  # ----------------------------------------------------------
+  # 2️⃣ Push image to Artifact Registry
+  # ----------------------------------------------------------
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'australia-southeast1-docker.pkg.dev/$PROJECT_ID/family-display/backend']
+    args:
+      [
+        'push',
+        'australia-southeast1-docker.pkg.dev/$PROJECT_ID/family-display/backend'
+      ]
+
+  # ----------------------------------------------------------
+  # 3️⃣ Deploy image to Cloud Run
+  # ----------------------------------------------------------
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
     args:
-      - 'run'
-      - 'deploy'
-      - 'family-display-backend'
-      - '--image=australia-southeast1-docker.pkg.dev/$PROJECT_ID/family-display/backend'
-      - '--region=australia-southeast1'
-      - '--platform=managed'
-      - '--allow-unauthenticated'
+      [
+        'run',
+        'deploy',
+        'family-display-backend',
+        '--image=australia-southeast1-docker.pkg.dev/$PROJECT_ID/family-display/backend',
+        '--region=australia-southeast1',
+        '--platform=managed',
+        '--allow-unauthenticated',
+        # performance and cost tuning
+        '--cpu=1',
+        '--memory=1Gi',
+        '--timeout=600',
+        '--max-instances=3',
+        '--min-instances=0',
+        '--concurrency=20'
+      ]
+
+# ------------------------------------------------------------
+# Images published by this build (for quick reference)
+# ------------------------------------------------------------
 images:
   - 'australia-southeast1-docker.pkg.dev/$PROJECT_ID/family-display/backend'
+
+# ------------------------------------------------------------
+# Global build options
+# ------------------------------------------------------------
 timeout: 1800s
 options:
   logging: CLOUD_LOGGING_ONLY
+  machineType: E2_HIGHCPU_8   # faster builds for Playwright/Chromium layers
