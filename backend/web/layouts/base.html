@@ -1,133 +1,143 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Kin;D Display Renderer</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      width: 800px;
-      height: 480px;
-      overflow: hidden;
-      background: var(--bg, #fff);
-      font-family: "Inter", sans-serif;
-      color: #000;
-    }
-    .el {
-      position: absolute;
-      box-sizing: border-box;
-    }
-    .card {
-      background: rgba(255,255,255,0.8);
-      border-radius: 16px;
-      padding: 10px 14px;
-      font-size: 18px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.15);
-    }
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=800,height=480" />
+<title>Kin:D Display Renderer</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 800px;
+    height: 480px;
+    background: #222;
+    color: #000;
+    font-family: "Roboto", system-ui, -apple-system, Segoe UI, Arial, sans-serif;
+    overflow: hidden;
+  }
+  #canvas {
+    position: relative;
+    width: 800px;
+    height: 480px;
+    overflow: hidden;
+  }
+  #bg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    z-index: 0;
+    opacity: 0.95;
+    background: #111;
+  }
+  .card {
+    position: absolute;
+    background: rgba(255,255,255,0.85);
+    border-radius: 16px;
+    padding: 14px 18px;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 0 6px rgba(0,0,0,0.3);
+    z-index: 5;
+  }
+</style>
 </head>
 <body>
+<div id="canvas">
+  <img id="bg" src="" alt="background" />
   <div id="root"></div>
 
-  <!-- Fallback default cards -->
-  <div id="fallback" style="display:none;">
-    <div id="dateCard" class="card" style="top:20px;left:20px;">Date</div>
-    <div id="weatherCard" class="card" style="top:80px;left:20px;">Weather</div>
-    <div id="jokeCard" class="card" style="bottom:20px;left:20px;right:20px;">Joke</div>
-  </div>
+  <!-- Fallback cards -->
+  <div id="fallback-date" class="card" style="top:16px;right:16px;font-weight:700;font-size:18px;"></div>
+  <div id="fallback-weather" class="card" style="left:16px;bottom:16px;width:360px;font-size:20px;"></div>
+  <div id="fallback-joke" class="card" style="right:16px;bottom:16px;width:360px;font-size:18px;line-height:1.25;"></div>
+</div>
 
-  <script>
-  async function main() {
-    const params = new URLSearchParams(window.location.search);
-    const device = params.get("device") || "familydisplay";
-    const dataUrl = `/v1/render_data?device=${device}`;
-    const layoutUrl = `/layouts/${device}`;
+<script>
+(async () => {
+  const qs = new URLSearchParams(location.search);
+  const backend = qs.get("backend") || location.origin;
+  const device  = qs.get("device")  || "familydisplay";
 
-    const [dataRes, layoutRes] = await Promise.allSettled([
-      fetch(dataUrl),
-      fetch(layoutUrl)
-    ]);
+  // 1. Fetch render data
+  let renderData = {};
+  try {
+    const resp = await fetch(`${backend}/v1/render_data?device=${encodeURIComponent(device)}`);
+    if (resp.ok) renderData = await resp.json();
+  } catch(e) { console.error("Render data error", e); }
 
-    let renderData = {};
-    let layout = null;
+  // 2. Fetch layout JSON
+  let layout = null;
+  try {
+    const resp = await fetch(`${backend}/layouts/${encodeURIComponent(device)}`);
+    if (resp.ok) layout = await resp.json();
+  } catch(e) { console.warn("No layout found"); }
 
-    if (dataRes.status === "fulfilled" && dataRes.value.ok) {
-      renderData = await dataRes.value.json();
-    }
-    if (layoutRes.status === "fulfilled" && layoutRes.value.ok) {
-      layout = await layoutRes.value.json();
-    }
-
-    if (layout && layout.elements && layout.elements.length) {
-      renderLayout(layout.elements, renderData);
-    } else {
-      document.getElementById("fallback").style.display = "block";
-      applyFallback(renderData);
-    }
+  // If layout present → use Designer elements, else fallback cards
+  if (layout && layout.elements && layout.elements.length) {
+    renderLayout(layout.elements, renderData);
+  } else {
+    applyFallback(renderData);
   }
+})();
 
-  function renderLayout(elements, data) {
-    const root = document.getElementById("root");
-    root.innerHTML = "";
-    for (const el of elements) {
-      const div = document.createElement("div");
-      div.classList.add("el");
-      div.style.left = (el.x || 0) + "px";
-      div.style.top = (el.y || 0) + "px";
-      div.style.width = (el.w || 100) + "px";
-      div.style.height = (el.h || 40) + "px";
-      div.style.fontSize = (el.fontSize || 18) + "px";
-      div.style.fontWeight = el.fontWeight || "500";
-      div.style.color = el.color || "#000";
+function renderLayout(elements, data) {
+  const root = document.getElementById("root");
+  root.innerHTML = "";
+  for (const el of elements) {
+    const div = document.createElement("div");
+    div.className = "card";
+    div.style.left = (el.x || 0) + "px";
+    div.style.top = (el.y || 0) + "px";
+    div.style.width = (el.w || 180) + "px";
+    div.style.height = (el.h || 40) + "px";
+    div.style.fontSize = (el.fontSize || 20) + "px";
+    div.style.fontWeight = el.fontWeight || "500";
+    div.style.color = el.color || "#000";
+    div.style.textAlign = el.textAlign || "left";
 
-      if (el.kind === "text") {
-        div.textContent = el.text || "";
-      }
-      else if (el.kind === "date") {
-        div.textContent = data.date || "—";
-      }
-      else if (el.kind === "city") {
-        div.textContent = data.city || "—";
-      }
-      else if (el.kind === "temp") {
-        div.textContent = (data.weather?.temp ?? "--") + "°C";
-      }
-      else if (el.kind === "weather-desc") {
-        div.textContent = data.weather?.desc || "—";
-      }
-      else if (el.kind === "humidity") {
-        div.textContent = "Humidity: " + (data.weather?.humidity ?? "--") + "%";
-      }
-      else if (el.kind === "wind") {
-        const kmh = Math.round((data.weather?.wind ?? 0) * 3.6);
-        div.textContent = "Wind: " + kmh + " km/h";
-      }
-      else if (el.kind === "rain") {
-        const rain = data.weather?.rain ?? 0;
-        div.textContent = rain > 0 ? "Rain: " + rain + " mm" : "";
-      }
-      else if (el.kind === "joke") {
-        div.textContent = data.dad_joke || "";
-      }
+    // normalize type
+    const K = (el.kind || el.type || "").toUpperCase();
 
-      root.appendChild(div);
+    if (K === "CUSTOM" || K === "TEXT") {
+      div.textContent = el.text || "";
+    } else if (K === "DATE") {
+      div.textContent = data.date || "—";
+    } else if (K === "CITY") {
+      div.textContent = data.city || "—";
+    } else if (K === "TEMP") {
+      div.textContent = (data.weather?.temp ?? "--") + "°C";
+    } else if (K === "WEATHER_DESC") {
+      div.textContent = data.weather?.desc || "—";
+    } else if (K === "HUMIDITY") {
+      div.textContent = "Humidity: " + (data.weather?.humidity ?? "--") + "%";
+    } else if (K === "WIND") {
+      const kmh = Math.round((data.weather?.wind ?? 0) * 3.6);
+      div.textContent = "Wind: " + kmh + " km/h";
+    } else if (K === "RAIN") {
+      const rain = data.weather?.rain ?? 0;
+      div.textContent = rain > 0 ? "Rain: " + rain + " mm" : "No rain";
+    } else if (K === "JOKE") {
+      div.textContent = data.dad_joke || "";
     }
-  }
 
-  function applyFallback(data) {
-    const d = data || {};
-    document.getElementById("dateCard").textContent = d.date || "—";
-    if (d.weather) {
-      const w = d.weather;
-      document.getElementById("weatherCard").textContent =
-        `${w.temp}°C ${w.desc || ""}, humidity ${w.humidity || "--"}%`;
-    }
-    document.getElementById("jokeCard").textContent = d.dad_joke || "";
+    root.appendChild(div);
   }
+}
 
-  main();
-  </script>
+function applyFallback(d) {
+  document.getElementById("fallback-date").textContent = d.date || "—";
+
+  const w = d.weather || {};
+  const city = d.city || "";
+  const desc = w.desc || "";
+  const temp = w.temp ?? "--";
+  const hum = w.humidity ?? "--";
+  document.getElementById("fallback-weather").innerHTML =
+    `${city} • ${temp}°C<br>${desc}<br>Humidity: ${hum}%`;
+
+  document.getElementById("fallback-joke").textContent = d.dad_joke || "No joke today.";
+}
+</script>
 </body>
 </html>
