@@ -3166,6 +3166,108 @@ function autoCollapsePanels() {
   }
 }
 
+<!-- ========================================================= -->
+<!-- Kin:D Designer Auto Theme + Pexels Sync -->
+<!-- ========================================================= -->
+<script>
+(async function () {
+  try {
+    const resp = await fetch('/themes', { cache: 'no-store' });
+    if (!resp.ok) return;
+    const data = await resp.json();
+
+    const themes = Array.isArray(data.themes) ? data.themes : [];
+    const pexels = Array.isArray(data.pexels) ? data.pexels : themes;
+
+    // Main theme dropdowns (try multiple known IDs)
+    const themeSel =
+      document.getElementById('themeSelect') ||
+      document.getElementById('displayTheme') ||
+      document.querySelector('[data-role="theme-select"]');
+
+    if (themeSel && themes.length) {
+      const keepFirst = themeSel.options.length ? themeSel.options[0] : null;
+      themeSel.innerHTML = '';
+      if (keepFirst) themeSel.appendChild(keepFirst);
+
+      themes.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t;
+        opt.textContent = t;
+        themeSel.appendChild(opt);
+      });
+    }
+
+    // Pexels theme dropdowns (if present)
+    const pexelsSel =
+      document.getElementById('pexelsThemeSelect') ||
+      document.getElementById('imageThemeSelect');
+
+    if (pexelsSel && pexels.length) {
+      pexelsSel.innerHTML = '';
+      pexels.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t;
+        opt.textContent = t;
+        pexelsSel.appendChild(opt);
+      });
+    }
+
+    console.log('✅ Kin;D Designer: themes loaded from backend', data);
+  } catch (err) {
+    console.warn('Kin;D Designer: could not load /themes', err);
+  }
+})();
+
+<script>
+(async function () {
+  try {
+    const resp = await fetch('/themes', { cache: 'no-store' });
+    if (!resp.ok) return;
+    const data = await resp.json();
+
+    const themes = Array.isArray(data.themes) ? data.themes : [];
+    const pexels = Array.isArray(data.pexels) ? data.pexels : themes;
+
+    // Main theme dropdowns (try multiple known IDs)
+    const themeSel =
+      document.getElementById('themeSelect') ||
+      document.getElementById('displayTheme') ||
+      document.querySelector('[data-role="theme-select"]');
+
+    if (themeSel && themes.length) {
+      const keepFirst = themeSel.options.length ? themeSel.options[0] : null;
+      themeSel.innerHTML = '';
+      if (keepFirst) themeSel.appendChild(keepFirst);
+
+      themes.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t;
+        opt.textContent = t;
+        themeSel.appendChild(opt);
+      });
+    }
+
+    // Pexels theme dropdowns (if present)
+    const pexelsSel =
+      document.getElementById('pexelsThemeSelect') ||
+      document.getElementById('imageThemeSelect');
+
+    if (pexelsSel && pexels.length) {
+      pexelsSel.innerHTML = '';
+      pexels.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t;
+        opt.textContent = t;
+        pexelsSel.appendChild(opt);
+      });
+    }
+
+    console.log('✅ Kin;D Designer: themes loaded from backend', data);
+  } catch (err) {
+    console.warn('Kin;D Designer: could not load /themes', err);
+  }
+})();
 </script>
 </body>
 </html>
