@@ -367,6 +367,27 @@ async def load_layout_for(username: Optional[str], device: Optional[str]) -> Opt
         logger.info("Using local preset: Theme 1.json")
     return preset
 
+# ================================================================
+# Helper: pick a random Pexels image from GCS (for background)
+# ================================================================
+def pick_pexels_image_from_gcs() -> Optional[str]:
+    """
+    Choose one random image from 'pexels/current/' in the bucket and return
+    a public URL so base.html can display it.
+    """
+    if not storage_enabled:
+        return None
+    try:
+        prefix = "pexels/current/"
+        blobs = list(gcs_client.list_blobs(GCS_BUCKET, prefix=prefix))
+        if not blobs:
+            return None
+        chosen = random.choice(blobs)
+        # build a signed URL or public GCS link
+        return f"https://storage.googleapis.com/{GCS_BUCKET}/{chosen.name}"
+    except Exception as e:
+        logger.debug(f"pick_pexels_image_from_gcs() failed: {e}")
+        return None
 
 # ================================================================
 # Build render payload
@@ -435,6 +456,13 @@ async def build_render_data(
 
     # 6️⃣ Visual theme rotation
     data["theme"] = random.choice(THEMES)
+    
+    # 7️⃣ Optional Pexels background
+    bg_url = pick_pexels_image_from_gcs()
+    if bg_url:
+        data["image_url"] = bg_url
+    else:
+        data["image_url"] = None
 
     return data
 
