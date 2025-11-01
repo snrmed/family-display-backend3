@@ -397,20 +397,22 @@ async def build_render_data(
     device: Optional[str],
     layout_json: Optional[Dict[str, Any]],
 ) -> Dict[str, Any]:
+    """Aggregate all provider data into one JSON payload."""
     today = dt.date.today().isoformat()
 
-    # city
+    # 1) City selection
     if CITY_MODE == "fetch" and layout_json and "city" in layout_json:
         city = layout_json.get("city", DEFAULT_CITY)
     else:
         city = DEFAULT_CITY
 
-    # icon theme
+    # 2) Icon theme (can come from layout_json.meta.iconTheme)
     icon_theme = DEFAULT_ICON_THEME
     if layout_json:
         meta = layout_json.get("meta") or {}
         icon_theme = meta.get("iconTheme", icon_theme)
 
+    # start building payload
     data: Dict[str, Any] = {
         "date": today,
         "city": city,
@@ -419,14 +421,12 @@ async def build_render_data(
         "iconTheme": icon_theme,
     }
 
-        # 3️⃣ Weather + Forecast
+    # 3) Weather + forecast
     if INFO_PROVIDERS["weather"]:
         current_weather = await get_weather(city)
         forecast = await get_forecast(city, days=2)
 
         icon_code = current_weather.get("icon", "01d")
-
-        # build an absolute URL if we know our public base
         if PUBLIC_BASE_URL:
             icon_url = f"{PUBLIC_BASE_URL}/gcs/assets/weather-icons/{icon_theme}/{icon_code}.svg"
         else:
@@ -436,12 +436,11 @@ async def build_render_data(
         data["weather"] = current_weather
         data["forecast"] = forecast
     else:
-        # backend weather disabled → still give an icon
+        # fallback weather
         if PUBLIC_BASE_URL:
             icon_url = f"{PUBLIC_BASE_URL}/gcs/assets/weather-icons/{icon_theme}/01d.svg"
         else:
             icon_url = f"/gcs/assets/weather-icons/{icon_theme}/01d.svg"
-
         data["weather"] = {
             "temp": 33,
             "feels_like": 33,
@@ -453,27 +452,33 @@ async def build_render_data(
             "icon_url": icon_url,
         }
         data["forecast"] = []
-        
-        # 7️⃣ Background from pexels/current – let’s just use the chosen theme name
-    theme_for_bg = data["theme"]
-    if PUBLIC_BASE_URL:
-        data["bg_url"] = f"{PUBLIC_BASE_URL}/gcs/pexels/current/{theme_for_bg}_0.jpg"
-    else:
-        data["bg_url"] = f"/gcs/pexels/current/{theme_for_bg}_0.jpg"
 
-    return data
-    
-    # joke
-    if INFO_PROVIDERS["joke"]:
+    # 4) Joke
+    if INFO_PROVIDERS.get("joke"):
         data["dad_joke"] = await get_joke()
     else:
         data["dad_joke"] = random.choice(LOCAL_JOKES)
 
-    # future
+    # 5) future providers
     if INFO_PROVIDERS.get("calendar"):
         data["calendar"] = await get_calendar()
     if INFO_PROVIDERS.get("sports"):
         data["sports"] = await get_sports()
+
+    # 6) ALWAYS set a theme before we use it
+    # (use first from env if you want determinism)
+    if THEMES:
+      chosen_theme = random.choice(THEMES)
+    else:
+      chosen_theme = "abstract"
+    data["theme"] = chosen_theme
+
+    # 7) background (pexels/current/<theme>_0.jpg)
+    # build absolute URL if PUBLIC_BASE_URL is set
+    if PUBLIC_BASE_URL:
+        data["bg_url"] = f"{PUBLIC_BASE_URL}/gcs/pexels/current/{chosen_theme}_0.jpg"
+    else:
+        data["bg_url"] = f"/gcs/pexels/current/{chosen_theme}_0.jpg"
 
     return data
 
