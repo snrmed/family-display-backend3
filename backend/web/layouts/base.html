@@ -1,183 +1,178 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>Kin;D Frame</title>
-  <meta name="viewport" content="width=800, height=480, initial-scale=1.0" />
-  <link rel="stylesheet" href="/fonts/fonts.css" />
+  <meta charset="UTF-8" />
+  <title>Kin;D Family Display</title>
+  <meta name="viewport" content="width=800, initial-scale=1.0" />
   <style>
     :root {
-      --bg: #111;
-      --card: rgba(235,235,235,1);
-      --text: #000;
-      --radius: 18px;
-      --pad: 18px;
-      --small: 15px;
+      --bg: #000;
+      --card-bg: rgba(255,255,255,0.9);
+      --text-color: #111;
+      --radius: 16px;
+      --font-main: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
+
+    * { box-sizing: border-box; font-family: var(--font-main); }
     body {
       margin: 0;
       background: var(--bg);
       width: 800px;
       height: 480px;
       overflow: hidden;
-      font-family: "Inter", system-ui, -apple-system, "Noto Sans", sans-serif;
       position: relative;
     }
+
+    /* Background image */
     #bgImg {
       position: absolute;
       inset: 0;
       width: 100%;
       height: 100%;
       object-fit: cover;
-      display: none; /* shown only if we actually have a src */
+      z-index: 0;
+      display: none;
     }
-    .card {
-      background: var(--card);
-      border-radius: var(--radius);
-      padding: var(--pad);
-      color: var(--text);
-      box-sizing: border-box;
+
+    /* Weather icon slot (Designer can resize) */
+    #weatherIcon {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      width: 60px;
+      height: 60px;
+      background-size: contain;
+      background-repeat: no-repeat;
+      background-position: center;
+      border-radius: 12px;
+      z-index: 3;
+      display: none;
     }
+
+    /* Weather card */
     #weatherCard {
       position: absolute;
       left: 16px;
       bottom: 80px;
-      width: 380px;
-      min-height: 90px;
+      width: 360px;
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      padding: 16px 18px;
+      color: var(--text-color);
+      z-index: 2;
     }
+
+    #weatherCard .city {
+      font-weight: 600;
+      margin-bottom: 8px;
+      font-size: 16px;
+    }
+
+    #weatherCard .temp {
+      font-size: 20px;
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
+
+    #weatherCard .line {
+      font-size: 14px;
+    }
+
+    /* Dad joke */
     #jokeCard {
       position: absolute;
       right: 16px;
       bottom: 16px;
-      width: 420px;
+      width: 400px;
+      min-height: 60px;
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      padding: 14px 18px;
+      color: var(--text-color);
+      font-size: 15px;
+      display: flex;
+      align-items: center;
+      z-index: 2;
     }
-    #topBtn {
+
+    /* Small Kin:D badge */
+    #badge {
       position: absolute;
-      right: 16px;
       top: 16px;
-      width: 48px;
-      height: 48px;
-      border-radius: 16px;
-      background: rgba(230,230,230,1);
+      left: 16px;
+      width: 56px;
+      height: 56px;
+      border-radius: 18px;
+      background: var(--card-bg);
       display: flex;
       align-items: center;
       justify-content: center;
       font-weight: 600;
-      font-size: 26px;
-      color: #000;
-    }
-    .title {
-      font-weight: 600;
-      margin-bottom: 6px;
-    }
-    .small {
-      font-size: var(--small);
+      z-index: 4;
+      color: var(--text-color);
     }
   </style>
 </head>
+
 <body>
-  <img id="bgImg" alt="background" />
+  <!-- Background -->
+  <img id="bgImg" alt="background">
 
-  <div id="topBtn">–</div>
+  <!-- Weather icon -->
+  <div id="weatherIcon"></div>
 
-  <div id="weatherCard" class="card">
-    <div class="title" id="cityEl">--</div>
-    <div id="tempEl">• --°C</div>
-    <div id="humidityEl" class="small">Humidity: --%</div>
-    <div id="windEl" class="small"></div>
-    <div id="rainEl" class="small"></div>
+  <!-- Weather info -->
+  <div id="weatherCard">
+    <div class="city" id="cityEl">—</div>
+    <div class="temp" id="tempEl">• --°C</div>
+    <div class="line" id="humEl">Humidity: --%</div>
+    <div class="line" id="windEl">Wind: -- km/h</div>
+    <div class="line" id="rainEl">Rain: --</div>
   </div>
 
-  <div id="jokeCard" class="card">
-    <div id="jokeEl">No joke today.</div>
-  </div>
+  <!-- Dad joke -->
+  <div id="jokeCard">No joke today.</div>
+
+  <!-- Badge -->
+  <div id="badge">Kin;D</div>
 
   <script>
-    // ---------- helpers ----------
-    function getQueryData() {
-      try {
-        const qs = new URLSearchParams(window.location.search);
-        const raw = qs.get("data");
-        if (!raw) return null;
-        return JSON.parse(raw);
-      } catch (e) {
-        console.warn("Failed to parse ?data=", e);
-        return null;
+    (function init() {
+      // 1️⃣ Parse ?data= JSON from URL
+      const params = new URLSearchParams(window.location.search);
+      const raw = params.get("data");
+      if (!raw) return;
+      let data;
+      try { data = JSON.parse(raw); }
+      catch(e){ console.error("Bad data", e); return; }
+
+      // 2️⃣ Background
+      const bg = document.getElementById("bgImg");
+      if (data.bg_url) {
+        bg.src = data.bg_url;
+        bg.style.display = "block";
       }
-    }
 
-    function applyData(data) {
-      if (!data) return;
-
-      const cityEl = document.getElementById("cityEl");
-      const tempEl = document.getElementById("tempEl");
-      const humEl  = document.getElementById("humidityEl");
-      const windEl = document.getElementById("windEl");
-      const rainEl = document.getElementById("rainEl");
-      const jokeEl = document.getElementById("jokeEl");
-      const bgImg  = document.getElementById("bgImg");
-
-      // city
-      cityEl.textContent = data.city || "—";
-
-      // weather
+      // 3️⃣ Weather
       const w = data.weather || {};
-      tempEl.textContent = "• " + (w.temp !== undefined ? w.temp : "—") + "°C";
-      humEl.textContent  = "Humidity: " + (w.humidity !== undefined ? w.humidity : "—") + "%";
+      document.getElementById("cityEl").textContent = data.city || "—";
+      document.getElementById("tempEl").textContent = `• ${w.temp ?? "--"}°C`;
+      document.getElementById("humEl").textContent = `Humidity: ${w.humidity ?? "--"}%`;
+      document.getElementById("windEl").textContent = `Wind: ${Math.round((w.wind ?? 0) * 3.6)} km/h`;
+      document.getElementById("rainEl").textContent = `Rain: ${w.rain > 0 ? w.rain + " mm" : "—"}`;
 
-      if (w.wind !== undefined) {
-        // openweather returns m/s -> we convert to km/h if it's small
-        let v = w.wind;
-        if (v < 30) v = Math.round(v * 3.6);
-        windEl.textContent = "Wind: " + v + " km/h";
-      } else {
-        windEl.textContent = "";
+      // 4️⃣ Weather icon (Designer-friendly div)
+      const icon = document.getElementById("weatherIcon");
+      if (w.icon_url) {
+        icon.style.backgroundImage = `url('${w.icon_url}')`;
+        icon.style.display = "block";
       }
 
-      if (w.rain !== undefined) {
-        rainEl.textContent = "Rain: " + (w.rain > 0 ? w.rain + " mm" : "No rain");
-      } else {
-        rainEl.textContent = "";
-      }
+      // 5️⃣ Dad joke
+      if (data.dad_joke) document.getElementById("jokeCard").textContent = data.dad_joke;
 
-      // joke
-      jokeEl.textContent = data.dad_joke || "No joke today.";
-
-      // background (optional — only show if provided)
-      // for now we look at data.bg or data.image_url or data.theme_image
-      const bgSrc = data.bg || data.image_url || data.theme_image;
-      if (bgSrc) {
-        bgImg.src = bgSrc;
-        bgImg.style.display = "block";
-      } else {
-        bgImg.style.display = "none";
-      }
-    }
-
-    async function fetchFromBackend() {
-      // this path only runs when you're testing in the browser
-      // from Cloud Run, Playwright will ALWAYS use ?data=...
-      try {
-        // try same-origin first
-        const res = await fetch("/v1/render_data?device=familydisplay");
-        if (!res.ok) throw new Error("HTTP " + res.status);
-        const j = await res.json();
-        applyData(j);
-      } catch (e) {
-        console.warn("Backend fetch failed, leaving placeholders.", e);
-      }
-    }
-
-    // ---------- app entry ----------
-    (function start() {
-      const injected = getQueryData();
-      if (injected) {
-        // this is the Playwright /v1/frame path
-        applyData(injected);
-      } else {
-        // this is when you open https://.../backend/web/layouts/base.html in a browser
-        fetchFromBackend();
-      }
+      // 6️⃣ Badge (theme / pack indicator for debugging)
+      document.getElementById("badge").textContent = data.iconTheme ? data.iconTheme.charAt(0).toUpperCase() : "K";
     })();
   </script>
 </body>
