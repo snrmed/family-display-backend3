@@ -50,7 +50,7 @@ RENDER_WIDTH = int(os.getenv("RENDER_WIDTH", "800"))
 RENDER_HEIGHT = int(os.getenv("RENDER_HEIGHT", "480"))
 
 # public base url (for absolute URLs from Cloud Run, optional)
-PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").strip()
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").rstrip("/")
 
 # Icon / weather theme (can be overridden by layout JSON -> meta.iconTheme)
 DEFAULT_ICON_THEME = os.getenv("WEATHER_ICON_PACK", "happy-skies")
@@ -419,18 +419,29 @@ async def build_render_data(
         "iconTheme": icon_theme,
     }
 
-    # weather + forecast
+        # 3️⃣ Weather + Forecast
     if INFO_PROVIDERS["weather"]:
         current_weather = await get_weather(city)
         forecast = await get_forecast(city, days=2)
-        # build local icon url (served via /gcs/ below)
+
         icon_code = current_weather.get("icon", "01d")
-        current_weather["icon_url"] = make_public_url(
-            f"gcs/assets/weather-icons/{icon_theme}/{icon_code}.svg"
-        )
+
+        # build an absolute URL if we know our public base
+        if PUBLIC_BASE_URL:
+            icon_url = f"{PUBLIC_BASE_URL}/gcs/assets/weather-icons/{icon_theme}/{icon_code}.svg"
+        else:
+            icon_url = f"/gcs/assets/weather-icons/{icon_theme}/{icon_code}.svg"
+
+        current_weather["icon_url"] = icon_url
         data["weather"] = current_weather
         data["forecast"] = forecast
     else:
+        # backend weather disabled → still give an icon
+        if PUBLIC_BASE_URL:
+            icon_url = f"{PUBLIC_BASE_URL}/gcs/assets/weather-icons/{icon_theme}/01d.svg"
+        else:
+            icon_url = f"/gcs/assets/weather-icons/{icon_theme}/01d.svg"
+
         data["weather"] = {
             "temp": 33,
             "feels_like": 33,
@@ -439,24 +450,19 @@ async def build_render_data(
             "wind": 5,
             "icon": "01d",
             "desc": "Sunny",
-            "icon_url": make_public_url(
-                f"gcs/assets/weather-icons/{icon_theme}/01d.svg"
-            ),
+            "icon_url": icon_url,
         }
         data["forecast"] = []
-
-    # background (new!)
-    picked = pick_background_for_theme(data["theme"] if "theme" in data else random.choice(THEMES))
-    # NOTE: we want theme anyway:
-    data["theme"] = data.get("theme") or random.choice(THEMES)
-    if not picked:
-        # try again using actual theme
-        picked = pick_background_for_theme(data["theme"])
-    if picked:
-        data["bg_url"] = make_public_url(f"gcs/{picked}")
+        
+        # 7️⃣ Background from pexels/current – let’s just use the chosen theme name
+    theme_for_bg = data["theme"]
+    if PUBLIC_BASE_URL:
+        data["bg_url"] = f"{PUBLIC_BASE_URL}/gcs/pexels/current/{theme_for_bg}_0.jpg"
     else:
-        data["bg_url"] = ""  # base.html will just show dark bg
+        data["bg_url"] = f"/gcs/pexels/current/{theme_for_bg}_0.jpg"
 
+    return data
+    
     # joke
     if INFO_PROVIDERS["joke"]:
         data["dad_joke"] = await get_joke()
