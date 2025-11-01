@@ -368,26 +368,46 @@ async def load_layout_for(username: Optional[str], device: Optional[str]) -> Opt
     return preset
 
 # ================================================================
-# Helper: pick a random Pexels image from GCS (for background)
+# Helper: pick a background image, theme-aware
 # ================================================================
-def pick_pexels_image_from_gcs() -> Optional[str]:
+def pick_background_from_gcs(theme: Optional[str] = None) -> Optional[str]:
     """
-    Choose one random image from 'pexels/current/' in the bucket and return
-    a public URL so base.html can display it.
+    Try (in order):
+    1. images/<theme>/...
+    2. pexels/current/...
+    Returns a public GCS URL or None.
     """
     if not storage_enabled:
         return None
+
+    # 1) theme-specific images/...
+    try:
+        if theme:
+            theme_prefixes = [
+                f"images/{theme}/",           # your current structure from screenshot
+                f"images/current/{theme}/",   # future-proof if you make a 'current' layer
+            ]
+            for prefix in theme_prefixes:
+                blobs = list(gcs_client.list_blobs(GCS_BUCKET, prefix=prefix))
+                blobs = [b for b in blobs if not b.name.endswith("/")]
+                if blobs:
+                    chosen = random.choice(blobs)
+                    return f"https://storage.googleapis.com/{GCS_BUCKET}/{chosen.name}"
+    except Exception as e:
+        logger.debug(f"theme image lookup failed: {e}")
+
+    # 2) fallback: pexels/current/
     try:
         prefix = "pexels/current/"
         blobs = list(gcs_client.list_blobs(GCS_BUCKET, prefix=prefix))
-        if not blobs:
-            return None
-        chosen = random.choice(blobs)
-        # build a signed URL or public GCS link
-        return f"https://storage.googleapis.com/{GCS_BUCKET}/{chosen.name}"
+        blobs = [b for b in blobs if not b.name.endswith("/")]
+        if blobs:
+            chosen = random.choice(blobs)
+            return f"https://storage.googleapis.com/{GCS_BUCKET}/{chosen.name}"
     except Exception as e:
-        logger.debug(f"pick_pexels_image_from_gcs() failed: {e}")
-        return None
+        logger.debug(f"pexels fallback lookup failed: {e}")
+
+    return None
 
 # ================================================================
 # Build render payload
@@ -455,10 +475,11 @@ async def build_render_data(
         data["sports"] = await get_sports()
 
     # 6️⃣ Visual theme rotation
-    data["theme"] = random.choice(THEMES)
-    
-    # 7️⃣ Optional Pexels background
-    bg_url = pick_pexels_image_from_gcs()
+    picked_theme = random.choice(THEMES)
+    data["theme"] = picked_theme
+
+    # 7️⃣ Background, theme-aware
+    bg_url = pick_background_from_gcs(picked_theme)
     if bg_url:
         data["image_url"] = bg_url
     else:
