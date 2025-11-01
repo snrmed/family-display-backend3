@@ -49,6 +49,9 @@ RENDER_PATH = os.getenv("RENDER_PATH", "backend/web/layouts/base.html")
 RENDER_WIDTH = int(os.getenv("RENDER_WIDTH", "800"))
 RENDER_HEIGHT = int(os.getenv("RENDER_HEIGHT", "480"))
 
+# Icon / weather theme (can be overridden by layout JSON -> meta.iconTheme)
+DEFAULT_ICON_THEME = os.getenv("WEATHER_ICON_PACK", "happy-skies")
+
 # ================================================================
 # Google Cloud Storage
 # ================================================================
@@ -373,25 +376,36 @@ async def build_render_data(
     device: Optional[str],
     layout_json: Optional[Dict[str, Any]],
 ) -> Dict[str, Any]:
+    """Aggregate all provider data into one JSON payload."""
     today = dt.date.today().isoformat()
 
-    # decide city
+    # 1️⃣ City selection
     if CITY_MODE == "fetch" and layout_json and "city" in layout_json:
         city = layout_json.get("city", DEFAULT_CITY)
     else:
         city = DEFAULT_CITY
+
+    # 2️⃣ Icon theme selection (NEW)
+    icon_theme = DEFAULT_ICON_THEME
+    if layout_json:
+        meta = layout_json.get("meta") or {}
+        icon_theme = meta.get("iconTheme", icon_theme)
 
     data: Dict[str, Any] = {
         "date": today,
         "city": city,
         "username": username,
         "device": device,
+        "iconTheme": icon_theme,   # Expose to templates and Designer
     }
 
-    # weather + forecast
+    # 3️⃣ Weather + Forecast
     if INFO_PROVIDERS["weather"]:
         current_weather = await get_weather(city)
         forecast = await get_forecast(city, days=2)
+        # build icon URL based on selected pack
+        icon_code = current_weather.get("icon", "01d")
+        current_weather["icon_url"] = f"/assets/weather-icons/{icon_theme}/{icon_code}.svg"
         data["weather"] = current_weather
         data["forecast"] = forecast
     else:
@@ -403,24 +417,26 @@ async def build_render_data(
             "wind": 5,
             "icon": "01d",
             "desc": "Sunny",
+            "icon_url": f"/assets/weather-icons/{icon_theme}/01d.svg",
         }
         data["forecast"] = []
 
-    # joke
+    # 4️⃣ Dad joke
     if INFO_PROVIDERS["joke"]:
         data["dad_joke"] = await get_joke()
     else:
         data["dad_joke"] = random.choice(LOCAL_JOKES)
 
-    # future stubs
+    # 5️⃣ Optional providers
     if INFO_PROVIDERS.get("calendar"):
         data["calendar"] = await get_calendar()
     if INFO_PROVIDERS.get("sports"):
         data["sports"] = await get_sports()
 
+    # 6️⃣ Visual theme rotation
     data["theme"] = random.choice(THEMES)
-    return data
 
+    return data
 
 # ================================================================
 # Async renderer
