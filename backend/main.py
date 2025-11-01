@@ -541,6 +541,42 @@ def get_designer():
             return f.read()
     return "<h1>Designer not found</h1>"
 
+# ---------------------------------------------------------------
+# GCS asset proxy (serves images, svgs, fonts from the bucket)
+# ---------------------------------------------------------------
+@app.get("/gcs/{path:path}")
+def get_gcs_asset(path: str):
+    """
+    Serve any object from the bucket at /gcs/<path>.
+    Example:
+      /gcs/pexels/current/abstract_0.jpg
+      /gcs/assets/weather-icons/happy-skies/01d.svg
+      /gcs/assets/fonts/Roboto/Roboto-Regular.ttf
+    """
+    if not storage_enabled:
+        raise HTTPException(status_code=500, detail="GCS not configured")
+
+    blob = gcs_bucket.blob(path)
+    if not blob.exists():
+        raise HTTPException(status_code=404, detail=f"asset not found: {path}")
+
+    data = blob.download_as_bytes()
+
+    # best-effort content type
+    if path.endswith(".svg"):
+        ctype = "image/svg+xml"
+    elif path.endswith(".png"):
+        ctype = "image/png"
+    elif path.endswith(".jpg") or path.endswith(".jpeg"):
+        ctype = "image/jpeg"
+    elif path.endswith(".css"):
+        ctype = "text/css"
+    elif path.endswith(".ttf") or path.endswith(".otf") or path.endswith(".woff") or path.endswith(".woff2"):
+        ctype = "font/ttf"
+    else:
+        ctype = "application/octet-stream"
+
+    return Response(content=data, media_type=ctype)
 
 # ---------------------------------------------------------------
 # Layout management
