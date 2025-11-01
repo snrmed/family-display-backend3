@@ -412,7 +412,7 @@ async def build_render_data(
         meta = layout_json.get("meta") or {}
         icon_theme = meta.get("iconTheme", icon_theme)
 
-    # start building payload
+    # start payload
     data: Dict[str, Any] = {
         "date": today,
         "city": city,
@@ -422,17 +422,18 @@ async def build_render_data(
     }
 
     # 3) Weather + forecast
-    if INFO_PROVIDERS["weather"]:
+    if INFO_PROVIDERS.get("weather"):
         current_weather = await get_weather(city)
         forecast = await get_forecast(city, days=2)
 
+        # build icon URL based on selected pack
         icon_code = current_weather.get("icon", "01d")
         if PUBLIC_BASE_URL:
             icon_url = f"{PUBLIC_BASE_URL}/gcs/assets/weather-icons/{icon_theme}/{icon_code}.svg"
         else:
             icon_url = f"/gcs/assets/weather-icons/{icon_theme}/{icon_code}.svg"
-
         current_weather["icon_url"] = icon_url
+
         data["weather"] = current_weather
         data["forecast"] = forecast
     else:
@@ -453,7 +454,7 @@ async def build_render_data(
         }
         data["forecast"] = []
 
-    # 4) Joke
+    # 4) Dad joke
     if INFO_PROVIDERS.get("joke"):
         data["dad_joke"] = await get_joke()
     else:
@@ -465,23 +466,20 @@ async def build_render_data(
     if INFO_PROVIDERS.get("sports"):
         data["sports"] = await get_sports()
 
-    # 6) ALWAYS set a theme before we use it
-    # (use first from env if you want determinism)
+    # 6) ALWAYS set a theme before using it
     if THEMES:
-      chosen_theme = random.choice(THEMES)
+        chosen_theme = random.choice(THEMES)
     else:
-      chosen_theme = "abstract"
+        chosen_theme = "abstract"
     data["theme"] = chosen_theme
 
-    # 7) background (pexels/current/<theme>_0.jpg)
-    # build absolute URL if PUBLIC_BASE_URL is set
+    # 7) background URL from theme
     if PUBLIC_BASE_URL:
         data["bg_url"] = f"{PUBLIC_BASE_URL}/gcs/pexels/current/{chosen_theme}_0.jpg"
     else:
         data["bg_url"] = f"/gcs/pexels/current/{chosen_theme}_0.jpg"
 
     return data
-
 
 # ================================================================
 # Async renderer
