@@ -633,6 +633,73 @@ async def v1_frame(
 
     return Response(content=png_bytes, media_type="image/png")
 
+# ---------------------------------------------------------------
+# Themes / images / pexels discovery (for Designer)
+# ---------------------------------------------------------------
+@app.get("/themes")
+def list_themes():
+    """
+    Return all known themes so the Designer can auto-populate dropdowns.
+    Sources:
+      1. Env THEMES=...
+      2. GCS images/<theme>/...
+      3. GCS pexels/current/<theme>_0.jpg  → infer theme name before '_'
+    """
+    # 1) start with env
+    env_themes = [t.strip() for t in os.getenv("THEMES", "").split(",") if t.strip()]
+    found_image_themes = set()
+    found_pexels_themes = set()
+
+    if storage_enabled:
+        # 2) discover images/<theme>/...
+        try:
+            # list_blobs on prefix="images/" and pull top-level folders
+            blobs = gcs_client.list_blobs(GCS_BUCKET, prefix="images/")
+            for b in blobs:
+                # b.name examples:
+                #   images/abstract/bg1.png
+                #   images/kids-shapes/01.png
+                parts = b.name.split("/")
+                if len(parts) >= 2:
+                    theme_name = parts[1]
+                    if theme_name and theme_name not in ("", "current"):
+                        found_image_themes.add(theme_name)
+        except Exception as e:
+            logger.warning(f"/themes: image discovery failed: {e}")
+
+        # 3) discover pexels/current/<theme>_0.jpg
+        try:
+            blobs = gcs_client.list_blobs(GCS_BUCKET, prefix="pexels/current/")
+            for b in blobs:
+                # e.g. pexels/current/abstract_0.jpg
+                base = b.name.split("/")[-1]
+                if "_" in base:
+                    theme_candidate = base.split("_", 1)[0]
+                    if theme_candidate:
+                        found_pexels_themes.add(theme_candidate)
+        except Exception as e:
+            logger.warning(f"/themes: pexels discovery failed: {e}")
+
+    # merge everything, keep order predictable
+    merged = []
+    for t in env_themes:
+        if t not in merged:
+            merged.append(t)
+    for t in sorted(found_image_themes):
+        if t not in merged:
+            merged.append(t)
+
+    return {
+        "themes": merged,                         # canonical list
+        "images": sorted(found_image_themes),     # what lives under images/
+        "pexels": sorted(found_pexels_themes),    # what we inferred from pexels/current/
+        "source": {
+            "storage": storage_enabled,
+            "env_count": len(env_themes),
+            "images_count": len(found_image_themes),
+            "pexels_count": len(found_pexels_themes),
+        },
+    }
 
 # ---------------------------------------------------------------
 # Manual render trigger
