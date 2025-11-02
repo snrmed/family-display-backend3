@@ -1,6 +1,6 @@
 # ================================================================
 # Kin:D / Family Display Backend
-# Production Build - Cloud Run / GCS / Playwright (async) / Pexels / Forecast
+# Production Build - Cloud Run / GCS / Playwright (async) / Pexels / Forecast / SVG
 # ================================================================
 
 import os
@@ -13,12 +13,7 @@ from typing import Optional, Dict, Any, List
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request, Query
-from fastapi.responses import (
-    JSONResponse,
-    HTMLResponse,
-    Response,
-    FileResponse,
-)
+from fastapi.responses import JSONResponse, HTMLResponse, Response, FileResponse
 
 # ================================================================
 # Logging / Configuration
@@ -31,7 +26,7 @@ PORT = int(os.getenv("PORT", "8080"))
 GCS_BUCKET = os.getenv("GCS_BUCKET", "")
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "adm_860510")
 
-# Feature toggles (env driven)
+# Feature toggles
 ENABLE_EMAIL_USERS = os.getenv("ENABLE_EMAIL_USERS", "false").lower() == "true"
 ENABLE_RENDERING = os.getenv("ENABLE_RENDERING", "true").lower() == "true"
 ENABLE_RENDER_NOW = os.getenv("ENABLE_RENDER_NOW", "true").lower() == "true"
@@ -54,10 +49,10 @@ RENDER_PATH = os.getenv("RENDER_PATH", "backend/web/layouts/base.html")
 RENDER_WIDTH = int(os.getenv("RENDER_WIDTH", "800"))
 RENDER_HEIGHT = int(os.getenv("RENDER_HEIGHT", "480"))
 
-# public base url (for absolute URLs from Cloud Run, optional)
+# public base url (optional) - good for Cloud Run public URL
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").rstrip("/")
 
-# Icon / weather theme (can be overridden by layout JSON -> meta.iconTheme)
+# Weather icon pack (can be overridden by layout json meta.iconTheme)
 DEFAULT_ICON_THEME = os.getenv("WEATHER_ICON_PACK", "happy-skies")
 
 # ================================================================
@@ -66,7 +61,6 @@ DEFAULT_ICON_THEME = os.getenv("WEATHER_ICON_PACK", "happy-skies")
 storage_enabled = False
 try:
     from google.cloud import storage
-
     gcs_client = storage.Client()
     gcs_bucket = gcs_client.bucket(GCS_BUCKET)
     storage_enabled = True
@@ -105,9 +99,8 @@ def gcs_write_bytes(key: str, data: bytes, content_type: str = "application/octe
 
 
 def make_public_url(path: str) -> str:
-    """Return an absolute or relative URL that the browser can request."""
     if PUBLIC_BASE_URL:
-        return f"{PUBLIC_BASE_URL.rstrip('/')}/{path.lstrip('/')}"
+        return f"{PUBLIC_BASE_URL}/{path.lstrip('/')}"
     return f"/{path.lstrip('/')}"
 
 
@@ -188,13 +181,11 @@ async def get_weather(city: str) -> Dict[str, Any]:
         url = f"https://api.openweathermap.org/data/2.5/weather?q={city}&appid={OPENWEATHER_KEY}&units=metric"
         async with httpx.AsyncClient(timeout=8) as client:
             r = await client.get(url)
-
         if r.status_code == 200:
             j = r.json()
             rain = 0
             if "rain" in j and "1h" in j["rain"]:
                 rain = j["rain"]["1h"]
-
             return {
                 "temp": round(j["main"]["temp"]),
                 "feels_like": round(j["main"]["feels_like"]),
@@ -204,9 +195,7 @@ async def get_weather(city: str) -> Dict[str, Any]:
                 "icon": j["weather"][0]["icon"],
                 "desc": j["weather"][0]["description"].title(),
             }
-
         logger.warning(f"Weather fetch failed {r.status_code}: {r.text[:100]}")
-
     except Exception as e:
         logger.error(f"Weather error: {e}")
 
@@ -224,26 +213,19 @@ async def get_weather(city: str) -> Dict[str, Any]:
 async def get_forecast(city: str, days: int = 2) -> List[Dict[str, Any]]:
     if not ENABLE_OPENWEATHER or not OPENWEATHER_KEY:
         return []
-
     try:
-        url = (
-            "https://api.openweathermap.org/data/2.5/forecast"
-            f"?q={city}&appid={OPENWEATHER_KEY}&units=metric"
-        )
+        url = f"https://api.openweathermap.org/data/2.5/forecast?q={city}&appid={OPENWEATHER_KEY}&units=metric"
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.get(url)
         if r.status_code != 200:
             logger.warning(f"Forecast fetch failed {r.status_code}: {r.text[:120]}")
             return []
-
         j = r.json()
         raw_list = j.get("list", [])
         if not raw_list:
             return []
-
         today_str = dt.date.today().isoformat()
         per_day: Dict[str, List[Dict[str, Any]]] = {}
-
         for item in raw_list:
             dt_txt = item.get("dt_txt")
             if not dt_txt:
@@ -251,12 +233,10 @@ async def get_forecast(city: str, days: int = 2) -> List[Dict[str, Any]]:
             date_only = dt_txt.split(" ")[0]
             if date_only == today_str:
                 continue
-
             main = item.get("main", {})
             weather_arr = item.get("weather", [])
             if not weather_arr:
                 continue
-
             w0 = weather_arr[0]
             entry = {
                 "temp": main.get("temp"),
@@ -264,7 +244,6 @@ async def get_forecast(city: str, days: int = 2) -> List[Dict[str, Any]]:
                 "icon": w0.get("icon"),
             }
             per_day.setdefault(date_only, []).append(entry)
-
         out: List[Dict[str, Any]] = []
         for day, entries in per_day.items():
             temps = [e["temp"] for e in entries if e.get("temp") is not None]
@@ -282,10 +261,8 @@ async def get_forecast(city: str, days: int = 2) -> List[Dict[str, Any]]:
                     "icon": mid.get("icon") or "01d",
                 }
             )
-
         out = sorted(out, key=lambda x: x["date"])[:days]
         return out
-
     except Exception as e:
         logger.error(f"Forecast error: {e}")
         return []
@@ -341,7 +318,6 @@ def load_local_preset() -> Optional[Dict[str, Any]]:
 async def load_layout_for(username: Optional[str], device: Optional[str]) -> Optional[Dict[str, Any]]:
     if not device:
         device = "familydisplay"
-
     if storage_enabled:
         try:
             if ENABLE_EMAIL_USERS and username:
@@ -353,46 +329,30 @@ async def load_layout_for(username: Optional[str], device: Optional[str]) -> Opt
                 return json.loads(gcs_read_bytes(key))
         except Exception as e:
             logger.warning(f"GCS layout load failed: {e}")
-
     preset = load_local_preset()
     if preset:
         logger.info("Using local preset: Theme 1.json")
     return preset
 
-
 # ================================================================
 # Background picker
 # ================================================================
 def pick_background_for_theme(theme: str) -> Optional[str]:
-    """
-    Tries, in order:
-      1. pexels/current/{theme}_0.jpg
-      2. images/current/{theme}/0.jpg
-      3. images/backup/{theme}.jpg
-      4. images/backup/default.jpg
-    Returns storage path or None.
-    """
     if not storage_enabled:
         return None
-
     key1 = f"pexels/current/{theme}_0.jpg"
     if gcs_exists(key1):
         return key1
-
     key2 = f"images/current/{theme}/0.jpg"
     if gcs_exists(key2):
         return key2
-
     key3 = f"images/backup/{theme}.jpg"
     if gcs_exists(key3):
         return key3
-
     key4 = "images/backup/default.jpg"
     if gcs_exists(key4):
         return key4
-
     return None
-
 
 # ================================================================
 # Build render payload
@@ -429,18 +389,12 @@ async def build_render_data(
         current_weather = await get_weather(city)
         forecast = await get_forecast(city, days=2)
         icon_code = current_weather.get("icon", "01d")
-        if PUBLIC_BASE_URL:
-            icon_url = f"{PUBLIC_BASE_URL}/gcs/assets/weather-icons/{icon_theme}/{icon_code}.svg"
-        else:
-            icon_url = f"/gcs/assets/weather-icons/{icon_theme}/{icon_code}.svg"
-        current_weather["icon_url"] = icon_url
+        current_weather["icon_url"] = make_public_url(
+            f"gcs/assets/weather-icons/{icon_theme}/{icon_code}.svg"
+        )
         data["weather"] = current_weather
         data["forecast"] = forecast
     else:
-        if PUBLIC_BASE_URL:
-            icon_url = f"{PUBLIC_BASE_URL}/gcs/assets/weather-icons/{icon_theme}/01d.svg"
-        else:
-            icon_url = f"/gcs/assets/weather-icons/{icon_theme}/01d.svg"
         data["weather"] = {
             "temp": 33,
             "feels_like": 33,
@@ -449,7 +403,7 @@ async def build_render_data(
             "wind": 5,
             "icon": "01d",
             "desc": "Sunny",
-            "icon_url": icon_url,
+            "icon_url": make_public_url(f"gcs/assets/weather-icons/{icon_theme}/01d.svg"),
         }
         data["forecast"] = []
 
@@ -472,23 +426,16 @@ async def build_render_data(
         chosen_theme = "abstract"
     data["theme"] = chosen_theme
 
-    # background
+    # background (use picker now)
     bg_key = pick_background_for_theme(chosen_theme)
     if bg_key:
-        if PUBLIC_BASE_URL:
-            data["bg_url"] = f"{PUBLIC_BASE_URL}/gcs/{bg_key}"
-        else:
-            data["bg_url"] = f"/gcs/{bg_key}"
+        data["bg_url"] = make_public_url(f"gcs/{bg_key}")
     else:
-        # last resort
-        if PUBLIC_BASE_URL:
-            data["bg_url"] = f"{PUBLIC_BASE_URL}/gcs/pexels/current/{chosen_theme}_0.jpg"
-        else:
-            data["bg_url"] = f"/gcs/pexels/current/{chosen_theme}_0.jpg"
+        data["bg_url"] = make_public_url(f"gcs/pexels/current/{chosen_theme}_0.jpg")
 
-    # SVG exposure
+    # SVG exposure (for Designer / layout)
+    svg_prefix = make_public_url("gcs/assets/svgs")
     svg_list: List[str] = []
-    svg_prefix = f"{PUBLIC_BASE_URL}/assets/svgs" if PUBLIC_BASE_URL else "/assets/svgs"
     try:
         if storage_enabled:
             for blob in gcs_client.list_blobs(GCS_BUCKET, prefix="assets/svgs/"):
@@ -509,14 +456,12 @@ async def build_render_data(
 
     return data
 
-
 # ================================================================
 # Async renderer
 # ================================================================
 async def render_html_to_png(html_path: str, context: Dict[str, Any]) -> bytes:
     if not ENABLE_RENDERING or playwright_browser is None:
         raise RuntimeError("Rendering disabled")
-
     page = await playwright_browser.new_page(
         viewport={"width": RENDER_WIDTH, "height": RENDER_HEIGHT}
     )
@@ -527,7 +472,6 @@ async def render_html_to_png(html_path: str, context: Dict[str, Any]) -> bytes:
     png_bytes = await page.screenshot(type="png")
     await page.close()
     return png_bytes
-
 
 # ================================================================
 # Routes
@@ -545,95 +489,69 @@ def root():
         "jokes_api": ENABLE_JOKES_API,
     }
 
+# ---------------------------------------------------------------
+# 1) SPECIFIC SVG ROUTE (must be BEFORE generic /gcs)
+# ---------------------------------------------------------------
+@app.get("/gcs/assets/svgs/{name}")
+def serve_svg(name: str):
+    """
+    Serve SVGs from:
+    1) local repo: backend/web/svgs/<name>
+    2) GCS: assets/svgs/<name>
+    """
+    local_path = os.path.join("backend", "web", "svgs", name)
+    if os.path.exists(local_path):
+        return FileResponse(local_path, media_type="image/svg+xml")
+    if storage_enabled:
+        gcs_key = f"assets/svgs/{name}"
+        if gcs_exists(gcs_key):
+            data = gcs_read_bytes(gcs_key)
+            return Response(content=data, media_type="image/svg+xml")
+    raise HTTPException(status_code=404, detail=f"SVG not found: {name}")
 
 # ---------------------------------------------------------------
-# GCS asset proxy (single version)
+# 2) GENERIC GCS PROXY (AFTER svg route)
 # ---------------------------------------------------------------
 @app.get("/gcs/{path:path}")
-def get_gcs_asset(path: str):
-    """
-    Serve any object from the bucket at /gcs/<path>.
-    Examples:
-      /gcs/pexels/current/abstract_0.jpg
-      /gcs/assets/weather-icons/happy-skies/01d.svg
-      /gcs/assets/fonts/Roboto/Roboto-Regular.ttf
-    """
+def gcs_proxy(path: str):
     if not storage_enabled:
         raise HTTPException(status_code=500, detail="GCS not configured")
-
-    blob = gcs_bucket.blob(path)
-    if not blob.exists():
-        raise HTTPException(status_code=404, detail=f"asset not found: {path}")
-
-    data = blob.download_as_bytes()
-
-    if path.endswith(".svg"):
-        ctype = "image/svg+xml"
-    elif path.endswith(".png"):
-        ctype = "image/png"
-    elif path.endswith(".jpg") or path.endswith(".jpeg"):
-        ctype = "image/jpeg"
-    elif path.endswith(".css"):
-        ctype = "text/css"
-    elif path.endswith(".ttf") or path.endswith(".otf") or path.endswith(".woff") or path.endswith(".woff2"):
-        ctype = "font/ttf"
+    if not gcs_exists(path):
+        raise HTTPException(status_code=404, detail="not found")
+    data = gcs_read_bytes(path)
+    pl = path.lower()
+    if pl.endswith(".png"):
+        ct = "image/png"
+    elif pl.endswith(".jpg") or pl.endswith(".jpeg"):
+        ct = "image/jpeg"
+    elif pl.endswith(".svg"):
+        ct = "image/svg+xml"
+    elif pl.endswith(".css"):
+        ct = "text/css"
+    elif pl.endswith(".ttf") or pl.endswith(".otf") or pl.endswith(".woff") or pl.endswith(".woff2"):
+        ct = "font/ttf"
     else:
-        ctype = "application/octet-stream"
-
-    return Response(content=data, media_type=ctype, headers={"Cache-Control": "public, max-age=3600"})
-
+        ct = "application/octet-stream"
+    return Response(content=data, media_type=ct, headers={"Cache-Control": "public, max-age=3600"})
 
 # ---------------------------------------------------------------
 # Designer HTML
 # ---------------------------------------------------------------
 @app.get("/designer/", response_class=HTMLResponse)
 def get_designer():
-    path = "web/designer/overlay_designer_v3_full.html"
+    path = "backend/web/designer/overlay_designer_v3_full.html"
     if os.path.exists(path):
         with open(path, "r", encoding="utf-8") as f:
             return f.read()
     return "<h1>Designer not found</h1>"
 
-
 # ---------------------------------------------------------------
-# Serve SVG assets (local + GCS) on /assets/svgs/<name>
-# ---------------------------------------------------------------
-@app.get("/assets/svgs/{name}")
-async def serve_svg(name: str):
-    """
-    Serve SVGs from:
-    1) local repo: backend/web/svgs/<name>
-    2) OR from bucket: assets/svgs/<name>
-    """
-    # 1) local first
-    local_path = os.path.join("backend", "web", "svgs", name)
-    if os.path.exists(local_path):
-        return FileResponse(local_path, media_type="image/svg+xml")
-
-    # 2) GCS fallback
-    if storage_enabled:
-        gcs_key = f"assets/svgs/{name}"
-        if gcs_exists(gcs_key):
-            data = gcs_read_bytes(gcs_key)
-            return Response(content=data, media_type="image/svg+xml")
-
-    # 3) nothing found
-    raise HTTPException(status_code=404, detail=f"SVG not found: {name}")
-
-
-# ---------------------------------------------------------------
-# SVG listing route (for Designer)
+# SVG listing (for Designer)
 # ---------------------------------------------------------------
 @app.get("/v1/svgs")
-async def list_svgs():
-    """
-    Return a JSON list of all available SVGs.
-    Looks in GCS under assets/svgs/ and in backend/web/svgs locally.
-    Designer will show /assets/svgs/... directly.
-    """
+def list_svgs():
+    svg_prefix = make_public_url("gcs/assets/svgs")
     svg_list: List[str] = []
-    svg_prefix = f"{PUBLIC_BASE_URL}/assets/svgs" if PUBLIC_BASE_URL else "/assets/svgs"
-
     try:
         if storage_enabled:
             for blob in gcs_client.list_blobs(GCS_BUCKET, prefix="assets/svgs/"):
@@ -648,9 +566,7 @@ async def list_svgs():
                         svg_list.append(f"{svg_prefix}/{f}")
     except Exception as e:
         logger.warning(f"SVG list error: {e}")
-
     return {"count": len(svg_list), "svgs": svg_list}
-
 
 # ---------------------------------------------------------------
 # Layout management
@@ -659,39 +575,31 @@ async def list_svgs():
 def get_layout(device_id: str, username: Optional[str] = Query(None)):
     if not storage_enabled:
         raise HTTPException(status_code=500, detail="GCS not configured")
-
     if ENABLE_EMAIL_USERS and username:
         user_key = safe_email(username)
         key = f"users/{user_key}/devices/{device_id}/layouts/current.json"
     else:
         key = f"layouts/{device_id}.json"
-
     if not gcs_exists(key):
         raise HTTPException(status_code=404, detail="layout not found")
-
     data = json.loads(gcs_read_bytes(key))
     return JSONResponse(data)
-
 
 @app.post("/admin/layouts/{device_id}")
 async def save_layout(device_id: str, request: Request, username: Optional[str] = Query(None)):
     token = request.headers.get("x-admin-token") or request.query_params.get("token")
     if token != ADMIN_TOKEN:
         raise HTTPException(status_code=403, detail="invalid admin token")
-
     payload = await request.json()
     if "elements" not in payload:
         raise HTTPException(status_code=400, detail="layout must contain 'elements'")
-
     if not storage_enabled:
         raise HTTPException(status_code=500, detail="GCS not configured")
-
     if ENABLE_EMAIL_USERS and username:
         user_key = safe_email(username)
         key = f"users/{user_key}/devices/{device_id}/layouts/current.json"
     else:
         key = f"layouts/{device_id}.json"
-
     gcs_write_bytes(
         key,
         json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8"),
@@ -699,9 +607,8 @@ async def save_layout(device_id: str, request: Request, username: Optional[str] 
     )
     return {"ok": True, "device": device_id, "username": username or "default"}
 
-
 # ---------------------------------------------------------------
-# Render data (for Designer Live Preview)
+# Render data (Designer live preview)
 # ---------------------------------------------------------------
 @app.get("/v1/render_data")
 async def v1_render_data(
@@ -711,7 +618,6 @@ async def v1_render_data(
     layout_json = await load_layout_for(username, device or "familydisplay")
     payload = await build_render_data(username, device or "familydisplay", layout_json)
     return JSONResponse(payload)
-
 
 # ---------------------------------------------------------------
 # Frame renderer
@@ -723,16 +629,13 @@ async def v1_frame(
 ):
     if not ENABLE_RENDERING:
         raise HTTPException(status_code=503, detail="Rendering disabled")
-
     layout_json = await load_layout_for(username, device or "familydisplay")
     render_data = await build_render_data(username, device or "familydisplay", layout_json)
-
     try:
         png_bytes = await render_html_to_png(RENDER_PATH, render_data)
     except Exception as e:
         logger.error(f"Frame render failed: {e}")
         raise HTTPException(status_code=500, detail="render failed")
-
     if storage_enabled:
         if ENABLE_EMAIL_USERS and username:
             save_key = f"users/{safe_email(username)}/devices/{device or 'default'}/renders/latest.png"
@@ -742,12 +645,10 @@ async def v1_frame(
             gcs_write_bytes(save_key, png_bytes, "image/png")
         except Exception as e:
             logger.warning(f"GCS save of rendered frame failed: {e}")
-
     return Response(content=png_bytes, media_type="image/png")
 
-
 # ---------------------------------------------------------------
-# Manual render trigger
+# Manual render
 # ---------------------------------------------------------------
 @app.get("/admin/render_now")
 async def admin_render_now(
@@ -761,16 +662,13 @@ async def admin_render_now(
         raise HTTPException(status_code=403, detail="render_now disabled")
     if not ENABLE_RENDERING:
         raise HTTPException(status_code=503, detail="rendering disabled")
-
     layout_json = await load_layout_for(username, device or "familydisplay")
     render_data = await build_render_data(username, device or "familydisplay", layout_json)
-
     try:
         png_bytes = await render_html_to_png(RENDER_PATH, render_data)
     except Exception as e:
         logger.error(f"Manual render failed: {e}")
         raise HTTPException(status_code=500, detail="manual render failed")
-
     if storage_enabled:
         today = dt.date.today().isoformat()
         if ENABLE_EMAIL_USERS and username:
@@ -779,12 +677,10 @@ async def admin_render_now(
             base = f"renders/{device or 'default'}/"
         gcs_write_bytes(base + f"{today}.png", png_bytes, "image/png")
         gcs_write_bytes(base + "latest.png", png_bytes, "image/png")
-
     return {"ok": True, "bytes": len(png_bytes)}
 
-
 # ---------------------------------------------------------------
-# Pexels prefetch / cache rollover
+# Pexels prefetch
 # ---------------------------------------------------------------
 async def pexels_fetch_images(theme: str, limit: int = 8) -> list:
     if not ENABLE_PEXELS or not PEXELS_API_KEY:
@@ -804,18 +700,15 @@ async def pexels_fetch_images(theme: str, limit: int = 8) -> list:
         logger.error(f"Pexels error: {e}")
     return []
 
-
 @app.get("/admin/prefetch")
 async def admin_prefetch(token: str):
     if token != ADMIN_TOKEN:
         raise HTTPException(status_code=403, detail="invalid admin token")
     if not ENABLE_PEXELS:
         raise HTTPException(status_code=403, detail="pexels disabled")
-
     today = dt.date.today().isoformat()
     rolled_over = False
     saved = 0
-
     try:
         if storage_enabled:
             prefix_current = "pexels/current/"
@@ -828,7 +721,6 @@ async def admin_prefetch(token: str):
                     gcs_bucket.copy_blob(b, gcs_bucket, dest)
                     b.delete()
                 logger.info(f"Rolled over {len(blobs)} images to cache/{today}/")
-
         for theme in THEMES:
             urls = await pexels_fetch_images(theme)
             for idx, url in enumerate(urls):
@@ -841,11 +733,9 @@ async def admin_prefetch(token: str):
                         saved += 1
                 except Exception as e:
                     logger.debug(f"Image fetch fail {url[:40]}: {e}")
-
         return {"ok": True, "rolled_over": rolled_over, "saved": saved, "themes": THEMES}
     except Exception as e:
         logger.error(f"Prefetch failed: {e}")
         raise HTTPException(status_code=500, detail="prefetch failed")
-
 
 logger.info("Kin:D backend loaded successfully.")
