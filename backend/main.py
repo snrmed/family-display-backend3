@@ -550,6 +550,12 @@ async def build_render_data(
     data["svgs"] = svg_urls
     data["svg_base"] = svg_prefix
 
+    # 8) pass layout through so base.html can render Designer elements
+    if layout_json:
+        data["layout"] = layout_json
+    else:
+        data["layout"] = {"elements": []}
+
     return data
 
 
