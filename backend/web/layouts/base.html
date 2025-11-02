@@ -2,30 +2,38 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Kin:D Base Layout</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kin:D Frame</title>
+  <meta name="viewport" content="width=800,initial-scale=1.0" />
   <style>
     :root {
-      --bg: #111;
-      --card: #e3e3e3;
-      --radius: 18px;
-      --pad: 18px;
-      --text: #000;
+      --w: 800px;
+      --h: 480px;
+      --card-bg: rgba(236,236,236,1);
+      --card-radius: 26px;
+      --card-pad: 18px;
+      --card-shadow: 0 10px 28px rgba(0,0,0,0.12);
+      --font: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+      --text: #111;
+      --sub: #333;
+      --badge: rgba(236,236,236,0.9);
     }
+
     * {
       box-sizing: border-box;
+    }
+
+    html, body {
       margin: 0;
       padding: 0;
-    }
-    body {
-      width: 800px;   /* will be overridden by viewport in Playwright */
-      height: 480px;
-      background: var(--bg);
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      width: var(--w);
+      height: var(--h);
+      background: #101010;
+      font-family: var(--font);
       position: relative;
       overflow: hidden;
     }
-    /* background image */
+
+    /* background image always at the very back */
     #bgImg {
       position: absolute;
       inset: 0;
@@ -34,167 +42,301 @@
       object-fit: cover;
       z-index: 0;
     }
-    /* optional decorative SVG */
-    #decorSvg {
+
+    /* a layer we can add stuff to if we want */
+    #layoutRoot {
       position: absolute;
-      top: 24px;
-      left: 24px;
-      width: 140px;
-      height: 140px;
-      object-fit: contain;
-      z-index: 2;
-      display: none; /* we only show it when svg_url exists */
-      pointer-events: none;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 5;
     }
-    /* top-right control button */
-    #topBtn {
+
+    .card {
       position: absolute;
-      top: 16px;
+      background: var(--card-bg);
+      border-radius: var(--card-radius);
+      padding: var(--card-pad);
+      box-shadow: var(--card-shadow);
+      color: var(--text);
+    }
+
+    #weatherCard {
+      left: 16px;
+      top: 240px;
+      width: 370px;
+      min-height: 140px;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+
+    #weatherIcon {
+      width: 52px;
+      height: 52px;
+      object-fit: contain;
+      flex: 0 0 52px;
+    }
+
+    #weatherText {
+      flex: 1;
+    }
+
+    #weatherText h2 {
+      margin: 0 0 4px 0;
+      font-size: 18px;
+    }
+
+    #weatherText p {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.3;
+      color: var(--sub);
+    }
+
+    #jokeCard {
       right: 16px;
-      width: 56px;
-      height: 56px;
-      background: rgba(227,227,227,0.95);
-      border-radius: 18px;
+      bottom: 16px;
+      left: 16px;
+      min-height: 52px;
+      display: flex;
+      align-items: center;
+      padding-inline: 26px;
+    }
+
+    #jokeCard span {
+      font-size: 16px;
+      line-height: 1.3;
+    }
+
+    /* badge / close button */
+    #badgeBtn {
+      position: absolute;
+      top: 18px;
+      right: 18px;
+      width: 64px;
+      height: 64px;
+      border-radius: 24px;
+      background: var(--badge);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 26px;
-      z-index: 3;
+      font-size: 28px;
+      font-weight: 500;
+      color: #000;
+      z-index: 50;
     }
-    /* weather card (bottom-left) */
-    #weatherCard {
+
+    /* layout-rendered elements */
+    .l-box {
       position: absolute;
-      left: 16px;
-      bottom: 82px;
-      width: 380px;
-      min-height: 150px;
-      background: rgba(227,227,227,0.95);
-      border-radius: 18px 18px 0 0;
-      padding: 16px 16px 14px 16px;
-      z-index: 3;
-      display: flex;
-      gap: 14px;
     }
-    #weatherIcon {
-      width: 56px;
-      height: 56px;
+
+    .l-text {
+      position: absolute;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .l-icon {
+      position: absolute;
       object-fit: contain;
-      flex: 0 0 56px;
-      display: none; /* shown only when icon_url exists */
-    }
-    #weatherText {
-      flex: 1;
-      color: #000;
-      font-size: 14px;
-      line-height: 1.4;
-    }
-    #cityLine {
-      font-weight: 600;
-      margin-bottom: 6px;
-    }
-    /* joke bar bottom */
-    #jokeBar {
-      position: absolute;
-      left: 16px;
-      right: 16px;
-      bottom: 16px;
-      background: rgba(227,227,227,0.95);
-      border-radius: 18px;
-      padding: 14px 20px;
-      z-index: 3;
-      font-size: 15px;
-      line-height: 1.35;
-      color: #000;
     }
   </style>
 </head>
 <body>
-  <!-- background image from Pexels or fallback -->
+  <!-- background image (will be set by JS) -->
   <img id="bgImg" alt="background" />
-  <!-- optional decorative SVG (from designer) -->
-  <img id="decorSvg" alt="decor" />
-  <!-- top-right button -->
-  <div id="topBtn">–</div>
 
-  <!-- weather -->
+  <!-- this is where JSON-driven elements will go -->
+  <div id="layoutRoot"></div>
+
+  <!-- fallback weather card -->
   <div id="weatherCard" class="card">
-    <img id="weatherIcon" alt="icon" />
+    <img id="weatherIcon" alt="icon" src="" />
     <div id="weatherText">
-      <div id="cityLine">City</div>
-      <div id="tempLine">--°C</div>
-      <div id="humidLine">Humidity: --%</div>
-      <div id="windLine">Wind: -- km/h</div>
-      <div id="rainLine">Rain: --</div>
+      <h2 id="weatherCity">---</h2>
+      <p id="weatherTemp">• --°C</p>
+      <p id="weatherMeta">Humidity: --%</p>
+      <p id="weatherExtra">Wind: -- km/h</p>
+      <p id="weatherRain">Rain: --</p>
     </div>
   </div>
 
-  <!-- joke -->
-  <div id="jokeBar">No joke today.</div>
+  <!-- fallback joke card -->
+  <div id="jokeCard" class="card">
+    <span id="jokeText">No joke today.</span>
+  </div>
+
+  <!-- badge (debug / placeholder) -->
+  <div id="badgeBtn">—</div>
 
   <script>
-    // small helper
-    function getDataFromQuery() {
-      const qs = new URLSearchParams(window.location.search);
-      const raw = qs.get("data");
-      if (!raw) return null;
-      try {
-        return JSON.parse(decodeURIComponent(raw));
-      } catch (e) {
-        console.warn("Cannot parse data param:", e);
-        return null;
+    // 1) read ?data=... from query
+    const qs = new URLSearchParams(window.location.search);
+    const raw = qs.get("data") || "{}";
+    let data = {};
+    try {
+      data = JSON.parse(raw);
+    } catch (e) {
+      console.warn("Could not parse data query:", e);
+      data = {};
+    }
+
+    // ---- helpers -------------------------------------------------
+    function setBackground(url) {
+      if (!url) return;
+      const img = document.getElementById("bgImg");
+      img.src = url;
+    }
+
+    function showFallbackWeather(d) {
+      const wc = document.getElementById("weatherCard");
+      const cityEl = document.getElementById("weatherCity");
+      const tempEl = document.getElementById("weatherTemp");
+      const metaEl = document.getElementById("weatherMeta");
+      const extraEl = document.getElementById("weatherExtra");
+      const rainEl = document.getElementById("weatherRain");
+      const iconEl = document.getElementById("weatherIcon");
+
+      const city = d.city || "—";
+      cityEl.textContent = city;
+
+      if (d.weather) {
+        const w = d.weather;
+        tempEl.textContent = "• " + (w.temp !== undefined ? w.temp + "°C" : "--°C");
+        metaEl.textContent = "Humidity: " + (w.humidity !== undefined ? w.humidity + "%" : "--%");
+        extraEl.textContent = "Wind: " + (w.wind !== undefined ? w.wind + " km/h" : "-- km/h");
+        rainEl.textContent = "Rain: " + (w.rain ? w.rain : "No rain");
+        if (w.icon_url) {
+          iconEl.src = w.icon_url;
+        } else {
+          iconEl.src = "";
+        }
       }
     }
 
-    const data = getDataFromQuery() || {};
-
-    // 1) background
-    const bg = document.getElementById("bgImg");
-    if (data.bg_url) {
-      bg.src = data.bg_url;
-    } else {
-      // tiny fallback
-      bg.style.background = "#111";
+    function showFallbackJoke(d) {
+      const el = document.getElementById("jokeText");
+      if (d.dad_joke) {
+        el.textContent = d.dad_joke;
+      }
     }
 
-    // 2) decorative SVG (THIS IS THE NEW BIT)
-    const decor = document.getElementById("decorSvg");
-    if (data.svg_url) {
-      decor.src = data.svg_url;
-      decor.style.display = "block";
-    } else {
-      decor.style.display = "none";
+    // ---- layout renderer -----------------------------------------
+    // renders Designer JSON (elements[]) if present
+    function renderDesignerLayout(layout, payload) {
+      const root = document.getElementById("layoutRoot");
+      root.innerHTML = ""; // clear previous
+
+      // if we render from layout, hide fallbacks
+      document.getElementById("weatherCard").style.display = "none";
+      document.getElementById("jokeCard").style.display = "none";
+
+      const els = layout.elements || [];
+
+      els.forEach((el) => {
+        // common positioning
+        const x = el.x || 0;
+        const y = el.y || 0;
+        const w = el.w || 100;
+        const h = el.h || 50;
+
+        if (el.kind === "box") {
+          const d = document.createElement("div");
+          d.className = "l-box";
+          d.style.left = x + "px";
+          d.style.top = y + "px";
+          d.style.width = w + "px";
+          d.style.height = h + "px";
+          if (el.fill) d.style.background = el.fill;
+          if (el.border) d.style.border = el.border;
+          if (el.radius) d.style.borderRadius = el.radius + "px";
+          if (el.shadow) d.style.boxShadow = el.shadow;
+          root.appendChild(d);
+        } else if (el.kind === "text") {
+          const d = document.createElement("div");
+          d.className = "l-text";
+          d.style.left = x + "px";
+          d.style.top = y + "px";
+          d.style.width = w + "px";
+          d.style.height = h + "px";
+          d.style.fontFamily = el.fontFamily || "Inter, system-ui, sans-serif";
+          d.style.fontSize = (el.fontSize || 16) + "px";
+          d.style.color = el.color || "#fff";
+          d.style.lineHeight = "1.2";
+          if (el.wrap) {
+            d.style.whiteSpace = "normal";
+          }
+
+          // bind to payload
+          let txt = el.text || "";
+          switch (el.type) {
+            case "CITY":
+              txt = payload.city || txt;
+              break;
+            case "TEMP":
+              if (payload.weather && typeof payload.weather.temp !== "undefined") {
+                txt = payload.weather.temp + "°C";
+              }
+              break;
+            case "HUMIDITY":
+              if (payload.weather && typeof payload.weather.humidity !== "undefined") {
+                txt = "Humidity: " + payload.weather.humidity + "%";
+              }
+              break;
+            case "JOKE":
+              if (payload.dad_joke) txt = payload.dad_joke;
+              break;
+            default:
+              // keep el.text
+              break;
+          }
+
+          d.textContent = txt;
+          root.appendChild(d);
+        } else if (el.kind === "icon") {
+          const img = document.createElement("img");
+          img.className = "l-icon";
+          img.style.left = x + "px";
+          img.style.top = y + "px";
+          img.style.width = w + "px";
+          img.style.height = h + "px";
+          img.style.objectFit = "contain";
+
+          // src may be absolute (/gcs/assets/svgs/lemon.svg) or relative
+          let src = el.src || "";
+          if (!src && payload.svg_base && el.name) {
+            // support future { "name": "lemon.svg" } style
+            src = payload.svg_base.replace(/\/$/, "") + "/" + el.name;
+          }
+          img.src = src;
+          root.appendChild(img);
+        }
+      });
     }
 
-    // 3) weather
-    const w = data.weather || {};
-    const cityLine = document.getElementById("cityLine");
-    const tempLine = document.getElementById("tempLine");
-    const humidLine = document.getElementById("humidLine");
-    const windLine = document.getElementById("windLine");
-    const rainLine = document.getElementById("rainLine");
-    const wIcon = document.getElementById("weatherIcon");
+    // -------------------------------------------------------------
+    // run with the payload we got
+    // -------------------------------------------------------------
+    (function main() {
+      // background
+      if (data.bg_url) {
+        setBackground(data.bg_url);
+      } else {
+        // nothing? fine, black stays
+      }
 
-    cityLine.textContent = data.city || "—";
-    tempLine.textContent = (w.temp !== undefined ? w.temp : "—") + "°C";
-    humidLine.textContent = "Humidity: " + (w.humidity !== undefined ? w.humidity : "—") + "%";
-    const windKmh = w.wind ? Math.round(w.wind * 3.6) : 0;
-    windLine.textContent = "Wind: " + (windKmh || "0") + " km/h";
-    rainLine.textContent = "Rain: " + (w.rain && w.rain > 0 ? w.rain + " mm" : "No rain");
-
-    if (w.icon_url) {
-      wIcon.src = w.icon_url;
-      wIcon.style.display = "block";
-    } else {
-      wIcon.style.display = "none";
-    }
-
-    // 4) joke
-    const jokeBar = document.getElementById("jokeBar");
-    if (data.dad_joke) {
-      jokeBar.textContent = data.dad_joke;
-    } else {
-      jokeBar.textContent = "No joke today.";
-    }
+      // if we have a Designer layout, render it and exit
+      if (data.layout && Array.isArray(data.layout.elements)) {
+        renderDesignerLayout(data.layout, data);
+      } else {
+        // else: draw the fixed cards
+        showFallbackWeather(data);
+        showFallbackJoke(data);
+      }
+    })();
   </script>
 </body>
 </html>
