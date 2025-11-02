@@ -1,10 +1,8 @@
 # ================================================================
 # Kin:D / Family Display Backend
-# Production Build - Cloud Run / GCS / Playwright (async) / Pexels / Forecast
+# Cloud Run / GCS / Playwright (async) / Pexels / SVG assets
 # ================================================================
-
 import os
-import io
 import json
 import random
 import logging
@@ -26,7 +24,7 @@ PORT = int(os.getenv("PORT", "8080"))
 GCS_BUCKET = os.getenv("GCS_BUCKET", "")
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "adm_860510")
 
-# Feature toggles (env driven)
+# feature toggles
 ENABLE_EMAIL_USERS = os.getenv("ENABLE_EMAIL_USERS", "false").lower() == "true"
 ENABLE_RENDERING = os.getenv("ENABLE_RENDERING", "true").lower() == "true"
 ENABLE_RENDER_NOW = os.getenv("ENABLE_RENDER_NOW", "true").lower() == "true"
@@ -34,16 +32,16 @@ ENABLE_PEXELS = os.getenv("ENABLE_PEXELS", "true").lower() == "true"
 ENABLE_OPENWEATHER = os.getenv("ENABLE_OPENWEATHER", "true").lower() == "true"
 ENABLE_JOKES_API = os.getenv("ENABLE_JOKES_API", "true").lower() == "true"
 
-# City behaviour
-CITY_MODE = os.getenv("CITY_MODE", "default").lower()  # "default" or "fetch"
+# city behaviour
+CITY_MODE = os.getenv("CITY_MODE", "default").lower()
 DEFAULT_CITY = os.getenv("DEFAULT_CITY", "Darwin")
 
-# External keys
+# external keys
 PEXELS_API_KEY = os.getenv("PEXELS_API_KEY", "")
 OPENWEATHER_KEY = os.getenv("OPENWEATHER_KEY", "")
 
-# Misc
-THEMES = [t.strip() for t in os.getenv("THEMES", "abstract,geometric,kids,photo").split(",")]
+# misc
+THEMES = [t.strip() for t in os.getenv("THEMES", "abstract,geometric,kids-shapes,minimal,paper-collage").split(",")]
 CACHE_EXPIRY_DAYS = int(os.getenv("CACHE_EXPIRY_DAYS", "7"))
 RENDER_PATH = os.getenv("RENDER_PATH", "backend/web/layouts/base.html")
 RENDER_WIDTH = int(os.getenv("RENDER_WIDTH", "800"))
@@ -52,15 +50,16 @@ RENDER_HEIGHT = int(os.getenv("RENDER_HEIGHT", "480"))
 # public base url (for absolute URLs from Cloud Run, optional)
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").rstrip("/")
 
-# Icon / weather theme (can be overridden by layout JSON -> meta.iconTheme)
+# weather icon pack
 DEFAULT_ICON_THEME = os.getenv("WEATHER_ICON_PACK", "happy-skies")
 
 # ================================================================
-# Google Cloud Storage
+# GCS client
 # ================================================================
 storage_enabled = False
 try:
     from google.cloud import storage
+
     gcs_client = storage.Client()
     gcs_bucket = gcs_client.bucket(GCS_BUCKET)
     storage_enabled = True
@@ -99,14 +98,19 @@ def gcs_write_bytes(key: str, data: bytes, content_type: str = "application/octe
 
 
 def make_public_url(path: str) -> str:
-    """Return an absolute or relative URL that the browser can request."""
+    """
+    Convert "gcs/..." or "assets/..." into a URL the browser can hit.
+    We'll always expose things under /gcs/... in FastAPI.
+    """
+    # normalise
+    path = path.lstrip("/")
     if PUBLIC_BASE_URL:
-        return f"{PUBLIC_BASE_URL.rstrip('/')}/{path.lstrip('/')}"
-    return f"/{path.lstrip('/')}"
+        return f"{PUBLIC_BASE_URL}/gcs/{path}"
+    return f"/gcs/{path}"
 
 
 # ================================================================
-# Playwright (ASYNC)
+# Playwright (async) setup
 # ================================================================
 from playwright.async_api import async_playwright
 
@@ -115,9 +119,7 @@ playwright_browser = None
 
 app = FastAPI(title="Kin:D Family Display Backend", version="2.0.0")
 
-# ================================================================
-# Local fallback jokes
-# ================================================================
+# local jokes
 LOCAL_JOKES = [
     "I told my wife she should embrace her mistakes — she gave me a hug.",
     "Why don’t skeletons fight each other? They don’t have the guts.",
@@ -127,9 +129,7 @@ LOCAL_JOKES = [
     "I asked my dog what’s two minus two. He said nothing.",
 ]
 
-# ================================================================
-# Startup / Shutdown
-# ================================================================
+
 @app.on_event("startup")
 async def startup_event():
     global playwright_app, playwright_browser, ENABLE_RENDERING
@@ -170,6 +170,7 @@ async def shutdown_event():
 # ================================================================
 async def get_weather(city: str) -> Dict[str, Any]:
     if not ENABLE_OPENWEATHER or not OPENWEATHER_KEY:
+        # built-in Darwin-ish fallback
         return {
             "temp": 33,
             "feels_like": 33,
@@ -206,6 +207,7 @@ async def get_weather(city: str) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Weather error: {e}")
 
+    # fallback
     return {
         "temp": 33,
         "feels_like": 33,
@@ -228,6 +230,7 @@ async def get_forecast(city: str, days: int = 2) -> List[Dict[str, Any]]:
         )
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.get(url)
+
         if r.status_code != 200:
             logger.warning(f"Forecast fetch failed {r.status_code}: {r.text[:120]}")
             return []
@@ -281,7 +284,6 @@ async def get_forecast(city: str, days: int = 2) -> List[Dict[str, Any]]:
 
         out = sorted(out, key=lambda x: x["date"])[:days]
         return out
-
     except Exception as e:
         logger.error(f"Forecast error: {e}")
         return []
@@ -324,6 +326,7 @@ INFO_PROVIDERS = {
 # Local preset loader
 # ================================================================
 def load_local_preset() -> Optional[Dict[str, Any]]:
+    """Used only if GCS layout is missing."""
     fallback_path = "backend/web/designer/presets/Theme 1.json"
     if os.path.exists(fallback_path):
         try:
@@ -335,6 +338,7 @@ def load_local_preset() -> Optional[Dict[str, Any]]:
 
 
 async def load_layout_for(username: Optional[str], device: Optional[str]) -> Optional[Dict[str, Any]]:
+    """Load layout JSON for a device (and username if enabled)."""
     if not device:
         device = "familydisplay"
 
@@ -361,28 +365,27 @@ async def load_layout_for(username: Optional[str], device: Optional[str]) -> Opt
 # ================================================================
 def pick_background_for_theme(theme: str) -> Optional[str]:
     """
-    Tries, in order:
-      1. pexels/current/{theme}_0.jpg
-      2. images/current/{theme}/0.jpg
-      3. images/backup/{theme}.jpg
-      4. images/backup/default.jpg
-    Returns *storage path* (without /gcs/) or None
+    Returns a bucket path (no /gcs/) or None
     """
     if not storage_enabled:
         return None
 
+    # 1) pexels/current/{theme}_0.jpg
     key1 = f"pexels/current/{theme}_0.jpg"
     if gcs_exists(key1):
         return key1
 
+    # 2) images/current/{theme}/0.jpg
     key2 = f"images/current/{theme}/0.jpg"
     if gcs_exists(key2):
         return key2
 
+    # 3) images/backup/{theme}.jpg
     key3 = f"images/backup/{theme}.jpg"
     if gcs_exists(key3):
         return key3
 
+    # 4) images/backup/default.jpg
     key4 = "images/backup/default.jpg"
     if gcs_exists(key4):
         return key4
@@ -400,13 +403,13 @@ async def build_render_data(
 ) -> Dict[str, Any]:
     today = dt.date.today().isoformat()
 
-    # 1) City selection
+    # city
     if CITY_MODE == "fetch" and layout_json and "city" in layout_json:
         city = layout_json.get("city", DEFAULT_CITY)
     else:
         city = DEFAULT_CITY
 
-    # 2) Icon theme
+    # icon theme
     icon_theme = DEFAULT_ICON_THEME
     if layout_json:
         meta = layout_json.get("meta") or {}
@@ -420,19 +423,15 @@ async def build_render_data(
         "iconTheme": icon_theme,
     }
 
-    # 3) Weather + forecast
+    # weather
     if INFO_PROVIDERS.get("weather"):
         current_weather = await get_weather(city)
         forecast = await get_forecast(city, days=2)
-
         icon_code = current_weather.get("icon", "01d")
-        icon_url = make_public_url(f"gcs/assets/weather-icons/{icon_theme}/{icon_code}.svg")
-        current_weather["icon_url"] = icon_url
-
+        current_weather["icon_url"] = make_public_url(f"assets/weather-icons/{icon_theme}/{icon_code}.svg")
         data["weather"] = current_weather
         data["forecast"] = forecast
     else:
-        icon_url = make_public_url(f"gcs/assets/weather-icons/{icon_theme}/01d.svg")
         data["weather"] = {
             "temp": 33,
             "feels_like": 33,
@@ -441,64 +440,45 @@ async def build_render_data(
             "wind": 5,
             "icon": "01d",
             "desc": "Sunny",
-            "icon_url": icon_url,
+            "icon_url": make_public_url(f"assets/weather-icons/{icon_theme}/01d.svg"),
         }
         data["forecast"] = []
 
-    # 4) Dad joke
+    # joke
     if INFO_PROVIDERS.get("joke"):
         data["dad_joke"] = await get_joke()
     else:
         data["dad_joke"] = random.choice(LOCAL_JOKES)
 
-    # 5) Optional providers
+    # calendar / sports placeholders
     if INFO_PROVIDERS.get("calendar"):
         data["calendar"] = await get_calendar()
     if INFO_PROVIDERS.get("sports"):
         data["sports"] = await get_sports()
 
-    # 6) Theme
+    # theme
     if THEMES:
         chosen_theme = random.choice(THEMES)
     else:
         chosen_theme = "abstract"
     data["theme"] = chosen_theme
 
-    # 7) Background: try to pick real file
+    # background
     bg_key = pick_background_for_theme(chosen_theme)
     if bg_key:
-        data["bg_url"] = make_public_url(f"gcs/{bg_key}")
+        data["bg_url"] = make_public_url(bg_key)
     else:
-        # final fallback to "pexels/current/<theme>_0.jpg"
-        data["bg_url"] = make_public_url(f"gcs/pexels/current/{chosen_theme}_0.jpg")
+        # default to pexels pattern
+        data["bg_url"] = make_public_url(f"pexels/current/{chosen_theme}_0.jpg")
 
-    # 8) SVG exposure
-    svg_urls: List[str] = []
-    svg_prefix = make_public_url("gcs/assets/svgs")
+    # expose layout to frontend (THIS is what the new base.html needs)
+    data["layout"] = layout_json or {}
 
-    try:
-        if storage_enabled:
-            for blob in gcs_client.list_blobs(GCS_BUCKET, prefix="assets/svgs/"):
-                name = blob.name.split("/")[-1]
-                if name.lower().endswith(".svg"):
-                    svg_urls.append(f"{svg_prefix}/{name}")
-        else:
-            local_dir = "backend/web/svgs"
-            if os.path.isdir(local_dir):
-                for f in os.listdir(local_dir):
-                    if f.lower().endswith(".svg"):
-                        svg_urls.append(f"{svg_prefix}/{f}")
-    except Exception as e:
-        logger.warning(f"SVG list failed in build_render_data: {e}")
-
-    if not svg_urls:
-        # hard fallback so Designer / base never breaks
-        svg_urls.append(f"{svg_prefix}/lemon.svg")
-
-    data["svgs"] = svg_urls
-    data["svg_base"] = svg_prefix
+    # also expose svg base in case Designer needs to know
+    data["svg_base"] = make_public_url("assets/svgs/")
 
     return data
+
 
 # ================================================================
 # Async renderer
@@ -537,26 +517,18 @@ def root():
 
 
 # ---------------------------------------------------------------
-# Serve ANY GCS object
+# Single GCS proxy (for images, svgs, fonts, etc.)
 # ---------------------------------------------------------------
 @app.get("/gcs/{path:path}")
-def get_gcs_asset(path: str):
-    """
-    Serve any object from the bucket at /gcs/<path>.
-    eg:
-      /gcs/pexels/current/abstract_0.jpg
-      /gcs/assets/weather-icons/happy-skies/01d.svg
-      /gcs/assets/svgs/lemon.svg
-    """
+def gcs_proxy(path: str):
     if not storage_enabled:
         raise HTTPException(status_code=500, detail="GCS not configured")
+    if not gcs_exists(path):
+        raise HTTPException(status_code=404, detail=f"not found: {path}")
 
-    blob = gcs_bucket.blob(path)
-    if not blob.exists():
-        raise HTTPException(status_code=404, detail=f"asset not found: {path}")
+    data = gcs_read_bytes(path)
 
-    data = blob.download_as_bytes()
-
+    # simple content-type guess
     if path.lower().endswith(".png"):
         ctype = "image/png"
     elif path.lower().endswith(".jpg") or path.lower().endswith(".jpeg"):
@@ -572,21 +544,15 @@ def get_gcs_asset(path: str):
 
 
 # ---------------------------------------------------------------
-# SPECIAL: serve a single SVG (local-first, then GCS)
+# Designer HTML
 # ---------------------------------------------------------------
-@app.get("/gcs/assets/svgs/{name}")
-async def serve_svg(name: str):
-    local_path = os.path.join("backend", "web", "svgs", name)
-    if os.path.exists(local_path):
-        return FileResponse(local_path, media_type="image/svg+xml")
-
-    if storage_enabled:
-        key = f"assets/svgs/{name}"
-        if gcs_exists(key):
-            data = gcs_read_bytes(key)
-            return Response(content=data, media_type="image/svg+xml")
-
-    raise HTTPException(status_code=404, detail=f"SVG not found: {name}")
+@app.get("/designer/", response_class=HTMLResponse)
+def get_designer():
+    path = "web/designer/overlay_designer_v3_full.html"
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read()
+    return "<h1>Designer not found</h1>"
 
 
 # ---------------------------------------------------------------
@@ -594,10 +560,10 @@ async def serve_svg(name: str):
 # ---------------------------------------------------------------
 @app.get("/v1/svgs")
 def list_svgs():
-    svg_prefix = make_public_url("gcs/assets/svgs")
+    svg_prefix = make_public_url("assets/svgs")
     svg_list: List[str] = []
 
-    # 1) try GCS
+    # 1) GCS
     if storage_enabled:
         try:
             for blob in gcs_client.list_blobs(GCS_BUCKET, prefix="assets/svgs/"):
@@ -607,8 +573,8 @@ def list_svgs():
         except Exception as e:
             logger.warning(f"/v1/svgs: GCS list failed: {e}")
 
-    # 2) try local
-    local_dir = os.path.join("backend", "web", "svgs")
+    # 2) local fallback
+    local_dir = "backend/web/svgs"
     if os.path.isdir(local_dir):
         for fname in os.listdir(local_dir):
             if fname.lower().endswith(".svg"):
@@ -621,18 +587,6 @@ def list_svgs():
         svg_list.append(f"{svg_prefix}/lemon.svg")
 
     return {"count": len(svg_list), "svgs": svg_list, "prefix": svg_prefix}
-
-
-# ---------------------------------------------------------------
-# Designer HTML
-# ---------------------------------------------------------------
-@app.get("/designer/", response_class=HTMLResponse)
-def get_designer():
-    path = "web/designer/overlay_designer_v3_full.html"
-    if os.path.exists(path):
-        with open(path, "r", encoding="utf-8") as f:
-            return f.read()
-    return "<h1>Designer not found</h1>"
 
 
 # ---------------------------------------------------------------
@@ -684,7 +638,7 @@ async def save_layout(device_id: str, request: Request, username: Optional[str] 
 
 
 # ---------------------------------------------------------------
-# Render data (for Designer Live Preview)
+# Render data (for live preview)
 # ---------------------------------------------------------------
 @app.get("/v1/render_data")
 async def v1_render_data(
@@ -716,6 +670,7 @@ async def v1_frame(
         logger.error(f"Frame render failed: {e}")
         raise HTTPException(status_code=500, detail="render failed")
 
+    # save rendered frame
     if storage_enabled:
         if ENABLE_EMAIL_USERS and username:
             save_key = f"users/{safe_email(username)}/devices/{device or 'default'}/renders/latest.png"
@@ -730,7 +685,7 @@ async def v1_frame(
 
 
 # ---------------------------------------------------------------
-# Manual render trigger
+# Manual render trigger (for Cloud Scheduler)
 # ---------------------------------------------------------------
 @app.get("/admin/render_now")
 async def admin_render_now(
@@ -767,7 +722,7 @@ async def admin_render_now(
 
 
 # ---------------------------------------------------------------
-# Pexels prefetch / cache rollover
+# Pexels prefetch
 # ---------------------------------------------------------------
 async def pexels_fetch_images(theme: str, limit: int = 8) -> list:
     if not ENABLE_PEXELS or not PEXELS_API_KEY:
@@ -800,6 +755,7 @@ async def admin_prefetch(token: str):
     saved = 0
 
     try:
+        # rollover
         if storage_enabled:
             prefix_current = "pexels/current/"
             prefix_cache = f"pexels/cache/{today}/"
@@ -812,6 +768,7 @@ async def admin_prefetch(token: str):
                     b.delete()
                 logger.info(f"Rolled over {len(blobs)} images to cache/{today}/")
 
+        # fetch for each theme
         for theme in THEMES:
             urls = await pexels_fetch_images(theme)
             for idx, url in enumerate(urls):
