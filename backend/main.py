@@ -479,6 +479,28 @@ async def build_render_data(
     else:
         data["bg_url"] = f"/gcs/pexels/current/{chosen_theme}_0.jpg"
 
+    # 8) SVG exposure (list and URL prefix)
+    svg_list = []
+    svg_prefix = f"{PUBLIC_BASE_URL}/gcs/assets/svgs" if PUBLIC_BASE_URL else "/gcs/assets/svgs"
+
+    try:
+        if storage_enabled:
+            for blob in gcs_client.list_blobs(GCS_BUCKET, prefix="assets/svgs/"):
+                name = blob.name.split("/")[-1]
+                if name.lower().endswith(".svg"):
+                    svg_list.append(f"{svg_prefix}/{name}")
+        else:
+            local_dir = "backend/web/svgs"
+            if os.path.isdir(local_dir):
+                for f in os.listdir(local_dir):
+                    if f.lower().endswith(".svg"):
+                        svg_list.append(f"{svg_prefix}/{f}")
+    except Exception as e:
+        logger.warning(f"SVG list failed: {e}")
+
+    data["svgs"] = svg_list
+    data["svg_base"] = svg_prefix
+
     return data
 
 # ================================================================
@@ -717,7 +739,62 @@ async def admin_render_now(
 
     return {"ok": True, "bytes": len(png_bytes)}
 
+# ---------------------------------------------------------------
+# Serve SVG assets (local + GCS)
+# ---------------------------------------------------------------
+from fastapi.responses import FileResponse  # ← already at top? if not, add
 
+@app.get("/gcs/assets/svgs/{name}")
+async def serve_svg(name: str):
+    """
+    Serve SVGs from:
+    1) local repo: backend/web/svgs/<name>
+    2) OR from bucket: assets/svgs/<name>
+    """
+    # 1) local first
+    local_path = os.path.join("backend", "web", "svgs", name)
+    if os.path.exists(local_path):
+        return FileResponse(local_path, media_type="image/svg+xml")
+
+    # 2) GCS fallback
+    if storage_enabled:
+        gcs_key = f"assets/svgs/{name}"
+        if gcs_exists(gcs_key):
+            data = gcs_read_bytes(gcs_key)
+            return Response(content=data, media_type="image/svg+xml")
+
+    # 3) nothing found
+    raise HTTPException(status_code=404, detail=f"SVG not found: {name}")
+
+# ---------------------------------------------------------------
+# SVG listing route (for Designer)
+# ---------------------------------------------------------------
+@app.get("/v1/svgs")
+async def list_svgs():
+    """
+    Return a JSON list of all available SVGs.
+    Looks in GCS under assets/svgs/ and in backend/web/svgs locally.
+    """
+    svg_list = []
+    svg_prefix = f"{PUBLIC_BASE_URL}/gcs/assets/svgs" if PUBLIC_BASE_URL else "/gcs/assets/svgs"
+
+    try:
+        if storage_enabled:
+            for blob in gcs_client.list_blobs(GCS_BUCKET, prefix="assets/svgs/"):
+                name = blob.name.split("/")[-1]
+                if name.lower().endswith(".svg"):
+                    svg_list.append(f"{svg_prefix}/{name}")
+        else:
+            local_dir = "backend/web/svgs"
+            if os.path.isdir(local_dir):
+                for f in os.listdir(local_dir):
+                    if f.lower().endswith(".svg"):
+                        svg_list.append(f"{svg_prefix}/{f}")
+    except Exception as e:
+        logger.warning(f"SVG list error: {e}")
+
+    return {"count": len(svg_list), "svgs": svg_list}
+    
 # ---------------------------------------------------------------
 # Pexels prefetch
 # ---------------------------------------------------------------
