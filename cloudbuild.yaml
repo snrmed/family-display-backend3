@@ -62,5 +62,14 @@ images:
 # ------------------------------------------------------------
 timeout: 1800s
 options:
+  machineType: 'n1-standard-1'
+  diskSizeGb: 20
   logging: CLOUD_LOGGING_ONLY
-  machineType: 'n1-standard-1'   # faster builds for Playwright/Chromium layers
+  substitutionOption: ALLOW_LOOSE
+  dynamicSubstitutions: true
+  # 👇 cache control
+  env:
+    - DOCKER_BUILDKIT=1
+  # this tells Cloud Build to use the registry as a cache source/destination
+  dockerCache:
+    usage: "CACHE_AND_PUSH"
