@@ -62,7 +62,6 @@ images:
 # ------------------------------------------------------------
 timeout: 1800s
 options:
-  machineType: 'e2-medium'
   diskSizeGb: 20
   logging: CLOUD_LOGGING_ONLY
   substitutionOption: ALLOW_LOOSE
