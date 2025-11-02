@@ -550,24 +550,49 @@ def get_designer():
 # ---------------------------------------------------------------
 @app.get("/v1/svgs")
 def list_svgs():
+    """
+    Return a JSON list of all available SVGs.
+
+    Priority:
+      1. GCS: assets/svgs/*
+      2. Local: backend/web/svgs/*
+      3. Hard fallback: lemon.svg
+    """
+    # build prefix exactly like the other assets
     svg_prefix = make_public_url("gcs/assets/svgs")
     svg_list: List[str] = []
+
+    # 1) try GCS (may fail if SA cannot list)
     try:
         if storage_enabled:
             for blob in gcs_client.list_blobs(GCS_BUCKET, prefix="assets/svgs/"):
                 name = blob.name.split("/")[-1]
                 if name.lower().endswith(".svg"):
                     svg_list.append(f"{svg_prefix}/{name}")
-        else:
-            local_dir = "backend/web/svgs"
-            if os.path.isdir(local_dir):
-                for f in os.listdir(local_dir):
-                    if f.lower().endswith(".svg"):
-                        svg_list.append(f"{svg_prefix}/{f}")
     except Exception as e:
-        logger.warning(f"SVG list error: {e}")
-    return {"count": len(svg_list), "svgs": svg_list}
+        logger.warning(f"/v1/svgs: GCS list failed: {e}")
 
+    # 2) local fallback
+    try:
+        local_dir = "backend/web/svgs"
+        if os.path.isdir(local_dir):
+            for f in os.listdir(local_dir):
+                if f.lower().endswith(".svg"):
+                    url = f"{svg_prefix}/{f}"
+                    if url not in svg_list:  # avoid dupes if both GCS and local have same file
+                        svg_list.append(url)
+    except Exception as e:
+        logger.warning(f"/v1/svgs: local scan failed: {e}")
+
+    # 3) hard fallback so Designer never 500s
+    if not svg_list:
+        svg_list.append(f"{svg_prefix}/lemon.svg")
+
+    return {
+        "count": len(svg_list),
+        "svgs": svg_list,
+        "prefix": svg_prefix,
+    }
 # ---------------------------------------------------------------
 # Layout management
 # ---------------------------------------------------------------
