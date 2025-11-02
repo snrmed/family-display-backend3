@@ -13,7 +13,12 @@ from typing import Optional, Dict, Any, List
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request, Query
-from fastapi.responses import JSONResponse, HTMLResponse, Response
+from fastapi.responses import (
+    JSONResponse,
+    HTMLResponse,
+    Response,
+    FileResponse,
+)
 
 # ================================================================
 # Logging / Configuration
@@ -61,6 +66,7 @@ DEFAULT_ICON_THEME = os.getenv("WEATHER_ICON_PACK", "happy-skies")
 storage_enabled = False
 try:
     from google.cloud import storage
+
     gcs_client = storage.Client()
     gcs_bucket = gcs_client.bucket(GCS_BUCKET)
     storage_enabled = True
@@ -115,6 +121,9 @@ playwright_browser = None
 
 app = FastAPI(title="Kin:D Family Display Backend", version="2.0.0")
 
+# ================================================================
+# Local fallback jokes
+# ================================================================
 LOCAL_JOKES = [
     "I told my wife she should embrace her mistakes — she gave me a hug.",
     "Why don’t skeletons fight each other? They don’t have the guts.",
@@ -352,7 +361,7 @@ async def load_layout_for(username: Optional[str], device: Optional[str]) -> Opt
 
 
 # ================================================================
-# Background picker  (THIS is the bit that fixes Pexels not showing)
+# Background picker
 # ================================================================
 def pick_background_for_theme(theme: str) -> Optional[str]:
     """
@@ -361,27 +370,23 @@ def pick_background_for_theme(theme: str) -> Optional[str]:
       2. images/current/{theme}/0.jpg
       3. images/backup/{theme}.jpg
       4. images/backup/default.jpg
-    Returns *storage path* (without /gcs/) or None
+    Returns storage path or None.
     """
     if not storage_enabled:
         return None
 
-    # 1) pexels
     key1 = f"pexels/current/{theme}_0.jpg"
     if gcs_exists(key1):
         return key1
 
-    # 2) local current images
     key2 = f"images/current/{theme}/0.jpg"
     if gcs_exists(key2):
         return key2
 
-    # 3) backup per theme
     key3 = f"images/backup/{theme}.jpg"
     if gcs_exists(key3):
         return key3
 
-    # 4) global backup
     key4 = "images/backup/default.jpg"
     if gcs_exists(key4):
         return key4
@@ -397,22 +402,20 @@ async def build_render_data(
     device: Optional[str],
     layout_json: Optional[Dict[str, Any]],
 ) -> Dict[str, Any]:
-    """Aggregate all provider data into one JSON payload."""
     today = dt.date.today().isoformat()
 
-    # 1) City selection
+    # city
     if CITY_MODE == "fetch" and layout_json and "city" in layout_json:
         city = layout_json.get("city", DEFAULT_CITY)
     else:
         city = DEFAULT_CITY
 
-    # 2) Icon theme (can come from layout_json.meta.iconTheme)
+    # icon theme
     icon_theme = DEFAULT_ICON_THEME
     if layout_json:
         meta = layout_json.get("meta") or {}
         icon_theme = meta.get("iconTheme", icon_theme)
 
-    # start payload
     data: Dict[str, Any] = {
         "date": today,
         "city": city,
@@ -421,23 +424,19 @@ async def build_render_data(
         "iconTheme": icon_theme,
     }
 
-    # 3) Weather + forecast
+    # weather
     if INFO_PROVIDERS.get("weather"):
         current_weather = await get_weather(city)
         forecast = await get_forecast(city, days=2)
-
-        # build icon URL based on selected pack
         icon_code = current_weather.get("icon", "01d")
         if PUBLIC_BASE_URL:
             icon_url = f"{PUBLIC_BASE_URL}/gcs/assets/weather-icons/{icon_theme}/{icon_code}.svg"
         else:
             icon_url = f"/gcs/assets/weather-icons/{icon_theme}/{icon_code}.svg"
         current_weather["icon_url"] = icon_url
-
         data["weather"] = current_weather
         data["forecast"] = forecast
     else:
-        # fallback weather
         if PUBLIC_BASE_URL:
             icon_url = f"{PUBLIC_BASE_URL}/gcs/assets/weather-icons/{icon_theme}/01d.svg"
         else:
@@ -454,35 +453,42 @@ async def build_render_data(
         }
         data["forecast"] = []
 
-    # 4) Dad joke
+    # joke
     if INFO_PROVIDERS.get("joke"):
         data["dad_joke"] = await get_joke()
     else:
         data["dad_joke"] = random.choice(LOCAL_JOKES)
 
-    # 5) future providers
+    # future
     if INFO_PROVIDERS.get("calendar"):
         data["calendar"] = await get_calendar()
     if INFO_PROVIDERS.get("sports"):
         data["sports"] = await get_sports()
 
-    # 6) ALWAYS set a theme before using it
+    # theme
     if THEMES:
         chosen_theme = random.choice(THEMES)
     else:
         chosen_theme = "abstract"
     data["theme"] = chosen_theme
 
-    # 7) background URL from theme
-    if PUBLIC_BASE_URL:
-        data["bg_url"] = f"{PUBLIC_BASE_URL}/gcs/pexels/current/{chosen_theme}_0.jpg"
+    # background
+    bg_key = pick_background_for_theme(chosen_theme)
+    if bg_key:
+        if PUBLIC_BASE_URL:
+            data["bg_url"] = f"{PUBLIC_BASE_URL}/gcs/{bg_key}"
+        else:
+            data["bg_url"] = f"/gcs/{bg_key}"
     else:
-        data["bg_url"] = f"/gcs/pexels/current/{chosen_theme}_0.jpg"
+        # last resort
+        if PUBLIC_BASE_URL:
+            data["bg_url"] = f"{PUBLIC_BASE_URL}/gcs/pexels/current/{chosen_theme}_0.jpg"
+        else:
+            data["bg_url"] = f"/gcs/pexels/current/{chosen_theme}_0.jpg"
 
-    # 8) SVG exposure (list and URL prefix)
-    svg_list = []
-    svg_prefix = f"{PUBLIC_BASE_URL}/gcs/assets/svgs" if PUBLIC_BASE_URL else "/gcs/assets/svgs"
-
+    # SVG exposure
+    svg_list: List[str] = []
+    svg_prefix = f"{PUBLIC_BASE_URL}/assets/svgs" if PUBLIC_BASE_URL else "/assets/svgs"
     try:
         if storage_enabled:
             for blob in gcs_client.list_blobs(GCS_BUCKET, prefix="assets/svgs/"):
@@ -502,6 +508,7 @@ async def build_render_data(
     data["svg_base"] = svg_prefix
 
     return data
+
 
 # ================================================================
 # Async renderer
@@ -540,46 +547,13 @@ def root():
 
 
 # ---------------------------------------------------------------
-# NEW: serve GCS files to browser  (/gcs/{path...})
-# ---------------------------------------------------------------
-@app.get("/gcs/{path:path}")
-def gcs_proxy(path: str):
-    if not storage_enabled:
-        raise HTTPException(status_code=500, detail="GCS not configured")
-    if not gcs_exists(path):
-        raise HTTPException(status_code=404, detail="not found")
-    data = gcs_read_bytes(path)
-    # cheap content-type guess
-    if path.lower().endswith(".png"):
-        ct = "image/png"
-    elif path.lower().endswith(".jpg") or path.lower().endswith(".jpeg"):
-        ct = "image/jpeg"
-    elif path.lower().endswith(".svg"):
-        ct = "image/svg+xml"
-    else:
-        ct = "application/octet-stream"
-    return Response(content=data, media_type=ct, headers={"Cache-Control": "public, max-age=3600"})
-
-
-# ---------------------------------------------------------------
-# Designer HTML
-# ---------------------------------------------------------------
-@app.get("/designer/", response_class=HTMLResponse)
-def get_designer():
-    path = "web/designer/overlay_designer_v3_full.html"
-    if os.path.exists(path):
-        with open(path, "r", encoding="utf-8") as f:
-            return f.read()
-    return "<h1>Designer not found</h1>"
-
-# ---------------------------------------------------------------
-# GCS asset proxy (serves images, svgs, fonts from the bucket)
+# GCS asset proxy (single version)
 # ---------------------------------------------------------------
 @app.get("/gcs/{path:path}")
 def get_gcs_asset(path: str):
     """
     Serve any object from the bucket at /gcs/<path>.
-    Example:
+    Examples:
       /gcs/pexels/current/abstract_0.jpg
       /gcs/assets/weather-icons/happy-skies/01d.svg
       /gcs/assets/fonts/Roboto/Roboto-Regular.ttf
@@ -593,7 +567,6 @@ def get_gcs_asset(path: str):
 
     data = blob.download_as_bytes()
 
-    # best-effort content type
     if path.endswith(".svg"):
         ctype = "image/svg+xml"
     elif path.endswith(".png"):
@@ -607,7 +580,77 @@ def get_gcs_asset(path: str):
     else:
         ctype = "application/octet-stream"
 
-    return Response(content=data, media_type=ctype)
+    return Response(content=data, media_type=ctype, headers={"Cache-Control": "public, max-age=3600"})
+
+
+# ---------------------------------------------------------------
+# Designer HTML
+# ---------------------------------------------------------------
+@app.get("/designer/", response_class=HTMLResponse)
+def get_designer():
+    path = "web/designer/overlay_designer_v3_full.html"
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read()
+    return "<h1>Designer not found</h1>"
+
+
+# ---------------------------------------------------------------
+# Serve SVG assets (local + GCS) on /assets/svgs/<name>
+# ---------------------------------------------------------------
+@app.get("/assets/svgs/{name}")
+async def serve_svg(name: str):
+    """
+    Serve SVGs from:
+    1) local repo: backend/web/svgs/<name>
+    2) OR from bucket: assets/svgs/<name>
+    """
+    # 1) local first
+    local_path = os.path.join("backend", "web", "svgs", name)
+    if os.path.exists(local_path):
+        return FileResponse(local_path, media_type="image/svg+xml")
+
+    # 2) GCS fallback
+    if storage_enabled:
+        gcs_key = f"assets/svgs/{name}"
+        if gcs_exists(gcs_key):
+            data = gcs_read_bytes(gcs_key)
+            return Response(content=data, media_type="image/svg+xml")
+
+    # 3) nothing found
+    raise HTTPException(status_code=404, detail=f"SVG not found: {name}")
+
+
+# ---------------------------------------------------------------
+# SVG listing route (for Designer)
+# ---------------------------------------------------------------
+@app.get("/v1/svgs")
+async def list_svgs():
+    """
+    Return a JSON list of all available SVGs.
+    Looks in GCS under assets/svgs/ and in backend/web/svgs locally.
+    Designer will show /assets/svgs/... directly.
+    """
+    svg_list: List[str] = []
+    svg_prefix = f"{PUBLIC_BASE_URL}/assets/svgs" if PUBLIC_BASE_URL else "/assets/svgs"
+
+    try:
+        if storage_enabled:
+            for blob in gcs_client.list_blobs(GCS_BUCKET, prefix="assets/svgs/"):
+                name = blob.name.split("/")[-1]
+                if name.lower().endswith(".svg"):
+                    svg_list.append(f"{svg_prefix}/{name}")
+        else:
+            local_dir = "backend/web/svgs"
+            if os.path.isdir(local_dir):
+                for f in os.listdir(local_dir):
+                    if f.lower().endswith(".svg"):
+                        svg_list.append(f"{svg_prefix}/{f}")
+    except Exception as e:
+        logger.warning(f"SVG list error: {e}")
+
+    return {"count": len(svg_list), "svgs": svg_list}
+
 
 # ---------------------------------------------------------------
 # Layout management
@@ -658,7 +701,7 @@ async def save_layout(device_id: str, request: Request, username: Optional[str] 
 
 
 # ---------------------------------------------------------------
-# Render data
+# Render data (for Designer Live Preview)
 # ---------------------------------------------------------------
 @app.get("/v1/render_data")
 async def v1_render_data(
@@ -704,7 +747,7 @@ async def v1_frame(
 
 
 # ---------------------------------------------------------------
-# Manual render
+# Manual render trigger
 # ---------------------------------------------------------------
 @app.get("/admin/render_now")
 async def admin_render_now(
@@ -739,64 +782,9 @@ async def admin_render_now(
 
     return {"ok": True, "bytes": len(png_bytes)}
 
-# ---------------------------------------------------------------
-# Serve SVG assets (local + GCS)
-# ---------------------------------------------------------------
-from fastapi.responses import FileResponse  # ← already at top? if not, add
-
-@app.get("/gcs/assets/svgs/{name}")
-async def serve_svg(name: str):
-    """
-    Serve SVGs from:
-    1) local repo: backend/web/svgs/<name>
-    2) OR from bucket: assets/svgs/<name>
-    """
-    # 1) local first
-    local_path = os.path.join("backend", "web", "svgs", name)
-    if os.path.exists(local_path):
-        return FileResponse(local_path, media_type="image/svg+xml")
-
-    # 2) GCS fallback
-    if storage_enabled:
-        gcs_key = f"assets/svgs/{name}"
-        if gcs_exists(gcs_key):
-            data = gcs_read_bytes(gcs_key)
-            return Response(content=data, media_type="image/svg+xml")
-
-    # 3) nothing found
-    raise HTTPException(status_code=404, detail=f"SVG not found: {name}")
 
 # ---------------------------------------------------------------
-# SVG listing route (for Designer)
-# ---------------------------------------------------------------
-@app.get("/v1/svgs")
-async def list_svgs():
-    """
-    Return a JSON list of all available SVGs.
-    Looks in GCS under assets/svgs/ and in backend/web/svgs locally.
-    """
-    svg_list = []
-    svg_prefix = f"{PUBLIC_BASE_URL}/gcs/assets/svgs" if PUBLIC_BASE_URL else "/gcs/assets/svgs"
-
-    try:
-        if storage_enabled:
-            for blob in gcs_client.list_blobs(GCS_BUCKET, prefix="assets/svgs/"):
-                name = blob.name.split("/")[-1]
-                if name.lower().endswith(".svg"):
-                    svg_list.append(f"{svg_prefix}/{name}")
-        else:
-            local_dir = "backend/web/svgs"
-            if os.path.isdir(local_dir):
-                for f in os.listdir(local_dir):
-                    if f.lower().endswith(".svg"):
-                        svg_list.append(f"{svg_prefix}/{f}")
-    except Exception as e:
-        logger.warning(f"SVG list error: {e}")
-
-    return {"count": len(svg_list), "svgs": svg_list}
-    
-# ---------------------------------------------------------------
-# Pexels prefetch
+# Pexels prefetch / cache rollover
 # ---------------------------------------------------------------
 async def pexels_fetch_images(theme: str, limit: int = 8) -> list:
     if not ENABLE_PEXELS or not PEXELS_API_KEY:
