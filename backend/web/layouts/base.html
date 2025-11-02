@@ -2,28 +2,28 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Kin;D Family Display</title>
+  <title>Kin:D Display</title>
   <meta name="viewport" content="width=800, initial-scale=1.0" />
   <style>
     :root {
-      --bg: #000;
-      --card-bg: rgba(255,255,255,0.9);
-      --text-color: #111;
-      --radius: 16px;
-      --font-main: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --w: 800px;
+      --h: 480px;
+      --card-bg: #e5e5e5;
+      --card-radius: 16px;
+      --card-pad: 16px 20px;
+      --text: #000;
     }
-
-    * { box-sizing: border-box; font-family: var(--font-main); }
+    * { box-sizing: border-box; }
     body {
       margin: 0;
-      background: var(--bg);
-      width: 800px;
-      height: 480px;
+      width: var(--w);
+      height: var(--h);
+      background: #111;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       overflow: hidden;
       position: relative;
     }
-
-    /* Background image */
+    /* background image */
     #bgImg {
       position: absolute;
       inset: 0;
@@ -31,149 +31,165 @@
       height: 100%;
       object-fit: cover;
       z-index: 0;
-      display: none;
     }
-
-    /* Weather icon slot (Designer can resize) */
-    #weatherIcon {
+    /* optional SVG asset – sits above background but below cards */
+    #svgAsset {
+      position: absolute;
+      top: 40px;
+      right: 40px;
+      width: 120px;
+      height: 120px;
+      object-fit: contain;
+      z-index: 2;
+      display: none; /* shown only if svg_url present */
+    }
+    /* top-right chip */
+    #topChip {
       position: absolute;
       top: 16px;
       right: 16px;
-      width: 60px;
-      height: 60px;
-      background-size: contain;
-      background-repeat: no-repeat;
-      background-position: center;
-      border-radius: 12px;
-      z-index: 3;
-      display: none;
-    }
-
-    /* Weather card */
-    #weatherCard {
-      position: absolute;
-      left: 16px;
-      bottom: 80px;
-      width: 360px;
-      background: var(--card-bg);
-      border-radius: var(--radius);
-      padding: 16px 18px;
-      color: var(--text-color);
-      z-index: 2;
-    }
-
-    #weatherCard .city {
-      font-weight: 600;
-      margin-bottom: 8px;
-      font-size: 16px;
-    }
-
-    #weatherCard .temp {
-      font-size: 20px;
-      font-weight: 500;
-      margin-bottom: 4px;
-    }
-
-    #weatherCard .line {
-      font-size: 14px;
-    }
-
-    /* Dad joke */
-    #jokeCard {
-      position: absolute;
-      right: 16px;
-      bottom: 16px;
-      width: 400px;
-      min-height: 60px;
-      background: var(--card-bg);
-      border-radius: var(--radius);
-      padding: 14px 18px;
-      color: var(--text-color);
-      font-size: 15px;
-      display: flex;
-      align-items: center;
-      z-index: 2;
-    }
-
-    /* Small Kin:D badge */
-    #badge {
-      position: absolute;
-      top: 16px;
-      left: 16px;
       width: 56px;
       height: 56px;
-      border-radius: 18px;
-      background: var(--card-bg);
+      background: rgba(255,255,255,0.6);
+      border-radius: 20px;
       display: flex;
       align-items: center;
       justify-content: center;
+      font-size: 28px;
+      z-index: 5;
+    }
+    /* bottom cards */
+    .card {
+      position: absolute;
+      background: var(--card-bg);
+      border-radius: var(--card-radius);
+      padding: var(--card-pad);
+      color: var(--text);
+      z-index: 5;
+    }
+    #weatherCard {
+      left: 16px;
+      bottom: 16px;
+      width: 380px;
+      min-height: 140px;
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+    }
+    #weatherIcon {
+      width: 56px;
+      height: 56px;
+      object-fit: contain;
+      display: none; /* only show if icon_url exists */
+    }
+    #jokeCard {
+      right: 16px;
+      bottom: 16px;
+      width: 420px;
+      min-height: 72px;
+      display: flex;
+      align-items: center;
+    }
+    h2, p {
+      margin: 0;
+      padding: 0;
+    }
+    .city {
       font-weight: 600;
-      z-index: 4;
-      color: var(--text-color);
+      margin-bottom: 6px;
+    }
+    .line {
+      font-size: 14px;
+      margin-top: 3px;
     }
   </style>
 </head>
-
 <body>
-  <!-- Background -->
-  <img id="bgImg" alt="background">
+  <!-- background image -->
+  <img id="bgImg" alt="background" />
 
-  <!-- Weather icon -->
-  <div id="weatherIcon"></div>
+  <!-- optional SVG overlay (from /gcs/assets/svgs/...) -->
+  <img id="svgAsset" alt="decor" />
 
-  <!-- Weather info -->
-  <div id="weatherCard">
-    <div class="city" id="cityEl">—</div>
-    <div class="temp" id="tempEl">• --°C</div>
-    <div class="line" id="humEl">Humidity: --%</div>
-    <div class="line" id="windEl">Wind: -- km/h</div>
-    <div class="line" id="rainEl">Rain: --</div>
+  <!-- small top-right chip -->
+  <div id="topChip">–</div>
+
+  <!-- weather card -->
+  <div id="weatherCard" class="card">
+    <img id="weatherIcon" alt="icon" />
+    <div id="weatherText">
+      <div class="city" id="cityTxt">--</div>
+      <div class="line" id="tempTxt">• --°C</div>
+      <div class="line" id="humidTxt">Humidity: --%</div>
+      <div class="line" id="windTxt">Wind: -- km/h</div>
+      <div class="line" id="rainTxt">Rain: No data</div>
+    </div>
   </div>
 
-  <!-- Dad joke -->
-  <div id="jokeCard">No joke today.</div>
-
-  <!-- Badge -->
-  <div id="badge">Kin;D</div>
+  <!-- joke card -->
+  <div id="jokeCard" class="card">
+    <p id="jokeTxt">No joke today.</p>
+  </div>
 
   <script>
-    (function init() {
-      // 1️⃣ Parse ?data= JSON from URL
-      const params = new URLSearchParams(window.location.search);
-      const raw = params.get("data");
-      if (!raw) return;
-      let data;
-      try { data = JSON.parse(raw); }
-      catch(e){ console.error("Bad data", e); return; }
-
-      // 2️⃣ Background
-      const bg = document.getElementById("bgImg");
-      if (data.bg_url) {
-        bg.src = data.bg_url;
-        bg.style.display = "block";
+    // helper: read ?data=... from URL
+    function getRenderData() {
+      const url = new URL(window.location.href);
+      const raw = url.searchParams.get("data");
+      if (!raw) return null;
+      try {
+        return JSON.parse(raw);
+      } catch (e) {
+        console.warn("bad data payload", e);
+        return null;
       }
+    }
 
-      // 3️⃣ Weather
-      const w = data.weather || {};
-      document.getElementById("cityEl").textContent = data.city || "—";
-      document.getElementById("tempEl").textContent = `• ${w.temp ?? "--"}°C`;
-      document.getElementById("humEl").textContent = `Humidity: ${w.humidity ?? "--"}%`;
-      document.getElementById("windEl").textContent = `Wind: ${Math.round((w.wind ?? 0) * 3.6)} km/h`;
-      document.getElementById("rainEl").textContent = `Rain: ${w.rain > 0 ? w.rain + " mm" : "—"}`;
+    const data = getRenderData() || {};
 
-      // 4️⃣ Weather icon (Designer-friendly div)
-      const icon = document.getElementById("weatherIcon");
-      if (w.icon_url) {
-        icon.style.backgroundImage = `url('${w.icon_url}')`;
-        icon.style.display = "block";
-      }
+    // 1) background
+    const bg = document.getElementById("bgImg");
+    if (data.bg_url) {
+      bg.src = data.bg_url;
+    } else {
+      // fallback solid color
+      bg.style.background = "#222";
+    }
 
-      // 5️⃣ Dad joke
-      if (data.dad_joke) document.getElementById("jokeCard").textContent = data.dad_joke;
+    // 2) optional SVG asset
+    const svgEl = document.getElementById("svgAsset");
+    if (data.svg_url) {
+      svgEl.src = data.svg_url;
+      svgEl.style.display = "block";
+    }
 
-      // 6️⃣ Badge (theme / pack indicator for debugging)
-      document.getElementById("badge").textContent = data.iconTheme ? data.iconTheme.charAt(0).toUpperCase() : "K";
-    })();
+    // 3) weather
+    const w = data.weather || {};
+    // icon
+    const iconImg = document.getElementById("weatherIcon");
+    if (w.icon_url) {
+      iconImg.src = w.icon_url;
+      iconImg.style.display = "block";
+    }
+    // text
+    document.getElementById("cityTxt").textContent = data.city || "—";
+    document.getElementById("tempTxt").textContent =
+      "• " + (w.temp !== undefined ? w.temp + "°C" : "--°C");
+    document.getElementById("humidTxt").textContent =
+      "Humidity: " + (w.humidity !== undefined ? w.humidity + "%" : "--%");
+    // wind in km/h
+    const kmh = w.wind !== undefined ? Math.round(w.wind * 3.6) : null;
+    document.getElementById("windTxt").textContent =
+      "Wind: " + (kmh !== null ? kmh + " km/h" : "-- km/h");
+    document.getElementById("rainTxt").textContent =
+      "Rain: " + (w.rain && w.rain > 0 ? w.rain + " mm" : "No rain");
+
+    // 4) joke
+    document.getElementById("jokeTxt").textContent =
+      data.dad_joke || "No joke today.";
+
+    // 5) top chip = theme (for debugging)
+    document.getElementById("topChip").textContent = data.theme ? data.theme[0].toUpperCase() : "–";
   </script>
 </body>
 </html>
