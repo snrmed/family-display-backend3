@@ -63,4 +63,4 @@ images:
 timeout: 1800s
 options:
   logging: CLOUD_LOGGING_ONLY
-  machineType: n1-standard-1   # faster builds for Playwright/Chromium layers
+  machineType: 'n1-standard-1'   # faster builds for Playwright/Chromium layers
