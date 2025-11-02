@@ -70,5 +70,3 @@ options:
   env:
     - DOCKER_BUILDKIT=1
   # this tells Cloud Build to use the registry as a cache source/destination
-  dockerCache:
-    usage: "CACHE_AND_PUSH"
