@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Kin:D Designer v4</title>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <style>
 :root{
   --bg:#0a0a0a;
@@ -915,7 +916,7 @@ button:disabled:hover {
 
 <script>
 // --- Globals ---
-const GRID_SIZE = 20;
+const GRID_SIZE = 10;
 const FORCE_SETUP_ON_LOAD = true;
 const canvas = document.getElementById('canvas');
 const gridOverlay = document.getElementById('gridOverlay');
@@ -960,6 +961,9 @@ const DEFAULT_PEXELS_CATEGORIES = ['abstract', 'geometric', 'kids-shapes', 'mini
 const pexelsCategorySelect = document.getElementById('pexelsCategorySelect');
 let availablePexelsCategories = [...DEFAULT_PEXELS_CATEGORIES];
 let currentPexelsCategory = availablePexelsCategories[0] || '';
+let currentWeatherTheme = 'happy-skies';
+let availableWeatherThemes = [];
+let fineMovementActive = false;
 
 // --- Setup Modal Logic ---
 function showSetupModal() {
@@ -1069,7 +1073,10 @@ function parsePx(str) {
 }
 
 function snap(val) {
-  return snapEnabled ? Math.round(val / GRID_SIZE) * GRID_SIZE : Math.round(val);
+  if (!snapEnabled || fineMovementActive) {
+    return Math.round(val);
+  }
+  return Math.round(val / GRID_SIZE) * GRID_SIZE;
 }
 
 function setStatus(msg, timeout = 0, isError = false) {
@@ -1168,6 +1175,99 @@ function rgbToHex(rgb) {
   return '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
 }
 
+function getDynamicTextForType(type) {
+  if (!renderData) return '';
+  const weather = renderData.weather || {};
+
+  switch (type) {
+    case 'TEMP':
+      return weather.temp != null ? `${weather.temp}°C` : '--°C';
+    case 'FEELS_LIKE':
+      return weather.feels_like != null ? `${weather.feels_like}°C` : '--°C';
+    case 'HUMIDITY':
+      return weather.humidity != null ? `Humidity: ${weather.humidity}%` : 'Humidity: --%';
+    case 'RAIN':
+      return weather.rain != null ? `Rain: ${weather.rain}mm` : 'Rain: --mm';
+    case 'WIND':
+      return weather.wind != null ? `Wind: ${weather.wind}km/h` : 'Wind: --km/h';
+    case 'WEATHER_DESC':
+      return weather.desc || 'Sunny';
+    case 'CITY':
+    case 'WEATHER_CITY':
+      return weather.city || 'City';
+    case 'WEATHER_MINMAX':
+      if (weather.temp_min != null && weather.temp_max != null) {
+        return `${weather.temp_min}° / ${weather.temp_max}°`;
+      }
+      return '--° / --°';
+    case 'DATE':
+      return renderData.date || '';
+    case 'JOKE':
+      return renderData.dad_joke || 'No joke today.';
+    default:
+      return '';
+  }
+}
+
+function applyDynamicTextToElement(el) {
+  if (!el || !renderData) return;
+  if (!(el.classList.contains('text') || el.classList.contains('icon'))) return;
+
+  const type = el.dataset.type || 'CUSTOM';
+  if (type === 'CUSTOM') return;
+
+  const text = getDynamicTextForType(type);
+  setElText(el, text || '');
+  if (selectedEl === el) {
+    const textInput = document.getElementById('textElContent');
+    if (textInput) {
+      textInput.value = getElText(el);
+    }
+  }
+}
+
+function applyDynamicTextToCanvas() {
+  if (!renderData) return;
+  const elements = canvas.querySelectorAll('.el.text, .el.icon');
+  elements.forEach(applyDynamicTextToElement);
+}
+
+function updateWeatherThemeSelection() {
+  const selector = document.getElementById('weatherThemeSelector');
+  if (!selector) return;
+
+  selector.querySelectorAll('.selector-item[data-placeholder="true"]').forEach(item => {
+    const theme = item.dataset.theme;
+    if (!theme) return;
+    const occurrences = selector.querySelectorAll(`.selector-item[data-theme="${theme}"]`);
+    if (occurrences.length > 1) {
+      item.remove();
+    }
+  });
+
+  if (currentWeatherTheme && !selector.querySelector(`.selector-item[data-theme="${currentWeatherTheme}"]`)) {
+    const placeholder = document.createElement('div');
+    placeholder.className = 'selector-item selected';
+    placeholder.dataset.theme = currentWeatherTheme;
+    placeholder.dataset.placeholder = 'true';
+    placeholder.innerHTML = `
+      <div class="selector-item-icon">🌤</div>
+      <div class="selector-item-label">${currentWeatherTheme}</div>
+    `;
+    selector.prepend(placeholder);
+  }
+
+  selector.querySelectorAll('.selector-item').forEach(item => {
+    const theme = item.dataset.theme;
+    if (!theme) return;
+    if (theme === currentWeatherTheme) {
+      item.classList.add('selected');
+    } else {
+      item.classList.remove('selected');
+    }
+  });
+}
+
 function drawGrid() {
   gridOverlay.innerHTML = '';
   const w = 800;
@@ -1218,6 +1318,11 @@ async function fetchRenderData() {
       svgLibraryBase = renderData.svg_base;
     }
 
+    const themeFromLayout = renderData?.layout?.meta?.iconTheme;
+    if (themeFromLayout) {
+      currentWeatherTheme = themeFromLayout;
+    }
+
     const metaCategory = renderData?.layout?.meta?.pexelsCategory;
     if (metaCategory) {
       currentPexelsCategory = metaCategory;
@@ -1230,11 +1335,15 @@ async function fetchRenderData() {
     availableInfoTypes = ['CUSTOM'];
     if (renderData.weather) {
       availableInfoTypes.push('TEMP', 'FEELS_LIKE', 'HUMIDITY', 'RAIN', 'WIND', 'WEATHER_DESC', 'CITY');
+      if (renderData.weather.temp_min != null && renderData.weather.temp_max != null) {
+        availableInfoTypes.push('WEATHER_MINMAX');
+      }
     }
     if (renderData.date) availableInfoTypes.push('DATE');
     if (renderData.dad_joke) availableInfoTypes.push('JOKE');
-    
+
     updateInfoTypeDropdown();
+    applyDynamicTextToCanvas();
     return renderData;
   } catch (error) {
     console.warn('Failed to fetch render data:', error.message);
@@ -1257,6 +1366,7 @@ function updateInfoTypeDropdown() {
     'RAIN': 'Rain',
     'WIND': 'Wind Speed',
     'WEATHER_DESC': 'Weather Description',
+    'WEATHER_MINMAX': 'Low / High',
     'CITY': 'City Name',
     'DATE': 'Date',
     'JOKE': 'Dad Joke'
@@ -1535,6 +1645,7 @@ function addElement(kind, x, y, w, h, options = {}) {
     el.dataset.textShadowIntensity = options.textShadowIntensity || 1;
     el.appendChild(content);
     applyTextShadow(content);
+    applyDynamicTextToElement(el);
     console.log('Created text/icon element with content:', content.textContent);
   } else if (actualKind === 'box') {
     el.style.backgroundColor = options.bgColor || 'rgba(255,255,255,0.16)';
@@ -1820,7 +1931,8 @@ async function loadWeatherThemes() {
     if (!themes.length) {
       themes = ['happy-skies', 'soft-skies', 'sunny-day', 'blue-sky-pro'];
     }
-    
+    availableWeatherThemes = themes;
+
     const themeEmojis = {
       'happy-skies': '😊',
       'soft-skies': '🌈',
@@ -1849,13 +1961,15 @@ async function loadWeatherThemes() {
       // Click listener is now added in the 'quickAddIcon' listener
       selector.appendChild(item);
     });
-    
+
+    updateWeatherThemeSelection();
     console.log('Loaded weather themes:', themes, 'base:', weatherIconBase);
     document.getElementById('quickAddIcon').disabled = false;
   } catch (error) {
     console.error('Failed to load weather themes:', error);
     weatherIconBase = '/designer/weather-icons';
     const fallbackThemes = ['happy-skies', 'soft-skies', 'sunny-day', 'blue-sky-pro'];
+    availableWeatherThemes = fallbackThemes;
     const selector = document.getElementById('weatherThemeSelector');
     selector.innerHTML = '';
     fallbackThemes.forEach(theme => {
@@ -1868,6 +1982,7 @@ async function loadWeatherThemes() {
       `;
       selector.appendChild(item);
     });
+    updateWeatherThemeSelection();
     document.getElementById('quickAddIcon').disabled = false;
   }
 }
@@ -1979,7 +2094,7 @@ function exportToJSON() {
     meta: {
       width: 800,
       height: 480,
-      iconTheme: 'happy-skies', // This should be editable
+      iconTheme: currentWeatherTheme || renderData?.layout?.meta?.iconTheme || 'happy-skies', // This should be editable
       pexelsCategory: selectedCategory || null
     },
     elements: elements
@@ -1992,6 +2107,18 @@ async function loadFromJSON(data) {
   
   if (data.meta && data.meta.name) {
     currentPresetName = data.meta.name;
+  }
+
+  if (data.meta && data.meta.iconTheme) {
+    currentWeatherTheme = data.meta.iconTheme;
+  } else {
+    const weatherElement = (data.elements || []).find(el => {
+      const name = el.svgName || el.src || '';
+      return typeof name === 'string' && name.startsWith('weather-');
+    });
+    if (weatherElement) {
+      currentWeatherTheme = (weatherElement.svgName || weatherElement.src).replace('weather-', '') || currentWeatherTheme;
+    }
   }
 
   const metaCategory = data.meta?.pexelsCategory || '';
@@ -2049,6 +2176,8 @@ async function loadFromJSON(data) {
   
   await Promise.all(elementPromises);
   selectEl(null);
+  applyDynamicTextToCanvas();
+  updateWeatherThemeSelection();
 }
 
 async function saveToCloud() {
@@ -2194,6 +2323,7 @@ document.getElementById('quickAddText').addEventListener('click', () => {
     'RAIN': { icon: 'T', label: 'RAIN' },
     'WIND': { icon: '💨', label: 'Wind' },
     'WEATHER_DESC': { icon: '☁️', label: 'Weather' },
+    'WEATHER_MINMAX': { icon: '🌡️', label: 'Low / High' },
     'CITY': { icon: '🏙️', label: 'City' },
     'DATE': { icon: '📅', label: 'Date' },
     'JOKE': { icon: '😄', label: 'Dad Joke' }
@@ -2209,16 +2339,13 @@ document.getElementById('quickAddText').addEventListener('click', () => {
     `;
     item.addEventListener('click', () => {
       let text = 'Text';
-      if (type === 'TEMP' && renderData?.weather) text = renderData.weather.temp + '°';
-      else if (type === 'FEELS_LIKE' && renderData?.weather) text = renderData.weather.feels_like + '°';
-      else if (type === 'HUMIDITY' && renderData?.weather) text = renderData.weather.humidity + '%';
-      else if (type === 'RAIN' && renderData?.weather) text = renderData.weather.rain + 'mm';
-      else if (type === 'WIND' && renderData?.weather) text = renderData.weather.wind + 'km/h';
-      else if (type === 'WEATHER_DESC' && renderData?.weather) text = renderData.weather.desc || 'Sunny';
-      else if (type === 'CITY' && renderData?.weather) text = renderData.weather.city || 'City';
-      else if (type === 'DATE' && renderData) text = renderData.date || 'Date';
-      else if (type === 'JOKE' && renderData) text = renderData.dad_joke || 'Joke';
-      
+      if (type !== 'CUSTOM') {
+        const dynamic = getDynamicTextForType(type);
+        if (dynamic) {
+          text = dynamic;
+        }
+      }
+
       addElement('text', 100, 100, 200, 40, {
         text: text,
         type: type,
@@ -2282,6 +2409,8 @@ document.getElementById('quickAddIcon').addEventListener('click', async () => {
           }
         }
 
+        currentWeatherTheme = theme;
+        updateWeatherThemeSelection();
         addElement('svg', 100, 100, 120, 120, {
           svgContent,
           svgName: `weather-${theme}`,
@@ -2368,6 +2497,8 @@ document.getElementById('textElContent').addEventListener('change', () => saveAc
 document.getElementById('textElType').addEventListener('change', e => {
   if (!selectedEl) return;
   selectedEl.dataset.type = e.target.value;
+  applyDynamicTextToElement(selectedEl);
+  document.getElementById('textElContent').value = getElText(selectedEl);
   saveAction('Change type');
 });
 
@@ -2562,6 +2693,18 @@ document.getElementById('snapToggle').addEventListener('change', e => {
   snapEnabled = e.target.checked;
 });
 
+document.addEventListener('keydown', e => {
+  if (e.key === 'Alt') {
+    fineMovementActive = true;
+  }
+});
+
+document.addEventListener('keyup', e => {
+  if (e.key === 'Alt') {
+    fineMovementActive = false;
+  }
+});
+
 document.getElementById('zoomSlider').addEventListener('input', e => {
   const zoom = e.target.value / 100;
   canvas.style.transform = `scale(${zoom})`;
@@ -2597,99 +2740,50 @@ document.getElementById('applyTemplateBtn').addEventListener('click', () => {
 
 document.getElementById('saveBtn').addEventListener('click', saveToCloud);
 document.getElementById('loadBtn').addEventListener('click', loadFromCloud);
-document.getElementById('exportPngBtn').addEventListener('click', () => {
-  // Deselect element first to hide handles
+document.getElementById('exportPngBtn').addEventListener('click', async () => {
   const lastSelected = selectedEl;
   selectEl(null);
 
-  const canvasEl = document.getElementById('canvas');
-  const scale = 2; // For higher res export
-  
-  const tempCanvas = document.createElement('canvas');
-  tempCanvas.width = 800 * scale;
-  tempCanvas.height = 480 * scale;
-  const ctx = tempCanvas.getContext('2d');
-  ctx.scale(scale, scale);
-  
-  // Draw gradient background
-  const gradient = ctx.createLinearGradient(0, 0, 800, 480);
-  gradient.addColorStop(0, '#f5f7fa');
-  gradient.addColorStop(1, '#c3cfe2');
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, 800, 480);
-  
-  // This is a simplified renderer. It won't capture SVGs or text shadows.
-  // A more robust solution would use a library like html2canvas.
-  // For now, it just exports boxes and basic text.
-  
-  const elements = Array.from(canvasEl.querySelectorAll('.el')).sort((a, b) => {
-    return (parseInt(a.style.zIndex) || 0) - (parseInt(b.style.zIndex) || 0);
-  });
-  
-  elements.forEach(el => {
-    const x = parsePx(el.style.left);
-    const y = parsePx(el.style.top);
-    const w = parsePx(el.style.width);
-    const h = parsePx(el.style.height);
-    
-    ctx.save();
-    ctx.translate(x + w / 2, y + h / 2);
-    ctx.rotate((parseFloat(el.dataset.rotation || 0) * Math.PI) / 180);
-    ctx.globalAlpha = parseFloat(el.style.opacity || 1);
-    
-    if (el.classList.contains('box')) {
-      ctx.fillStyle = el.style.backgroundColor;
-      const radius = parsePx(el.style.borderRadius);
-      
-      ctx.beginPath();
-      ctx.moveTo(-w / 2 + radius, -h / 2);
-      ctx.lineTo(w / 2 - radius, -h / 2);
-      ctx.quadraticCurveTo(w / 2, -h / 2, w / 2, -h / 2 + radius);
-      ctx.lineTo(w / 2, h / 2 - radius);
-      ctx.quadraticCurveTo(w / 2, h / 2, w / 2 - radius, h / 2);
-      ctx.lineTo(-w / 2 + radius, h / 2);
-      ctx.quadraticCurveTo(-w / 2, h / 2, -w / 2, h / 2 - radius);
-      ctx.lineTo(-w / 2, -h / 2 + radius);
-      ctx.quadraticCurveTo(-w / 2, -h / 2, -w / 2 + radius, -h / 2);
-      ctx.closePath();
-      ctx.fill();
-      
-      if (parsePx(el.style.borderWidth) > 0) {
-        ctx.strokeStyle = el.style.borderColor;
-        ctx.lineWidth = parsePx(el.style.borderWidth);
-        ctx.stroke();
-      }
-    } else if (el.classList.contains('text') || el.classList.contains('icon')) {
-      const content = el.querySelector('.el-content');
-      const text = content.textContent;
-      const style = getComputedStyle(content);
-      
-      ctx.font = `${style.fontWeight} ${style.fontSize} ${el.style.fontFamily}`;
-      ctx.fillStyle = style.color;
-      ctx.textAlign = style.textAlign || 'center';
-      ctx.textBaseline = 'middle';
-      
-      ctx.fillText(text, 0, 0); // Already translated to center
+  const gridWasVisible = gridOverlay.classList.contains('visible');
+  gridOverlay.classList.remove('visible');
+
+  try {
+    if (typeof html2canvas === 'undefined') {
+      throw new Error('html2canvas not loaded');
     }
-    
-    ctx.restore();
-  });
-  
-  tempCanvas.toBlob(blob => {
+
+    const canvasEl = document.getElementById('canvas');
+    const exportCanvas = await html2canvas(canvasEl, {
+      backgroundColor: null,
+      useCORS: true,
+      scale: 2
+    });
+
+    const blob = await new Promise((resolve, reject) => {
+      exportCanvas.toBlob(b => {
+        if (b) resolve(b);
+        else reject(new Error('Failed to encode PNG'));
+      }, 'image/png');
+    });
+
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = 'layout.png';
     a.click();
     URL.revokeObjectURL(url);
-  });
-  
-  // Reselect element
-  if (lastSelected) {
-    selectEl(lastSelected);
+    setStatus('PNG exported', 2000);
+  } catch (error) {
+    console.error('PNG export failed:', error);
+    setStatus(`PNG export failed: ${error.message}`, 3000, true);
+  } finally {
+    if (gridWasVisible) {
+      gridOverlay.classList.add('visible');
+    }
+    if (lastSelected && canvas.contains(lastSelected)) {
+      selectEl(lastSelected);
+    }
   }
-  
-  setStatus('PNG exported (basic)', 2000);
 });
 
 document.getElementById('exportJsonBtn').addEventListener('click', () => {
@@ -2853,9 +2947,15 @@ async function init() {
       fetchRenderData()
     ]);
 
+    if (renderData?.layout) {
+      await loadFromJSON(renderData.layout);
+    }
+
+    applyDynamicTextToCanvas();
+    updateWeatherThemeSelection();
     console.log('Initialization complete.');
     setStatus('Ready', 0);
-    
+
   } catch (error) {
     console.error('Initialization failed:', error.message);
     setStatus('API Error. Is server running?', 0, true);

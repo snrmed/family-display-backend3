@@ -174,7 +174,7 @@
             return data.weather.temp_min + "° / " + data.weather.temp_max + "°";
           }
           return "--° / --°";
-        
+
         default:
           return el.text || "";
       }
@@ -275,7 +275,7 @@
         if (kind === "text") {
           const span = document.createElement("div");
           span.textContent = textFromType(el, data);
-          
+
           // Text styling
           if (el.fontFamily) span.style.fontFamily = el.fontFamily;
           if (el.fontSize) span.style.fontSize = el.fontSize + "px";
@@ -283,7 +283,22 @@
           if (el.weight) span.style.fontWeight = el.weight;
           if (el.align) span.style.textAlign = el.align;
           if (el.wrap) span.style.whiteSpace = "normal";
-          
+
+          if (el.textShadowType && el.textShadowType !== "none") {
+            const intensity = parseFloat(el.textShadowIntensity ?? 1) || 1;
+            const color = el.textShadowColor || "#000000";
+            if (el.textShadowType === "drop") {
+              const blur = 4 * intensity;
+              const offset = 2 * intensity;
+              span.style.textShadow = `${offset}px ${offset}px ${blur}px ${color}`;
+            } else if (el.textShadowType === "glow") {
+              const blur = 8 * intensity;
+              span.style.textShadow = `0 0 ${blur}px ${color}`;
+            }
+          } else {
+            span.style.textShadow = "none";
+          }
+
           span.style.width = "100%";
           span.style.height = "100%";
           span.style.display = "flex";
