@@ -51,6 +51,8 @@ body{
   padding:32px;
   max-width:480px;
   width:90%;
+  max-height:80vh;
+  overflow-y:auto;
   box-shadow:0 20px 60px rgba(0,0,0,0.5);
 }
 .modal-header{
@@ -113,6 +115,50 @@ body{
   flex:1;
 }
 
+/* ====== SELECTOR MODAL ====== */
+.selector-grid{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:12px;
+  margin-top:16px;
+}
+.selector-item{
+  aspect-ratio:1;
+  background:var(--panel);
+  border:2px solid var(--border);
+  border-radius:8px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+  padding:12px;
+  transition:all 0.2s;
+}
+.selector-item:hover{
+  background:var(--hover);
+  border-color:var(--brand);
+  transform:scale(1.05);
+}
+.selector-item.selected{
+  border-color:var(--brand);
+  background:var(--hover);
+}
+.selector-item-icon{
+  font-size:32px;
+  margin-bottom:4px;
+}
+.selector-item-label{
+  font-size:11px;
+  color:var(--muted);
+  text-align:center;
+}
+.selector-item svg{
+  width:80%;
+  height:80%;
+  object-fit:contain;
+}
+
 /* ====== HEADER ====== */
 header{
   background:var(--panel);
@@ -154,7 +200,7 @@ header{
   height:100%;
   overflow:hidden;
 }
-.sidebar,. inspector{
+.sidebar,.inspector{
   background:var(--panel);
   border-right:1px solid var(--border);
   overflow-y:auto;
@@ -377,18 +423,28 @@ button:disabled{
   gap:8px;
 }
 .quick-add-btn{
-  padding:16px 8px;
+  padding:12px 8px;
   background:var(--panel);
   border:1px solid var(--border);
   border-radius:8px;
   text-align:center;
   cursor:pointer;
   transition:all 0.2s;
-  font-size:24px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:4px;
 }
 .quick-add-btn:hover{
   background:var(--hover);
   border-color:var(--brand);
+}
+.quick-add-btn-icon{
+  font-size:32px;
+}
+.quick-add-btn-label{
+  font-size:10px;
+  color:var(--muted);
 }
 
 /* ====== SVG LIBRARY ====== */
@@ -462,6 +518,78 @@ button:disabled{
     </div>
   </div>
 
+  <!-- ====== ADD BOX MODAL ====== -->
+  <div class="modal-overlay hidden" id="addBoxModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title">
+          <h2>Add Box Element</h2>
+          <p>Select an SVG overlay or create empty box</p>
+        </div>
+      </div>
+      <div class="modal-body">
+        <button id="addEmptyBox" class="primary" style="width:100%;margin-bottom:16px">Empty Box</button>
+        <div class="selector-grid" id="boxSvgSelector"></div>
+      </div>
+      <div class="modal-footer">
+        <button id="cancelAddBox">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== ADD INFO MODAL ====== -->
+  <div class="modal-overlay hidden" id="addInfoModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title">
+          <h2>Add Info Element</h2>
+          <p>Select data type to display</p>
+        </div>
+      </div>
+      <div class="modal-body">
+        <div class="selector-grid" id="infoTypeSelector"></div>
+      </div>
+      <div class="modal-footer">
+        <button id="cancelAddInfo">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== ADD WEATHER ICON MODAL ====== -->
+  <div class="modal-overlay hidden" id="addWeatherModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title">
+          <h2>Add Weather Icon</h2>
+          <p>Select icon theme</p>
+        </div>
+      </div>
+      <div class="modal-body">
+        <div class="selector-grid" id="weatherThemeSelector">
+          <div class="selector-item" data-theme="happy-skies">
+            <div class="selector-item-icon">😊</div>
+            <div class="selector-item-label">Happy Skies</div>
+          </div>
+          <div class="selector-item" data-theme="soft-skies">
+            <div class="selector-item-icon">🌈</div>
+            <div class="selector-item-label">Soft Skies</div>
+          </div>
+          <div class="selector-item" data-theme="sunny-day">
+            <div class="selector-item-icon">☀️</div>
+            <div class="selector-item-label">Sunny Day</div>
+          </div>
+          <div class="selector-item" data-theme="blue-sky-pro">
+            <div class="selector-item-icon">🌤</div>
+            <div class="selector-item-label">Blue Sky Pro</div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="cancelAddWeather">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <header>
     <div class="brand">
       <span class="brand-logo">:D</span>
@@ -501,9 +629,18 @@ button:disabled{
         <h3>📦 Quick Add</h3>
         <div class="panel-content">
           <div class="quick-add">
-            <button class="quick-add-btn" id="quickAddBox" title="Add Box">▢</button>
-            <button class="quick-add-btn" id="quickAddText" title="Add Text">T</button>
-            <button class="quick-add-btn" id="quickAddIcon" title="Add Icon">😀</button>
+            <button class="quick-add-btn" id="quickAddBox">
+              <div class="quick-add-btn-icon">▢</div>
+              <div class="quick-add-btn-label">Box</div>
+            </button>
+            <button class="quick-add-btn" id="quickAddText">
+              <div class="quick-add-btn-icon">T</div>
+              <div class="quick-add-btn-label">Info</div>
+            </button>
+            <button class="quick-add-btn" id="quickAddIcon">
+              <div class="quick-add-btn-icon">☀️</div>
+              <div class="quick-add-btn-label">Weather</div>
+            </button>
           </div>
         </div>
       </div>
@@ -770,7 +907,6 @@ button:disabled{
 </div>
 
 <script>
-// ====== CONSTANTS ======
 const GRID_SIZE = 20;
 const canvas = document.getElementById('canvas');
 const gridOverlay = document.getElementById('gridOverlay');
@@ -778,19 +914,16 @@ const templateSelect = document.getElementById('templateSelect');
 const deviceIdInput = document.getElementById('deviceId');
 const adminTokenInput = document.getElementById('adminToken');
 
-// ====== STORAGE KEYS ======
 const STORAGE_KEY_DEVICE = 'kindDesignerDeviceId';
 const STORAGE_KEY_TOKEN = 'kindDesignerAdminToken';
 const STORAGE_KEY_DRAFT = 'kindDesignerDraft';
 
-// Load stored credentials
 let storedDeviceId = localStorage.getItem(STORAGE_KEY_DEVICE) || '';
 let storedAdminToken = localStorage.getItem(STORAGE_KEY_TOKEN) || '';
 
 if (storedDeviceId) deviceIdInput.value = storedDeviceId;
 if (storedAdminToken) adminTokenInput.value = storedAdminToken;
 
-// ====== SETUP MODAL FUNCTIONS ======
 function showSetupModal() {
   document.getElementById('setupModal').classList.remove('hidden');
   document.getElementById('setupDeviceId').value = storedDeviceId;
@@ -834,40 +967,22 @@ function updateDeviceStatusUI() {
     syncStatus.style.color = 'var(--brand)';
     loadBtn.disabled = false;
     saveBtn.disabled = false;
-    loadBtn.style.opacity = '1';
-    saveBtn.style.opacity = '1';
-    loadBtn.style.cursor = 'pointer';
-    saveBtn.style.cursor = 'pointer';
-    loadBtn.title = 'Load layout from cloud';
-    saveBtn.title = 'Save layout to cloud';
   } else {
     syncStatus.textContent = '⚠ Not configured';
     syncStatus.style.color = 'var(--muted)';
     loadBtn.disabled = true;
     saveBtn.disabled = true;
-    loadBtn.style.opacity = '0.5';
-    saveBtn.style.opacity = '0.5';
-    loadBtn.style.cursor = 'not-allowed';
-    saveBtn.style.cursor = 'not-allowed';
-    loadBtn.title = 'Configure Device ID first';
-    saveBtn.title = 'Configure Device ID first';
   }
 }
 
-// Setup modal event listeners
-document.getElementById('setupSave').addEventListener('click', () => {
-  saveSetupCredentials();
-});
-
+document.getElementById('setupSave').addEventListener('click', saveSetupCredentials);
 document.getElementById('setupSkip').addEventListener('click', () => {
   hideSetupModal();
-  setStatus('Setup skipped - you can configure later', 2000);
+  setStatus('Setup skipped', 2000);
 });
-
 document.getElementById('setupTogglePasskey').addEventListener('click', () => {
   const input = document.getElementById('setupPasskey');
   const btn = document.getElementById('setupTogglePasskey');
-  
   if (input.type === 'password') {
     input.type = 'text';
     btn.textContent = '🙈';
@@ -876,33 +991,22 @@ document.getElementById('setupTogglePasskey').addEventListener('click', () => {
     btn.textContent = '👁';
   }
 });
+document.getElementById('editSettingsBtn').addEventListener('click', showSetupModal);
 
-document.getElementById('editSettingsBtn').addEventListener('click', () => {
-  showSetupModal();
-});
-
-// Check if setup is needed on load
 function checkSetupNeeded() {
   if (!storedDeviceId || !storedAdminToken) {
-    setTimeout(() => {
-      showSetupModal();
-    }, 500);
+    setTimeout(showSetupModal, 500);
   }
   updateDeviceStatusUI();
 }
 
-// ====== STATE ======
 let selectedEl = null;
 let multiSelected = [];
 let isDragging = false;
-let isResizing = false;
 let dragStartX = 0;
 let dragStartY = 0;
 let elStartX = 0;
 let elStartY = 0;
-let elStartW = 0;
-let elStartH = 0;
-let originalTemplate = null;
 let currentTemplateKey = '';
 let currentPresetName = '';
 let lastUsedTextColor = '#000000';
@@ -914,7 +1018,6 @@ let availableSVGs = [];
 let availableInfoTypes = [];
 let renderData = null;
 
-// ====== UTILITY FUNCTIONS ======
 function parsePx(str) {
   return parseFloat(str) || 0;
 }
@@ -946,35 +1049,21 @@ function setElText(el, txt) {
   if (content) content.textContent = txt;
 }
 
-// ====== FETCH RENDER DATA ======
 async function fetchRenderData() {
   try {
     const device = deviceIdInput.value.trim() || 'familydisplay';
     const response = await fetch(`/v1/render_data?device=${device}`);
-    if (!response.ok) {
-      console.warn('Failed to fetch render data');
-      return null;
-    }
+    if (!response.ok) return null;
     renderData = await response.json();
     
-    // Extract available info types from render data
     availableInfoTypes = ['CUSTOM'];
     if (renderData.weather) {
-      availableInfoTypes.push('TEMP', 'FEELS_LIKE', 'HUMIDITY', 'RAIN', 'WIND', 'WEATHER_DESC', 'WEATHER_ICON');
+      availableInfoTypes.push('TEMP', 'FEELS_LIKE', 'HUMIDITY', 'RAIN', 'WIND', 'WEATHER_DESC', 'CITY');
     }
-    if (renderData.weather && renderData.weather.city) {
-      availableInfoTypes.push('CITY');
-    }
-    if (renderData.date) {
-      availableInfoTypes.push('DATE');
-    }
-    if (renderData.dad_joke) {
-      availableInfoTypes.push('JOKE');
-    }
+    if (renderData.date) availableInfoTypes.push('DATE');
+    if (renderData.dad_joke) availableInfoTypes.push('JOKE');
     
-    // Update info type dropdown
     updateInfoTypeDropdown();
-    
     return renderData;
   } catch (error) {
     console.error('Failed to fetch render data:', error);
@@ -996,7 +1085,6 @@ function updateInfoTypeDropdown() {
     'RAIN': 'Rain',
     'WIND': 'Wind Speed',
     'WEATHER_DESC': 'Weather Description',
-    'WEATHER_ICON': 'Weather Icon',
     'CITY': 'City Name',
     'DATE': 'Date',
     'JOKE': 'Dad Joke'
@@ -1014,7 +1102,6 @@ function updateInfoTypeDropdown() {
   }
 }
 
-// ====== SELECTION ======
 function selectEl(el, addToMulti = false) {
   if (!el) {
     if (selectedEl) selectedEl.classList.remove('selected');
@@ -1049,7 +1136,6 @@ function selectEl(el, addToMulti = false) {
   autoCollapsePanels();
 }
 
-// ====== INSPECTOR UPDATE ======
 function updateInspector() {
   const el = getSelectedElement();
   const inspectorEmpty = document.getElementById('inspectorEmpty');
@@ -1073,7 +1159,6 @@ function updateInspector() {
   document.getElementById('elOpacity').value = parseFloat(el.style.opacity || 1);
   document.getElementById('elOpacityValue').textContent = parseFloat(el.style.opacity || 1).toFixed(2);
 
-  // Update text controls
   if (el.classList.contains('text') || el.classList.contains('icon')) {
     const content = el.querySelector('.el-content');
     const style = getComputedStyle(content || el);
@@ -1098,7 +1183,6 @@ function updateInspector() {
     }
   }
 
-  // Update box controls
   if (el.classList.contains('box')) {
     document.getElementById('boxBgColor').value = rgbToHex(el.style.backgroundColor);
     document.getElementById('boxBorderColor').value = rgbToHex(el.style.borderColor);
@@ -1120,7 +1204,6 @@ function updateInspector() {
     }
   }
 
-  // Update SVG controls
   if (el.classList.contains('svg-overlay')) {
     document.getElementById('svgOpacity').value = parseFloat(el.style.opacity || 1);
     document.getElementById('svgOpacityValue').textContent = parseFloat(el.style.opacity || 1).toFixed(2);
@@ -1143,7 +1226,6 @@ function updateInspector() {
   }
 }
 
-// ====== COLOR CONVERSION ======
 function rgbToHex(rgb) {
   if (!rgb || rgb === 'transparent') return '#000000';
   if (rgb.startsWith('#')) return rgb;
@@ -1155,7 +1237,6 @@ function rgbToHex(rgb) {
   return '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
 }
 
-// ====== GRID ======
 function drawGrid() {
   gridOverlay.innerHTML = '';
   const w = 800;
@@ -1181,7 +1262,6 @@ function drawGrid() {
   }
 }
 
-// ====== ELEMENT CREATION ======
 function addElement(kind, x, y, w, h, options = {}) {
   saveAction(`Add ${kind}`);
   
@@ -1234,7 +1314,6 @@ function addElement(kind, x, y, w, h, options = {}) {
   selectEl(el);
 }
 
-// ====== TEXT SHADOW ======
 function applyTextShadow(content) {
   const el = content.parentElement;
   const type = el.dataset.textShadowType || 'none';
@@ -1253,7 +1332,6 @@ function applyTextShadow(content) {
   }
 }
 
-// ====== BOX SHADOW ======
 function applyBoxShadow(el) {
   const type = el.dataset.boxShadowType || 'none';
   const color = el.dataset.boxShadowColor || '#000000';
@@ -1272,7 +1350,6 @@ function applyBoxShadow(el) {
   }
 }
 
-// ====== SVG CONTENT ======
 function updateSVGContent(el) {
   const svg = el.querySelector('svg');
   if (!svg) return;
@@ -1323,7 +1400,6 @@ function updateSVGContent(el) {
   }
 }
 
-// ====== UNDO/REDO ======
 function saveAction(description) {
   const state = exportToJSON();
   undoStack.push({ description, state });
@@ -1349,17 +1425,11 @@ function redo() {
   setStatus('Redo', 2000);
 }
 
-// ====== LOAD PRESETS ======
 async function loadPresets() {
   try {
     const response = await fetch('/presets/');
     if (!response.ok) {
-      availablePresets = [
-        'blank_canvas_light', 'blank_canvas_dark',
-        'abstract_gradient', 'geometric_shapes', 'kids_fun',
-        'minimal_modern', 'paper_collage', 'photo_frame',
-        'weather_focus', 'calendar_view'
-      ];
+      availablePresets = [];
       renderPresetOptions();
       return;
     }
@@ -1377,7 +1447,6 @@ async function loadPresets() {
     renderPresetOptions();
   } catch (error) {
     console.error('Failed to load presets:', error);
-    setStatus('Presets unavailable', 2000);
   }
 }
 
@@ -1395,7 +1464,6 @@ function renderPresetOptions() {
   });
 }
 
-// ====== APPLY TEMPLATE ======
 async function applyTemplate(key) {
   if (!key) return;
   
@@ -1415,33 +1483,33 @@ async function applyTemplate(key) {
   }
 }
 
-// ====== LOAD SVG LIBRARY ======
 async function loadSVGLibrary() {
   try {
-    const response = await fetch('/svgs/');
-    if (!response.ok) {
-      availableSVGs = [
-        'heart.svg', 'star.svg', 'sun.svg', 'moon.svg', 'cloud.svg',
-        'home.svg', 'user.svg', 'calendar.svg', 'clock.svg', 'weather.svg'
-      ];
-      renderSVGLibrary();
-      return;
+    const response = await fetch('/gcs/assets/svgs/');
+    let svgList = [];
+    
+    if (response.ok) {
+      const html = await response.text();
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, 'text/html');
+      const links = doc.querySelectorAll('a');
+      
+      svgList = Array.from(links)
+        .map(link => link.getAttribute('href'))
+        .filter(href => href && href.endsWith('.svg'))
+        .map(href => href.split('/').pop());
     }
     
-    const html = await response.text();
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(html, 'text/html');
-    const links = doc.querySelectorAll('a');
+    if (svgList.length === 0) {
+      svgList = ['heart.svg', 'star.svg', 'sun.svg', 'moon.svg', 'cloud.svg'];
+    }
     
-    availableSVGs = Array.from(links)
-      .map(link => link.getAttribute('href'))
-      .filter(href => href && href.endsWith('.svg'))
-      .map(href => href.split('/').pop());
-    
+    availableSVGs = svgList;
     renderSVGLibrary();
   } catch (error) {
     console.error('Failed to load SVG library:', error);
-    setStatus('SVG library unavailable', 2000);
+    availableSVGs = ['heart.svg', 'star.svg'];
+    renderSVGLibrary();
   }
 }
 
@@ -1459,8 +1527,11 @@ function renderSVGLibrary() {
     item.className = 'svg-item';
     item.title = svgName;
     
-    fetch(`/svgs/${svgName}`)
-      .then(r => r.text())
+    fetch(`/gcs/assets/svgs/${svgName}`)
+      .then(r => {
+        if (!r.ok) throw new Error('Not found');
+        return r.text();
+      })
       .then(svgContent => {
         item.innerHTML = svgContent;
         item.addEventListener('click', () => {
@@ -1473,14 +1544,13 @@ function renderSVGLibrary() {
         });
       })
       .catch(err => {
-        item.innerHTML = '<div style="font-size:10px;color:var(--muted)">?</div>';
+        item.innerHTML = '<div style="font-size:10px;color:var(--muted)">×</div>';
       });
     
     library.appendChild(item);
   });
 }
 
-// ====== EXPORT/IMPORT JSON ======
 function exportToJSON() {
   const elements = Array.from(canvas.querySelectorAll('.el')).map(el => {
     const base = {
@@ -1564,18 +1634,12 @@ function loadFromJSON(data) {
   selectEl(null);
 }
 
-// ====== SAVE/LOAD TO CLOUD ======
 async function saveToCloud() {
   const deviceId = deviceIdInput.value.trim();
   const token = adminTokenInput.value.trim();
   
-  if (!deviceId) {
-    alert('Please enter a Device ID');
-    return;
-  }
-  
-  if (!token) {
-    alert('Please enter an Admin Token');
+  if (!deviceId || !token) {
+    alert('Please configure Device ID and Admin Token');
     return;
   }
   
@@ -1591,16 +1655,12 @@ async function saveToCloud() {
       body: JSON.stringify(layout)
     });
     
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(error);
-    }
+    if (!response.ok) throw new Error('Save failed');
     
     setStatus('✓ Saved to cloud', 2000);
   } catch (error) {
     console.error('Save failed:', error);
     setStatus('✗ Save failed', 2000);
-    alert('Failed to save: ' + error.message);
   }
 }
 
@@ -1608,13 +1668,8 @@ async function loadFromCloud() {
   const deviceId = deviceIdInput.value.trim();
   const token = adminTokenInput.value.trim();
   
-  if (!deviceId) {
-    alert('Please enter a Device ID');
-    return;
-  }
-  
-  if (!token) {
-    alert('Please enter an Admin Token');
+  if (!deviceId || !token) {
+    alert('Please configure Device ID and Admin Token');
     return;
   }
   
@@ -1626,9 +1681,7 @@ async function loadFromCloud() {
       }
     });
     
-    if (!response.ok) {
-      throw new Error('Layout not found');
-    }
+    if (!response.ok) throw new Error('Layout not found');
     
     const data = await response.json();
     loadFromJSON(data);
@@ -1636,55 +1689,88 @@ async function loadFromCloud() {
   } catch (error) {
     console.error('Load failed:', error);
     setStatus('✗ Load failed', 2000);
-    alert('Failed to load: ' + error.message);
   }
 }
 
-// ====== EVENT LISTENERS: QUICK ADD ======
 document.getElementById('quickAddBox').addEventListener('click', () => {
-  // Show dropdown with available SVGs if we want to add an SVG box
-  if (availableSVGs.length > 0 && confirm('Add a decorative SVG box?')) {
-    const svgName = prompt('Enter SVG name from library:', availableSVGs[0]);
-    if (svgName && availableSVGs.includes(svgName)) {
-      fetch(`/svgs/${svgName}`)
-        .then(r => r.text())
-        .then(svgContent => {
+  const modal = document.getElementById('addBoxModal');
+  const selector = document.getElementById('boxSvgSelector');
+  selector.innerHTML = '';
+  
+  availableSVGs.forEach(svgName => {
+    const item = document.createElement('div');
+    item.className = 'selector-item';
+    item.dataset.svg = svgName;
+    
+    fetch(`/gcs/assets/svgs/${svgName}`)
+      .then(r => r.text())
+      .then(svgContent => {
+        item.innerHTML = svgContent + `<div class="selector-item-label">${svgName.replace('.svg', '')}</div>`;
+        item.addEventListener('click', () => {
           addElement('svg-overlay', 100, 100, 100, 100, {
             svgContent: svgContent,
             svgName: svgName,
             fillType: 'none'
           });
+          modal.classList.add('hidden');
           setStatus(`Added ${svgName}`, 1500);
         });
-      return;
-    }
-  }
+      })
+      .catch(() => {
+        item.innerHTML = '<div style="font-size:10px">×</div>';
+      });
+    
+    selector.appendChild(item);
+  });
   
-  // Regular box
+  modal.classList.remove('hidden');
+});
+
+document.getElementById('addEmptyBox').addEventListener('click', () => {
   addElement('box', 100, 100, 200, 100, {
     bgColor: 'rgba(255,255,255,0.16)',
     borderColor: 'rgba(0,0,0,0.2)',
     borderWidth: 1,
     borderRadius: 12
   });
+  document.getElementById('addBoxModal').classList.add('hidden');
   setStatus('Box added', 1500);
 });
 
+document.getElementById('cancelAddBox').addEventListener('click', () => {
+  document.getElementById('addBoxModal').classList.add('hidden');
+});
+
 document.getElementById('quickAddText').addEventListener('click', () => {
-  // Show dropdown for info type if available
-  if (availableInfoTypes.length > 1) {
-    const type = prompt('Select info type:\n' + availableInfoTypes.join(', '), 'CUSTOM');
-    if (type && availableInfoTypes.includes(type)) {
+  const modal = document.getElementById('addInfoModal');
+  const selector = document.getElementById('infoTypeSelector');
+  selector.innerHTML = '';
+  
+  const typeInfo = {
+    'CUSTOM': { icon: 'T', label: 'Custom Text' },
+    'TEMP': { icon: '🌡️', label: 'Temperature' },
+    'CITY': { icon: '🏙️', label: 'City' },
+    'DATE': { icon: '📅', label: 'Date' },
+    'JOKE': { icon: '😄', label: 'Dad Joke' },
+    'HUMIDITY': { icon: '💧', label: 'Humidity' },
+    'WIND': { icon: '💨', label: 'Wind' },
+    'WEATHER_DESC': { icon: '☁️', label: 'Weather' }
+  };
+  
+  availableInfoTypes.forEach(type => {
+    const info = typeInfo[type] || { icon: 'T', label: type };
+    const item = document.createElement('div');
+    item.className = 'selector-item';
+    item.innerHTML = `
+      <div class="selector-item-icon">${info.icon}</div>
+      <div class="selector-item-label">${info.label}</div>
+    `;
+    item.addEventListener('click', () => {
       let text = 'Text';
-      if (type === 'TEMP' && renderData && renderData.weather) {
-        text = renderData.weather.temp + '°';
-      } else if (type === 'CITY' && renderData && renderData.weather) {
-        text = renderData.weather.city || 'City';
-      } else if (type === 'DATE' && renderData) {
-        text = renderData.date || 'Date';
-      } else if (type === 'JOKE' && renderData) {
-        text = renderData.dad_joke || 'Joke';
-      }
+      if (type === 'TEMP' && renderData?.weather) text = renderData.weather.temp + '°';
+      else if (type === 'CITY' && renderData?.weather) text = renderData.weather.city || 'City';
+      else if (type === 'DATE' && renderData) text = renderData.date || 'Date';
+      else if (type === 'JOKE' && renderData) text = renderData.dad_joke || 'Joke';
       
       addElement('text', 100, 100, 200, 40, {
         text: text,
@@ -1695,34 +1781,54 @@ document.getElementById('quickAddText').addEventListener('click', () => {
         fontFamily: 'Inter',
         fontWeight: '400'
       });
-      setStatus(`Text added: ${type}`, 1500);
-      return;
-    }
-  }
-  
-  // Default text
-  addElement('text', 100, 100, 200, 40, {
-    text: 'Text',
-    fontSize: 16,
-    color: lastUsedTextColor,
-    align: 'center',
-    fontFamily: 'Inter',
-    fontWeight: '400'
+      modal.classList.add('hidden');
+      setStatus(`Added ${info.label}`, 1500);
+    });
+    selector.appendChild(item);
   });
-  setStatus('Text added', 1500);
+  
+  modal.classList.remove('hidden');
+});
+
+document.getElementById('cancelAddInfo').addEventListener('click', () => {
+  document.getElementById('addInfoModal').classList.add('hidden');
 });
 
 document.getElementById('quickAddIcon').addEventListener('click', () => {
-  addElement('icon', 100, 100, 80, 80, {
-    text: '😀',
-    fontSize: 48,
-    color: lastUsedTextColor,
-    align: 'center'
+  const modal = document.getElementById('addWeatherModal');
+  const selector = document.getElementById('weatherThemeSelector');
+  
+  selector.querySelectorAll('.selector-item').forEach(item => {
+    item.addEventListener('click', async () => {
+      const theme = item.dataset.theme;
+      
+      try {
+        const iconCode = '01d';
+        const response = await fetch(`/gcs/assets/weather-icons/${theme}/${iconCode}.svg`);
+        const svgContent = await response.text();
+        
+        addElement('svg-overlay', 100, 100, 120, 120, {
+          svgContent: svgContent,
+          svgName: `weather-${theme}`,
+          fillType: 'none'
+        });
+        
+        modal.classList.add('hidden');
+        setStatus(`Added weather icon: ${theme}`, 1500);
+      } catch (error) {
+        console.error('Failed to load weather icon:', error);
+        setStatus('Failed to load weather icon', 2000);
+      }
+    });
   });
-  setStatus('Icon added', 1500);
+  
+  modal.classList.remove('hidden');
 });
 
-// ====== EVENT LISTENERS: INSPECTOR ======
+document.getElementById('cancelAddWeather').addEventListener('click', () => {
+  document.getElementById('addWeatherModal').classList.add('hidden');
+});
+
 ['elX', 'elY', 'elW', 'elH'].forEach(id => {
   document.getElementById(id).addEventListener('input', e => {
     if (!selectedEl) return;
@@ -1768,7 +1874,6 @@ document.getElementById('duplicateBtn').addEventListener('click', () => {
   saveAction('Duplicate');
 });
 
-// Text controls
 document.getElementById('textElContent').addEventListener('input', e => {
   if (!selectedEl) return;
   setElText(selectedEl, e.target.value);
@@ -1844,7 +1949,6 @@ document.getElementById('textShadowIntensity').addEventListener('input', e => {
   saveAction('Change shadow intensity');
 });
 
-// Box controls
 document.getElementById('boxBgColor').addEventListener('input', e => {
   if (!selectedEl) return;
   selectedEl.style.backgroundColor = e.target.value;
@@ -1901,7 +2005,6 @@ document.getElementById('boxShadowIntensity').addEventListener('input', e => {
   saveAction('Change shadow intensity');
 });
 
-// SVG controls
 document.getElementById('svgFillType').addEventListener('change', e => {
   if (!selectedEl) return;
   selectedEl.dataset.fillType = e.target.value;
@@ -1956,7 +2059,6 @@ document.getElementById('svgRotation').addEventListener('input', e => {
   saveAction('Rotate SVG');
 });
 
-// ====== EVENT LISTENERS: HEADER ======
 document.getElementById('toggleGrid').addEventListener('change', e => {
   gridOverlay.classList.toggle('visible', e.target.checked);
 });
@@ -1981,7 +2083,6 @@ document.getElementById('fitBtn').addEventListener('click', () => {
 document.getElementById('undoBtn').addEventListener('click', undo);
 document.getElementById('redoBtn').addEventListener('click', redo);
 
-// ====== EVENT LISTENERS: SIDEBAR ======
 document.getElementById('applyTemplateBtn').addEventListener('click', () => {
   const key = templateSelect.value;
   if (key) applyTemplate(key);
@@ -2078,7 +2179,6 @@ document.getElementById('exportJsonBtn').addEventListener('click', () => {
   setStatus('JSON exported', 2000);
 });
 
-// ====== CANVAS INTERACTION ======
 canvas.addEventListener('mousedown', e => {
   const el = e.target.closest('.el');
   
@@ -2119,7 +2219,6 @@ document.addEventListener('mouseup', () => {
   }
 });
 
-// ====== KEYBOARD SHORTCUTS ======
 document.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
   
@@ -2152,7 +2251,6 @@ document.addEventListener('keydown', e => {
   }
 });
 
-// ====== PANEL COLLAPSE ======
 function setupPanelToggles() {
   document.querySelectorAll('.panel h3').forEach(header => {
     header.addEventListener('click', () => {
@@ -2187,7 +2285,6 @@ function autoCollapsePanels() {
   }
 }
 
-// ====== INITIALIZATION ======
 async function init() {
   drawGrid();
   setupPanelToggles();
