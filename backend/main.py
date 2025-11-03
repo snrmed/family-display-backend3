@@ -2,7 +2,7 @@ import os
 import json
 import random
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, Any
 from urllib.parse import quote
@@ -381,18 +381,93 @@ async def get_weather(city: str) -> dict:
                     r = await client.get(url, timeout=5)
                     if r.status_code == 200:
                         data = r.json()
-                        return {
-                            "temp": round(data["main"]["temp"]),
-                            "feels_like": round(data["main"]["feels_like"]),
-                            "humidity": data["main"]["humidity"],
+                        weather: dict[str, Any] = {
+                            "temp": round(data["main"].get("temp", 0)),
+                            "feels_like": round(data["main"].get("feels_like", 0)),
+                            "humidity": data.get("main", {}).get("humidity"),
                             "rain": data.get("rain", {}).get("1h", 0),
-                            "wind": round(data["wind"]["speed"]),
-                            "icon": data["weather"][0]["icon"],
-                            "desc": data["weather"][0]["description"].title()
+                            "wind": round(data.get("wind", {}).get("speed", 0)),
+                            "icon": data.get("weather", [{}])[0].get("icon", "01d"),
+                            "desc": data.get("weather", [{}])[0].get("description", "").title() or "Sunny",
                         }
+
+                        tz_offset = data.get("timezone", 0)
+                        weather["timezone_offset"] = tz_offset
+
+                        coord = data.get("coord", {})
+                        lat = coord.get("lat")
+                        lon = coord.get("lon")
+
+                        if lat is not None and lon is not None:
+                            try:
+                                forecast_url = (
+                                    "https://api.openweathermap.org/data/2.5/forecast"
+                                    f"?lat={lat}&lon={lon}&appid={api_key}&units=metric"
+                                )
+                                forecast_resp = await client.get(forecast_url, timeout=5)
+                                forecast_resp.raise_for_status()
+                                forecast_data = forecast_resp.json()
+
+                                target_date = (
+                                    datetime.now(timezone.utc)
+                                    .astimezone(timezone(timedelta(seconds=tz_offset)))
+                                    .date()
+                                )
+
+                                min_samples: list[float] = []
+                                max_samples: list[float] = []
+
+                                local_timezone = timezone(timedelta(seconds=tz_offset))
+
+                                for entry in forecast_data.get("list", []):
+                                    dt_val = entry.get("dt")
+                                    if dt_val is None:
+                                        continue
+
+                                    local_dt = datetime.fromtimestamp(dt_val, tz=timezone.utc).astimezone(local_timezone)
+                                    if local_dt.date() != target_date:
+                                        continue
+
+                                    main_block = entry.get("main", {})
+                                    min_val = main_block.get("temp_min")
+                                    max_val = main_block.get("temp_max")
+
+                                    if isinstance(min_val, (int, float)):
+                                        min_samples.append(float(min_val))
+                                    if isinstance(max_val, (int, float)):
+                                        max_samples.append(float(max_val))
+
+                                if min_samples:
+                                    weather["temp_min"] = round(sum(min_samples) / len(min_samples))
+                                else:
+                                    api_min = data.get("main", {}).get("temp_min")
+                                    if isinstance(api_min, (int, float)):
+                                        weather["temp_min"] = round(api_min)
+
+                                if max_samples:
+                                    weather["temp_max"] = round(sum(max_samples) / len(max_samples))
+                                else:
+                                    api_max = data.get("main", {}).get("temp_max")
+                                    if isinstance(api_max, (int, float)):
+                                        weather["temp_max"] = round(api_max)
+                            except Exception as exc:
+                                logger.warning(f"OpenWeather forecast failed: {exc}")
+                                api_min = data.get("main", {}).get("temp_min")
+                                api_max = data.get("main", {}).get("temp_max")
+                                if isinstance(api_min, (int, float)):
+                                    weather["temp_min"] = round(api_min)
+                                if isinstance(api_max, (int, float)):
+                                    weather["temp_max"] = round(api_max)
+
+                        if "temp_min" not in weather:
+                            weather["temp_min"] = weather["temp"]
+                        if "temp_max" not in weather:
+                            weather["temp_max"] = weather["temp"]
+
+                        return weather
             except Exception as e:
                 logger.warning(f"OpenWeather failed: {e}")
-    
+
     return {
         "temp": 33,
         "feels_like": 33,
@@ -400,7 +475,10 @@ async def get_weather(city: str) -> dict:
         "rain": 0,
         "wind": 5,
         "icon": "01d",
-        "desc": "Sunny"
+        "desc": "Sunny",
+        "temp_min": 30,
+        "temp_max": 36,
+        "timezone_offset": 0,
     }
 
 async def get_joke() -> str:
@@ -449,7 +527,16 @@ async def build_render_data(device: str = "familydisplay") -> dict:
     weather["icon_theme"] = icon_theme
     weather["icon_url"] = resolve_weather_icon_url(icon_theme, icon_code)
     weather["city"] = city
-    
+
+    tz_offset = weather.get("timezone_offset")
+    now_utc = datetime.now(timezone.utc)
+    if isinstance(tz_offset, (int, float)):
+        city_tz = timezone(timedelta(seconds=int(tz_offset)), name=city)
+        now = now_utc.astimezone(city_tz)
+    else:
+        now = now_utc
+    weather["local_datetime"] = now.isoformat()
+
     dad_joke = await get_joke()
 
     layout_meta = layout.get("meta", {}) if isinstance(layout, dict) else {}
@@ -473,7 +560,6 @@ async def build_render_data(device: str = "familydisplay") -> dict:
                 "categories": categories,
             }
     
-    now = datetime.now()
     date_str = now.strftime("%a, %d %b")
     
     if storage_enabled:

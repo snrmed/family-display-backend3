@@ -1181,6 +1181,9 @@ function getDynamicTextForType(type) {
 
   switch (type) {
     case 'TEMP':
+      if (weather.temp_min != null && weather.temp_max != null) {
+        return `${weather.temp_min}° / ${weather.temp_max}°`;
+      }
       return weather.temp != null ? `${weather.temp}°C` : '--°C';
     case 'FEELS_LIKE':
       return weather.feels_like != null ? `${weather.feels_like}°C` : '--°C';
@@ -1543,6 +1546,32 @@ function clearResizeHandles(el) {
   el.querySelectorAll('.resize-handle').forEach(handle => handle.remove());
 }
 
+function computeElementLayer(el) {
+  if (!el) return 10;
+  if (el.classList.contains('text') || el.classList.contains('icon')) {
+    return 30;
+  }
+
+  if (el.classList.contains('svg-overlay')) {
+    const src = (el.dataset.src || el.dataset.svgName || '').toString();
+    if (src === 'weather-icon' || src.startsWith('weather-')) {
+      return 35;
+    }
+    return 20;
+  }
+
+  if (el.classList.contains('box')) {
+    return 15;
+  }
+
+  return 10;
+}
+
+function applyElementLayer(el) {
+  if (!el) return;
+  el.style.zIndex = String(computeElementLayer(el));
+}
+
 function startResize(e, handleType) {
   e.stopPropagation();
   isResizing = true;
@@ -1627,9 +1656,8 @@ function addElement(kind, x, y, w, h, options = {}) {
   el.style.width = w + 'px';
   el.style.height = h + 'px';
   el.style.opacity = options.opacity !== undefined ? options.opacity : 1;
-  el.style.zIndex = '10'; // All elements on same z-index, selection outline handles visibility
   el.dataset.rotation = options.rotation || 0;
-  
+
   if (actualKind === 'text' || actualKind === 'icon') {
     const content = document.createElement('div');
     content.className = 'el-content';
@@ -1666,7 +1694,18 @@ function addElement(kind, x, y, w, h, options = {}) {
     el.dataset.gradEnd = options.gradEnd || '#1a6ec0';
     el.dataset.gradAngle = options.gradAngle || 135;
     el.dataset.svgName = options.svgName || 'svg';
-    
+
+    let srcValue = options.src;
+    if (!srcValue && options.svgName && options.svgName.startsWith('weather-')) {
+      srcValue = 'weather-icon';
+    }
+    if (srcValue && srcValue.startsWith('weather-')) {
+      srcValue = 'weather-icon';
+    }
+    if (srcValue) {
+      el.dataset.src = srcValue;
+    }
+
     const svg = el.querySelector('svg');
     if (svg) {
       svg.style.width = '100%';
@@ -1678,7 +1717,8 @@ function addElement(kind, x, y, w, h, options = {}) {
     updateSVGContent(el);
     console.log('Created SVG element:', options.svgName);
   }
-  
+
+  applyElementLayer(el);
   canvas.appendChild(el);
   console.log('Element appended to canvas. Total elements:', canvas.querySelectorAll('.el').length);
   selectEl(el);
@@ -2073,7 +2113,8 @@ function exportToJSON() {
       const svgName = el.dataset.svgName || 'svg';
       base.kind = 'svg';
       base.svgName = svgName;
-      base.src = svgName;
+      const storedSrc = el.dataset.src || svgName;
+      base.src = storedSrc;
       base.fillType = el.dataset.fillType || 'none';
       if (base.fillType === 'solid') {
         base.fillColor = el.dataset.fillColor;
@@ -2414,7 +2455,8 @@ document.getElementById('quickAddIcon').addEventListener('click', async () => {
         addElement('svg', 100, 100, 120, 120, {
           svgContent,
           svgName: `weather-${theme}`,
-          fillType: 'none'
+          fillType: 'none',
+          src: 'weather-icon'
         });
 
         modal.classList.add('hidden');
@@ -2481,7 +2523,8 @@ document.getElementById('duplicateBtn').addEventListener('click', () => {
   // Remove selection state from clone
   clone.classList.remove('selected');
   clone.querySelectorAll('.resize-handle').forEach(h => h.remove());
-  
+
+  applyElementLayer(clone);
   canvas.appendChild(clone);
   selectEl(clone); // Select the new clone
   saveAction('Duplicate');
