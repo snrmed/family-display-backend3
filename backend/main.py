@@ -205,6 +205,45 @@ def choose_pexels_background(category: str | None) -> dict | None:
     }
 
 
+def resolve_weather_icon_url(icon_theme: str, icon_code: str | None) -> str:
+    """Return a weather icon URL, falling back to day variants when needed."""
+
+    safe_theme = icon_theme or DEFAULT_ICON_THEME
+    candidates: list[str] = []
+
+    if icon_code:
+        candidates.append(icon_code)
+        if icon_code.endswith("n"):
+            candidates.append(icon_code[:-1] + "d")
+
+    if "01d" not in candidates:
+        candidates.append("01d")
+
+    for code in candidates:
+        if storage_enabled:
+            blob_path = f"assets/weather-icons/{safe_theme}/{code}.svg"
+            try:
+                blob = gcs_bucket.blob(blob_path)
+                if blob.exists():
+                    return make_public_url(f"gcs/{blob_path}")
+            except Exception as exc:
+                logger.warning(f"Failed to check weather icon {blob_path}: {exc}")
+        else:
+            local_roots = [
+                Path("backend/web/designer/weather-icons"),
+                Path("web/designer/weather-icons"),
+            ]
+            for root in local_roots:
+                local_path = root / safe_theme / f"{code}.svg"
+                if local_path.exists():
+                    return make_public_url(f"designer/weather-icons/{safe_theme}/{code}.svg")
+
+    fallback_code = candidates[0]
+    if storage_enabled:
+        return make_public_url(f"gcs/assets/weather-icons/{safe_theme}/{fallback_code}.svg")
+    return make_public_url(f"designer/weather-icons/{safe_theme}/{fallback_code}.svg")
+
+
 def rollover_pexels_current(categories: list[str], date_stamp: str) -> dict[str, int]:
     """Move current images to cache/date/category"""
     moved: dict[str, int] = {category: 0 for category in categories}
@@ -407,7 +446,8 @@ async def build_render_data(device: str = "familydisplay") -> dict:
     
     weather = await get_weather(city)
     icon_code = weather.get("icon", "01d")
-    weather["icon_url"] = make_public_url(f"gcs/assets/weather-icons/{icon_theme}/{icon_code}.svg")
+    weather["icon_theme"] = icon_theme
+    weather["icon_url"] = resolve_weather_icon_url(icon_theme, icon_code)
     weather["city"] = city
     
     dad_joke = await get_joke()
