@@ -1,202 +1,335 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Kin:D Frame</title>
-  <meta name="viewport" content="width=800, initial-scale=1" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kin:D Display</title>
   <style>
-    :root {
-      --w: 800px;
-      --h: 480px;
-      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    }
-    * { box-sizing: border-box; }
-    body {
+    * {
       margin: 0;
-      width: var(--w);
-      height: var(--h);
-      background: #111;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      width: 800px;
+      height: 480px;
       overflow: hidden;
       position: relative;
-      font-family: var(--font);
+      background: #000;
     }
+    
     #bg {
       position: absolute;
-      inset: 0;
+      top: 0;
+      left: 0;
       width: 100%;
       height: 100%;
       object-fit: cover;
       z-index: 0;
     }
+    
     #root {
       position: absolute;
-      inset: 0;
-      z-index: 2;
-      pointer-events: none;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
     }
+    
     .el {
       position: absolute;
-      pointer-events: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
     }
-    .wrap { white-space: normal; word-break: break-word; }
-
-    /* small red box if no layout */
+    
+    .el.wrap {
+      white-space: normal;
+      word-wrap: break-word;
+    }
+    
     #fallback-box {
-      position: absolute;
-      top: 20px;
-      left: 20px;
-      right: 20px;
-      padding: 16px;
-      background: rgba(200,0,0,0.9);
-      color: #fff;
-      border-radius: 16px;
-      font-size: 14px;
-      z-index: 20;
       display: none;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      padding: 20px;
+      background: rgba(255,255,255,0.9);
+      border-radius: 12px;
+      font-family: Arial, sans-serif;
+      font-size: 18px;
+      color: #333;
+      text-align: center;
+      z-index: 999;
     }
   </style>
 </head>
 <body>
-  <img id="bg" alt="background" />
+  <img id="bg" src="" alt="Background">
   <div id="root"></div>
-  <div id="fallback-box">No layout found in data.layout.</div>
+  <div id="fallback-box">
+    <p>⚠️ No layout data</p>
+    <p style="font-size: 14px; margin-top: 10px;">Check render_data endpoint</p>
+  </div>
 
   <script>
-    // 1) get JSON from query
+    // ================================================================
+    // CRITICAL FIX: URL Resolution for Playwright
+    // ================================================================
+    
+    /**
+     * Parse data from URL query string
+     * Expected format: ?data=<url_encoded_json>
+     */
     function getDataFromQuery() {
-      const sp = new URLSearchParams(location.search);
-      const raw = sp.get("data");
-      if (!raw) return null;
-      try { return JSON.parse(raw); } catch (e) { return null; }
+      const params = new URLSearchParams(window.location.search);
+      const encoded = params.get("data");
+      
+      if (!encoded) {
+        console.error("❌ No data parameter in URL");
+        return null;
+      }
+      
+      try {
+        const decoded = decodeURIComponent(encoded);
+        const data = JSON.parse(decoded);
+        console.log("✅ Parsed data:", {
+          layout_elements: data.layout?.elements?.length || 0,
+          svg_base: data.svg_base || "not_set",
+          weather_icon: data.weather?.icon_url || "not_set"
+        });
+        return data;
+      } catch (e) {
+        console.error("❌ Failed to parse data:", e);
+        return null;
+      }
     }
 
-    // 2) map text types (CITY, TEMP, HUMIDITY, JOKE, DATE...)
+    /**
+     * CRITICAL FIX: Resolve URLs properly for Playwright
+     * When running under file:// protocol, we need full absolute URLs
+     */
+    function resolveUrl(path, svg_base) {
+      if (!path) return "";
+      
+      // Already absolute URL - use as-is
+      if (path.startsWith("http://") || path.startsWith("https://")) {
+        return path;
+      }
+      
+      // Absolute path starting with / - needs base URL
+      if (path.startsWith("/")) {
+        // Extract base from svg_base (which should be full URL)
+        if (svg_base && svg_base.startsWith("http")) {
+          // svg_base is like: https://domain.com/gcs/assets/svgs
+          // Extract: https://domain.com
+          const base = svg_base.split("/gcs/")[0];
+          return base + path;
+        }
+        // Fallback: return as-is (will fail in file:// but at least we tried)
+        return path;
+      }
+      
+      // Relative path - prepend svg_base
+      if (svg_base) {
+        return svg_base.replace(/\/$/, "") + "/" + path;
+      }
+      
+      return path;
+    }
+
+    /**
+     * Get text content based on element type
+     */
     function textFromType(el, data) {
-      const t = (el.type || "").toUpperCase();
-      switch (t) {
+      const type = el.type || "CUSTOM";
+      
+      switch (type) {
+        case "WEATHER_CITY":
         case "CITY":
-          return data.city || "City";
+          return data.weather?.city || "City";
+        
         case "TEMP":
-          return data.weather && data.weather.temp != null
+          return data.weather?.temp != null 
             ? data.weather.temp + "°C"
             : "--°C";
+        
         case "HUMIDITY":
-          return data.weather && data.weather.humidity != null
+          return data.weather?.humidity != null
             ? "Humidity: " + data.weather.humidity + "%"
             : "Humidity: --%";
+        
         case "JOKE":
           return data.dad_joke || "No joke today.";
+        
         case "DATE":
           return data.date || "";
+        
+        case "WEATHER_MINMAX":
+          if (data.weather?.temp_min != null && data.weather?.temp_max != null) {
+            return data.weather.temp_min + "° / " + data.weather.temp_max + "°";
+          }
+          return "--° / --°";
+        
         default:
           return el.text || "";
       }
     }
 
-    // 3) load an SVG from URL and inline it
+    /**
+     * Load SVG from URL and inline it
+     * CRITICAL FIX: Uses full absolute URLs
+     */
     async function inlineSvgInto(elDiv, url) {
+      console.log("📥 Fetching SVG:", url);
+      
       try {
-        const r = await fetch(url, {mode: "cors"});
-        if (!r.ok) throw new Error("fetch failed");
-        const txt = await r.text();
-        // put the SVG markup directly in the div
-        elDiv.innerHTML = txt;
-        // make sure it fills the box
+        const response = await fetch(url, { mode: "cors" });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const svgText = await response.text();
+        
+        // Insert SVG markup
+        elDiv.innerHTML = svgText;
+        
+        // Make SVG fill container
         const svg = elDiv.querySelector("svg");
         if (svg) {
           svg.setAttribute("width", "100%");
           svg.setAttribute("height", "100%");
           svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+          console.log("✅ SVG loaded successfully");
         }
-      } catch (e) {
-        // if fetch fails, at least show the url for debugging
-        elDiv.textContent = "svg";
+      } catch (error) {
+        console.error("❌ SVG fetch failed:", url, error);
+        // Show error visually
+        elDiv.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-size:12px;color:#ff0000;">SVG Error</div>`;
       }
     }
 
-    (async function init(){
+    /**
+     * Main initialization
+     */
+    (async function init() {
       const data = getDataFromQuery();
       const bg = document.getElementById("bg");
       const root = document.getElementById("root");
-      const fb = document.getElementById("fallback-box");
+      const fallback = document.getElementById("fallback-box");
 
       if (!data) {
-        fb.style.display = "block";
+        fallback.style.display = "block";
         return;
       }
 
-      // background
+      // Set background
       if (data.bg_url) {
         bg.src = data.bg_url;
       }
 
       const layout = data.layout;
       if (!layout || !Array.isArray(layout.elements) || layout.elements.length === 0) {
-        fb.style.display = "block";
+        console.warn("⚠️  No layout elements");
+        fallback.style.display = "block";
         return;
       }
 
-      fb.style.display = "none";
+      fallback.style.display = "none";
 
-      // base for short SVG names
-      const svgBase = (data.svg_base || "/gcs/assets/svgs").replace(/\/$/, "");
+      // CRITICAL: Get svg_base from data (should be full URL)
+      const svg_base = data.svg_base || "/gcs/assets/svgs";
+      console.log("🎨 Rendering with svg_base:", svg_base);
 
-      // render each element
+      // Render each element
       for (const el of layout.elements) {
-        const d = document.createElement("div");
-        d.className = "el";
+        const div = document.createElement("div");
+        div.className = "el";
 
-        // position and style
-        d.style.left = (el.x || 0) + "px";
-        d.style.top  = (el.y || 0) + "px";
-        if (el.w != null) d.style.width  = el.w + "px";
-        if (el.h != null) d.style.height = el.h + "px";
-        if (el.radius != null) d.style.borderRadius = el.radius + "px";
-        if (el.fill)   d.style.background = el.fill;
-        if (el.border) d.style.border     = el.border;
-        if (el.shadow) d.style.boxShadow  = el.shadow;
-        if (el.opacity != null) d.style.opacity = el.opacity;
+        // Position
+        div.style.left = (el.x || 0) + "px";
+        div.style.top = (el.y || 0) + "px";
+        
+        // Size
+        if (el.w != null) div.style.width = el.w + "px";
+        if (el.h != null) div.style.height = el.h + "px";
+
+        // Styling
+        if (el.radius != null) div.style.borderRadius = el.radius + "px";
+        if (el.fill) div.style.background = el.fill;
+        if (el.border) div.style.border = el.border;
+        if (el.shadow) div.style.boxShadow = el.shadow;
+        if (el.opacity != null) div.style.opacity = el.opacity;
 
         const kind = (el.kind || "").toLowerCase();
 
+        // ============================================================
+        // TEXT ELEMENTS
+        // ============================================================
         if (kind === "text") {
           const span = document.createElement("div");
-          const txt = textFromType(el, data);
-          span.textContent = txt;
+          span.textContent = textFromType(el, data);
+          
+          // Text styling
           if (el.fontFamily) span.style.fontFamily = el.fontFamily;
-          if (el.fontSize)   span.style.fontSize   = el.fontSize + "px";
-          if (el.color)      span.style.color      = el.color;
-          if (el.wrap)       span.classList.add("wrap");
-          d.appendChild(span);
-        } else if (kind === "icon") {
-          // decide final URL
+          if (el.fontSize) span.style.fontSize = el.fontSize + "px";
+          if (el.color) span.style.color = el.color;
+          if (el.weight) span.style.fontWeight = el.weight;
+          if (el.align) span.style.textAlign = el.align;
+          if (el.wrap) span.style.whiteSpace = "normal";
+          
+          span.style.width = "100%";
+          span.style.height = "100%";
+          span.style.display = "flex";
+          span.style.alignItems = "center";
+          span.style.justifyContent = "center";
+          
+          div.appendChild(span);
+        }
+        
+        // ============================================================
+        // ICON/SVG ELEMENTS - CRITICAL FIX
+        // ============================================================
+        else if (kind === "icon" || kind === "svg") {
           let src = el.src || "";
-          // if you ever want to support weather-icon shorthand:
-          if (src === "weather-icon" && data.weather && data.weather.icon_url) {
+          
+          // Special case: weather icon shorthand
+          if (src === "weather-icon" && data.weather?.icon_url) {
             src = data.weather.icon_url;
           }
-
-          // relative name → prepend svgBase
-          if (src && !src.startsWith("http") && !src.startsWith("/")) {
-            src = svgBase + "/" + src;
-          }
-
-          // svg → inline
-          if (src.endsWith(".svg")) {
-            await inlineSvgInto(d, src);
+          
+          // CRITICAL: Resolve URL properly
+          const resolvedUrl = resolveUrl(src, svg_base);
+          console.log(`🔗 ${kind} element:`, { original: src, resolved: resolvedUrl });
+          
+          // Load SVG
+          if (resolvedUrl.endsWith(".svg")) {
+            await inlineSvgInto(div, resolvedUrl);
           } else {
+            // Raster image
             const img = document.createElement("img");
-            img.src = src;
+            img.src = resolvedUrl;
             img.style.width = "100%";
             img.style.height = "100%";
             img.style.objectFit = "contain";
-            d.appendChild(img);
+            div.appendChild(img);
           }
         }
-        // boxes are already visually styled
+        
+        // ============================================================
+        // BOX ELEMENTS (styling already applied above)
+        // ============================================================
+        // Boxes don't need content, just visual styling
 
-        root.appendChild(d);
+        root.appendChild(div);
       }
+      
+      console.log("✅ Render complete:", layout.elements.length, "elements");
     })();
   </script>
 </body>
