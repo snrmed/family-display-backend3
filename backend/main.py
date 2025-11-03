@@ -1,132 +1,23 @@
-"""
-Kin:D Family Display Backend
-Fixed version with proper URL resolution for Playwright rendering
-"""
 import os
-import re
 import json
-import logging
 import random
+import logging
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from urllib.parse import quote
-from fastapi import FastAPI, Header, HTTPException, Response
-from fastapi.responses import HTMLResponse, JSONResponse
+
+from fastapi import FastAPI, HTTPException, Header
+from fastapi.responses import HTMLResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
-# ================================================================
-# Environment Variables
-# ================================================================
-PORT = int(os.getenv("PORT", 8080))
-LOG_LEVEL = os.getenv("LOG_LEVEL", "info").lower()
-GCS_BUCKET = os.getenv("GCS_BUCKET", "family-display-packs")
-ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "adm_860510")
+from google.cloud import storage
+import httpx
 
-# Feature flags
-ENABLE_EMAIL_USERS = os.getenv("ENABLE_EMAIL_USERS", "false").lower() == "true"
-ENABLE_RENDERING = os.getenv("ENABLE_RENDERING", "true").lower() == "true"
-ENABLE_PEXELS = os.getenv("ENABLE_PEXELS", "true").lower() == "true"
-ENABLE_OPENWEATHER = os.getenv("ENABLE_OPENWEATHER", "true").lower() == "true"
-ENABLE_JOKES_API = os.getenv("ENABLE_JOKES_API", "true").lower() == "true"
-
-# City mode
-CITY_MODE = os.getenv("CITY_MODE", "default")
-DEFAULT_CITY = os.getenv("DEFAULT_CITY", "Darwin")
-
-# Rendering
-RENDER_PATH = os.getenv("RENDER_PATH", "backend/web/layouts/base.html")
-RENDER_WIDTH = int(os.getenv("RENDER_WIDTH", "800"))
-RENDER_HEIGHT = int(os.getenv("RENDER_HEIGHT", "480"))
-
-# CRITICAL FIX: Public base URL for absolute paths
-PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").rstrip("/")
-
-# Icon theme
-DEFAULT_ICON_THEME = os.getenv("WEATHER_ICON_PACK", "happy-skies")
-
-# ================================================================
-# Logging
-# ================================================================
-logging.basicConfig(
-    level=logging.DEBUG if LOG_LEVEL == "debug" else logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s"
-)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# ================================================================
-# Google Cloud Storage
-# ================================================================
-storage_enabled = False
-gcs_bucket = None
-
-try:
-    from google.cloud import storage
-    gcs_client = storage.Client()
-    gcs_bucket = gcs_client.bucket(GCS_BUCKET)
-    storage_enabled = True
-    logger.info(f"✅ GCS enabled: {GCS_BUCKET}")
-except Exception as e:
-    logger.warning(f"⚠️  GCS disabled: {e}")
-
-# ================================================================
-# Helper Functions
-# ================================================================
-
-def make_public_url(path: str) -> str:
-    """Convert GCS path to full public URL"""
-    if PUBLIC_BASE_URL:
-        return f"{PUBLIC_BASE_URL}/{path.lstrip('/')}"
-    return f"/{path.lstrip('/')}"
-
-def gcs_read_json(key: str) -> dict:
-    """Read JSON from GCS"""
-    if not storage_enabled:
-        raise RuntimeError("GCS not configured")
-    blob = gcs_bucket.blob(key)
-    if not blob.exists():
-        raise FileNotFoundError(f"Not found: {key}")
-    data = blob.download_as_bytes()
-    return json.loads(data.decode('utf-8'))
-
-def gcs_write_bytes(key: str, data: bytes, content_type: str = "application/octet-stream"):
-    """Write bytes to GCS"""
-    if not storage_enabled:
-        raise RuntimeError("GCS not configured")
-    blob = gcs_bucket.blob(key)
-    blob.upload_from_string(data, content_type=content_type)
-    logger.info(f"✅ Uploaded: {key}")
-
-# ================================================================
-# Playwright Setup
-# ================================================================
-from playwright.async_api import async_playwright
-
-playwright_app = None
-playwright_browser = None
-
-async def init_playwright():
-    global playwright_app, playwright_browser
-    if ENABLE_RENDERING and playwright_browser is None:
-        try:
-            playwright_app = await async_playwright().start()
-            playwright_browser = await playwright_app.chromium.launch(
-                args=["--disable-dev-shm-usage", "--no-sandbox"]
-            )
-            logger.info("✅ Playwright initialized")
-        except Exception as e:
-            logger.error(f"❌ Playwright failed: {e}")
-
-async def close_playwright():
-    global playwright_app, playwright_browser
-    if playwright_browser:
-        await playwright_browser.close()
-    if playwright_app:
-        await playwright_app.stop()
-
-# ================================================================
-# FastAPI App
-# ================================================================
-app = FastAPI(title="Kin:D Family Display Backend", version="2.0.0-fixed")
+app = FastAPI(title="Kin:D Family Display Backend")
 
 app.add_middleware(
     CORSMiddleware,
@@ -136,26 +27,121 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.on_event("startup")
-async def startup():
-    await init_playwright()
+PORT = int(os.getenv("PORT", "8080"))
+GCS_BUCKET = os.getenv("GCS_BUCKET", "family-display-packs")
+ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "adm_860510")
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "")
+ENABLE_RENDERING = os.getenv("ENABLE_RENDERING", "true").lower() == "true"
+ENABLE_PEXELS = os.getenv("ENABLE_PEXELS", "true").lower() == "true"
+ENABLE_OPENWEATHER = os.getenv("ENABLE_OPENWEATHER", "true").lower() == "true"
+ENABLE_JOKES_API = os.getenv("ENABLE_JOKES_API", "true").lower() == "true"
+ENABLE_EMAIL_USERS = os.getenv("ENABLE_EMAIL_USERS", "false").lower() == "true"
+CITY_MODE = os.getenv("CITY_MODE", "default")
+DEFAULT_CITY = os.getenv("DEFAULT_CITY", "Darwin")
+DEFAULT_ICON_THEME = os.getenv("WEATHER_ICON_PACK", "happy-skies")
+RENDER_WIDTH = int(os.getenv("RENDER_WIDTH", "800"))
+RENDER_HEIGHT = int(os.getenv("RENDER_HEIGHT", "480"))
+RENDER_PATH = os.getenv("RENDER_PATH", "backend/web/layouts/base.html")
 
-@app.on_event("shutdown")
-async def shutdown():
-    await close_playwright()
+storage_enabled = False
+gcs_bucket = None
+playwright_browser = None
 
-# ================================================================
-# Mock Data Providers (simplified for demo)
-# ================================================================
+try:
+    storage_client = storage.Client()
+    gcs_bucket = storage_client.bucket(GCS_BUCKET)
+    storage_enabled = True
+    logger.info(f"✓ GCS enabled: {GCS_BUCKET}")
+except Exception as e:
+    logger.warning(f"⚠️  GCS disabled: {e}")
+
+if ENABLE_RENDERING:
+    try:
+        from playwright.async_api import async_playwright
+        playwright = None
+        playwright_browser = None
+        
+        @app.on_event("startup")
+        async def startup():
+            global playwright, playwright_browser
+            playwright = await async_playwright().start()
+            playwright_browser = await playwright.chromium.launch(
+                headless=True,
+                args=['--no-sandbox', '--disable-setuid-sandbox']
+            )
+            logger.info("✓ Playwright browser started")
+        
+        @app.on_event("shutdown")
+        async def shutdown():
+            if playwright_browser:
+                await playwright_browser.close()
+            if playwright:
+                await playwright.stop()
+            logger.info("✓ Playwright stopped")
+    except ImportError:
+        logger.warning("⚠️  Playwright not available")
+        ENABLE_RENDERING = False
 
 LOCAL_JOKES = [
-    "Why don't skeletons fight each other? They don't have the guts.",
-    "I told my wife she should embrace her mistakes — she gave me a hug.",
-    "What do you call a bear with no teeth? A gummy bear.",
+    "Why don't scientists trust atoms? Because they make up everything!",
+    "What do you call a fake noodle? An impasta.",
+    "Why did the scarecrow win an award? He was outstanding in his field.",
+    "I'm reading a book about anti-gravity. It's impossible to put down!",
+    "Did you hear about the mathematician who's afraid of negative numbers? He'll stop at nothing to avoid them.",
+    "Why do we tell actors to 'break a leg?' Because every play has a cast.",
+    "Helvetica and Times New Roman walk into a bar. 'Get out of here!' shouts the bartender. 'We don't serve your type.'",
+    "Yesterday I saw a guy spill all his Scrabble letters on the road. I asked him, 'What's the word on the street?'",
+    "What do you call a factory that makes okay products? A satisfactory.",
+    "I used to hate facial hair, but then it grew on me.",
 ]
 
+def make_public_url(path: str) -> str:
+    """Build full public URL for assets"""
+    if path.startswith("http"):
+        return path
+    base = PUBLIC_BASE_URL.rstrip("/") if PUBLIC_BASE_URL else f"http://localhost:{PORT}"
+    return f"{base}/{path.lstrip('/')}"
+
+def gcs_read_json(key: str) -> dict:
+    """Read JSON from GCS"""
+    if not storage_enabled:
+        raise RuntimeError("GCS not enabled")
+    blob = gcs_bucket.blob(key)
+    if not blob.exists():
+        raise FileNotFoundError(f"Blob not found: {key}")
+    return json.loads(blob.download_as_text(encoding='utf-8'))
+
+def gcs_write_bytes(key: str, data: bytes, content_type: str = "application/octet-stream"):
+    """Write bytes to GCS"""
+    if not storage_enabled:
+        raise RuntimeError("GCS not enabled")
+    blob = gcs_bucket.blob(key)
+    blob.upload_from_string(data, content_type=content_type)
+    logger.info(f"✓ Wrote {len(data)} bytes to {key}")
+
 async def get_weather(city: str) -> dict:
-    """Mock weather data"""
+    """Get weather data"""
+    if ENABLE_OPENWEATHER:
+        api_key = os.getenv("OPENWEATHER_KEY")
+        if api_key:
+            try:
+                async with httpx.AsyncClient() as client:
+                    url = f"https://api.openweathermap.org/data/2.5/weather?q={city}&appid={api_key}&units=metric"
+                    r = await client.get(url, timeout=5)
+                    if r.status_code == 200:
+                        data = r.json()
+                        return {
+                            "temp": round(data["main"]["temp"]),
+                            "feels_like": round(data["main"]["feels_like"]),
+                            "humidity": data["main"]["humidity"],
+                            "rain": data.get("rain", {}).get("1h", 0),
+                            "wind": round(data["wind"]["speed"]),
+                            "icon": data["weather"][0]["icon"],
+                            "desc": data["weather"][0]["description"].title()
+                        }
+            except Exception as e:
+                logger.warning(f"OpenWeather failed: {e}")
+    
     return {
         "temp": 33,
         "feels_like": 33,
@@ -167,20 +153,25 @@ async def get_weather(city: str) -> dict:
     }
 
 async def get_joke() -> str:
-    """Mock joke"""
+    """Get dad joke"""
+    if ENABLE_JOKES_API:
+        try:
+            async with httpx.AsyncClient() as client:
+                r = await client.get(
+                    "https://icanhazdadjoke.com/",
+                    headers={"Accept": "application/json"},
+                    timeout=5
+                )
+                if r.status_code == 200:
+                    return r.json()["joke"]
+        except Exception as e:
+            logger.warning(f"Joke API failed: {e}")
+    
     return random.choice(LOCAL_JOKES)
 
-# ================================================================
-# Render Data Assembly - FIXED VERSION
-# ================================================================
-
 async def build_render_data(device: str = "familydisplay") -> dict:
-    """
-    Build complete data context for rendering
-    CRITICAL FIX: Include svg_base with full PUBLIC_BASE_URL
-    """
+    """Build complete data context for rendering"""
     
-    # 1) Load layout
     if ENABLE_EMAIL_USERS:
         layout_key = f"users/default/devices/{device}/layouts/current.json"
     else:
@@ -196,33 +187,24 @@ async def build_render_data(device: str = "familydisplay") -> dict:
             "elements": []
         }
     
-    # 2) Icon theme from layout meta or default
     icon_theme = layout.get("meta", {}).get("iconTheme", DEFAULT_ICON_THEME)
     
-    # 3) Get city
     city = DEFAULT_CITY
     if CITY_MODE == "fetch":
         city = layout.get("meta", {}).get("city", DEFAULT_CITY)
     
-    # 4) Weather data with FULL URLs
     weather = await get_weather(city)
     icon_code = weather.get("icon", "01d")
     weather["icon_url"] = make_public_url(f"gcs/assets/weather-icons/{icon_theme}/{icon_code}.svg")
     weather["city"] = city
     
-    # 5) Other data
     dad_joke = await get_joke()
     
-    # 6) Background - mock for now
     bg_url = make_public_url("gcs/pexels/current/abstract_0.jpg")
     
-    # 7) Date
     now = datetime.now()
     date_str = now.strftime("%a, %d %b")
     
-    # ================================================================
-    # CRITICAL FIX: svg_base must be FULL URL
-    # ================================================================
     svg_base = make_public_url("gcs/assets/svgs")
     
     return {
@@ -231,19 +213,12 @@ async def build_render_data(device: str = "familydisplay") -> dict:
         "dad_joke": dad_joke,
         "date": date_str,
         "bg_url": bg_url,
-        "svg_base": svg_base,  # ✅ FULL URL for Playwright
+        "svg_base": svg_base,
         "timestamp": now.isoformat()
     }
 
-# ================================================================
-# HTML to PNG Rendering - FIXED VERSION
-# ================================================================
-
 async def render_html_to_png(html_path: str, context: Dict[str, Any]) -> bytes:
-    """
-    Render base.html to PNG using Playwright
-    FIXED: Properly encode data and pass base URL
-    """
+    """Render base.html to PNG using Playwright"""
     if not ENABLE_RENDERING or playwright_browser is None:
         raise RuntimeError("Rendering disabled")
     
@@ -251,72 +226,75 @@ async def render_html_to_png(html_path: str, context: Dict[str, Any]) -> bytes:
         viewport={"width": RENDER_WIDTH, "height": RENDER_HEIGHT}
     )
     
-    # 1) Serialize context to JSON
     raw_json = json.dumps(context)
-    
-    # 2) URL-encode the data
     encoded_data = quote(raw_json, safe="")
-    
-    # 3) Build file:// URL with data parameter
-    # CRITICAL: base.html will use data.svg_base from JSON, not query param
     url = f"file://{os.path.abspath(html_path)}?data={encoded_data}"
     
     logger.info(f"🎨 Rendering: {url[:100]}...")
     
     try:
         await page.goto(url, wait_until="networkidle", timeout=10000)
-        await page.wait_for_timeout(1500)  # Let JS render
+        await page.wait_for_timeout(1500)
         png_bytes = await page.screenshot(type="png", full_page=False)
         await page.close()
         logger.info(f"✅ Rendered {len(png_bytes)} bytes")
         return png_bytes
     except Exception as e:
-        logger.error(f"❌ Render failed: {e}")
+        logger.error(f"Render failed: {e}")
         await page.close()
         raise
-
-# ================================================================
-# API Routes
-# ================================================================
 
 @app.get("/")
 def root():
     return {
         "service": "Kin:D Family Display Backend",
-        "version": "2.0.0-fixed",
-        "storage": "enabled" if storage_enabled else "disabled",
-        "rendering": "enabled" if ENABLE_RENDERING else "disabled",
-        "public_base_url": PUBLIC_BASE_URL or "not_set"
+        "status": "running",
+        "features": {
+            "rendering": ENABLE_RENDERING,
+            "pexels": ENABLE_PEXELS,
+            "openweather": ENABLE_OPENWEATHER,
+            "jokes": ENABLE_JOKES_API,
+            "gcs": storage_enabled
+        }
     }
 
 @app.get("/v1/render_data")
 async def get_render_data(device: str = "familydisplay"):
-    """Get render data JSON"""
-    data = await build_render_data(device)
-    return JSONResponse(content=data)
-
-@app.get("/v1/frame")
-async def render_frame(device: str = "familydisplay"):
-    """Render PNG frame"""
+    """Get render context data"""
     try:
         data = await build_render_data(device)
-        png_bytes = await render_html_to_png(RENDER_PATH, data)
+        return data
+    except Exception as e:
+        logger.error(f"Render data failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/v1/frame")
+async def get_frame(device: str = "familydisplay"):
+    """Render and return PNG frame"""
+    if not ENABLE_RENDERING:
+        raise HTTPException(status_code=503, detail="Rendering disabled")
+    
+    try:
+        context = await build_render_data(device)
+        png_bytes = await render_html_to_png(RENDER_PATH, context)
         return Response(content=png_bytes, media_type="image/png")
     except Exception as e:
-        logger.error(f"Frame render failed: {e}")
+        logger.error(f"Frame generation failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/admin/render_now")
-async def admin_render_now(token: str, device: str = "familydisplay"):
-    """Admin: Force render and save to GCS"""
+async def admin_render_now(device: str = "familydisplay", token: str = None):
+    """Force render and save to GCS"""
     if token != ADMIN_TOKEN:
         raise HTTPException(status_code=403, detail="Invalid token")
     
+    if not ENABLE_RENDERING:
+        raise HTTPException(status_code=503, detail="Rendering disabled")
+    
     try:
-        data = await build_render_data(device)
-        png_bytes = await render_html_to_png(RENDER_PATH, data)
+        context = await build_render_data(device)
+        png_bytes = await render_html_to_png(RENDER_PATH, context)
         
-        # Save to GCS
         if ENABLE_EMAIL_USERS:
             render_key = f"users/default/devices/{device}/renders/latest.png"
         else:
@@ -334,19 +312,9 @@ async def admin_render_now(token: str, device: str = "familydisplay"):
         logger.error(f"Admin render failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# ================================================================
-# GCS Asset Proxy
-# ================================================================
-
 @app.get("/gcs/{path:path}")
 def get_gcs_asset(path: str):
-    """
-    Serve assets from GCS bucket
-    Examples:
-      /gcs/assets/svgs/lemon.svg
-      /gcs/assets/weather-icons/happy-skies/01d.svg
-      /gcs/pexels/current/abstract_0.jpg
-    """
+    """Serve assets from GCS bucket"""
     if not storage_enabled:
         raise HTTPException(status_code=500, detail="GCS not configured")
     
@@ -357,7 +325,6 @@ def get_gcs_asset(path: str):
     
     data = blob.download_as_bytes()
     
-    # Determine content type
     if path.endswith(".svg"):
         ctype = "image/svg+xml"
     elif path.endswith(".png"):
@@ -378,9 +345,41 @@ def get_gcs_asset(path: str):
         }
     )
 
-# ================================================================
-# Layout Management
-# ================================================================
+@app.get("/api/list-svgs")
+def list_svgs():
+    """List all SVG files in GCS bucket"""
+    if not storage_enabled:
+        return {"svgs": []}
+    
+    try:
+        blobs = gcs_bucket.list_blobs(prefix="assets/svgs/")
+        svgs = [
+            blob.name.split("/")[-1]
+            for blob in blobs
+            if blob.name.endswith(".svg")
+        ]
+        logger.info(f"Found {len(svgs)} SVGs in bucket")
+        return {"svgs": svgs}
+    except Exception as e:
+        logger.error(f"Failed to list SVGs: {e}")
+        return {"svgs": []}
+
+@app.get("/api/list-weather-themes")
+def list_weather_themes():
+    """List available weather icon themes"""
+    if not storage_enabled:
+        return {"themes": ["happy-skies", "soft-skies", "sunny-day", "blue-sky-pro"]}
+    
+    try:
+        blobs = gcs_bucket.list_blobs(prefix="assets/weather-icons/", delimiter="/")
+        themes = [
+            prefix.split("/")[-2]
+            for prefix in blobs.prefixes
+        ]
+        return {"themes": themes}
+    except Exception as e:
+        logger.error(f"Failed to list weather themes: {e}")
+        return {"themes": ["happy-skies", "soft-skies", "sunny-day", "blue-sky-pro"]}
 
 @app.get("/layouts/{device}")
 def get_layout(device: str, x_admin_token: str = Header(None)):
@@ -413,14 +412,10 @@ def save_layout(device: str, layout: dict, x_admin_token: str = Header(None)):
     
     try:
         json_str = json.dumps(layout, indent=2)
-        gcs_write_bytes(key, json_str.encode(), "application/json")
+        gcs_write_bytes(key, json_str.encode('utf-8'), "application/json")
         return {"status": "saved", "path": key}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-# ================================================================
-# Designer
-# ================================================================
 
 @app.get("/designer/", response_class=HTMLResponse)
 def get_designer():
@@ -431,9 +426,14 @@ def get_designer():
             return f.read()
     return "<h1>Designer not found</h1>"
 
-# ================================================================
-# Run
-# ================================================================
+if os.path.exists("web"):
+    app.mount("/web", StaticFiles(directory="web"), name="web")
+
+if os.path.exists("web/presets"):
+    app.mount("/presets", StaticFiles(directory="web/presets", html=True), name="presets")
+
+if os.path.exists("web/svgs"):
+    app.mount("/svgs", StaticFiles(directory="web/svgs"), name="svgs")
 
 if __name__ == "__main__":
     import uvicorn
