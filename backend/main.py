@@ -556,6 +556,10 @@ async def build_render_data(
     else:
         data["layout"] = {"elements": []}
 
+    # 9) expose layout JSON so base.html can render EXACTLY what the device saved
+    #    (if none on GCS, this will just be None and the HTML will use its own fallback)
+    data["layout"] = layout_json
+    
     return data
 
 
