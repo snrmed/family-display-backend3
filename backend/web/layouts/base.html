@@ -56,6 +56,7 @@
       color: #fff;
       border-radius: 16px;
       font-size: 14px;
+      z-index: 99;
     }
   </style>
 </head>
@@ -65,46 +66,83 @@
   <div id="fallback-box" style="display:none;">No layout found in data.layout.</div>
 
   <script>
-    function getData() {
+    function getDataFromQuery() {
       const sp = new URLSearchParams(location.search);
       const raw = sp.get("data");
       if (!raw) return null;
-      try { return JSON.parse(raw); } catch { return null; }
+      try { return JSON.parse(raw); } catch (e) { return null; }
     }
 
-    function makeTextFromType(el, data) {
+    // map layout element type -> real text
+    function textFromType(el, data) {
       const t = (el.type || "").toUpperCase();
       switch (t) {
-        case "CITY": return data.city || "City";
-        case "TEMP": return data.weather && data.weather.temp != null ? data.weather.temp + "°C" : "--°C";
-        case "HUMIDITY": return data.weather && data.weather.humidity != null ? "Humidity: " + data.weather.humidity + "%" : "Humidity: --%";
-        case "JOKE": return data.dad_joke || "No joke today.";
-        case "DATE": return data.date || "";
-        default: return el.text || "";
+        case "CITY":
+          return data.city || "City";
+        case "TEMP":
+          return data.weather && data.weather.temp != null
+            ? data.weather.temp + "°C"
+            : "--°C";
+        case "HUMIDITY":
+          return data.weather && data.weather.humidity != null
+            ? "Humidity: " + data.weather.humidity + "%"
+            : "Humidity: --%";
+        case "WIND":
+          return data.weather && data.weather.wind != null
+            ? "Wind: " + data.weather.wind + " km/h"
+            : "Wind: -- km/h";
+        case "RAIN":
+          return data.weather && data.weather.rain != null
+            ? "Rain: " + data.weather.rain
+            : "Rain: --";
+        case "JOKE":
+          return data.dad_joke || "No joke today.";
+        case "DATE":
+          return data.date || "";
+        default:
+          return el.text || "";
       }
     }
 
     (function init(){
-      const data = getData();
+      const data = getDataFromQuery();
       const bg = document.getElementById("bg");
       const root = document.getElementById("root");
+      const fb = document.getElementById("fallback-box");
+
       if (!data) {
-        document.getElementById("fallback-box").style.display = "block";
+        fb.style.display = "block";
         return;
       }
 
-      // background
-      if (data.bg_url) bg.src = data.bg_url;
+      // 1) background: prefer server-provided, else try theme
+      if (data.bg_url) {
+        bg.src = data.bg_url;
+      } else if (data.theme) {
+        bg.src = "/gcs/pexels/current/" + data.theme + "_0.jpg";
+      }
 
+      // 2) layout: must come from data.layout (main.py now sends this)
       const layout = data.layout;
       if (!layout || !Array.isArray(layout.elements) || layout.elements.length === 0) {
-        document.getElementById("fallback-box").style.display = "block";
+        fb.style.display = "block";
         return;
       }
+      fb.style.display = "none";
 
-      // we have elements → render and hide fallback
-      document.getElementById("fallback-box").style.display = "none";
+      // optional: if layout.meta has width/height, apply
+      if (layout.meta) {
+        if (layout.meta.width) {
+          document.documentElement.style.setProperty("--w", layout.meta.width + "px");
+          document.body.style.width = layout.meta.width + "px";
+        }
+        if (layout.meta.height) {
+          document.documentElement.style.setProperty("--h", layout.meta.height + "px");
+          document.body.style.height = layout.meta.height + "px";
+        }
+      }
 
+      // base for svgs (main.py sends this)
       const svgBase = data.svg_base || "/gcs/assets/svgs";
 
       layout.elements.forEach(el => {
@@ -121,26 +159,47 @@
         if (el.opacity != null) d.style.opacity = el.opacity;
 
         const kind = (el.kind || "").toLowerCase();
+
         if (kind === "text") {
           const span = document.createElement("div");
-          const txt = makeTextFromType(el, data);
+          const txt = textFromType(el, data);
           span.textContent = txt;
           if (el.fontFamily) span.style.fontFamily = el.fontFamily;
           if (el.fontSize) span.style.fontSize = el.fontSize + "px";
           if (el.color) span.style.color = el.color;
           if (el.wrap) span.classList.add("wrap");
           d.appendChild(span);
+
         } else if (kind === "icon") {
           const img = document.createElement("img");
+
+          // SOURCE PRIORITY:
+          // 1. explicit weather marker
+          // 2. el.src as given
+          // 3. el.src as filename → prefix with svgBase
           let src = el.src || "";
+
+          // allow designer to say "weather-icon" or "{{weather.icon}}"
+          if (src === "weather-icon" || src === "{{weather.icon}}") {
+            src = (data.weather && data.weather.icon_url) ? data.weather.icon_url : "";
+          }
+
+          // if it's just "lemon.svg" or "myicon.svg" → stick on the svg base
           if (src && !src.startsWith("http") && !src.startsWith("/")) {
             src = svgBase.replace(/\/$/, "") + "/" + src;
           }
+
           img.src = src;
+          img.alt = el.alt || "icon";
+          img.style.width = "100%";
+          img.style.height = "100%";
+          img.style.objectFit = "contain";
+
           d.classList.add("el-icon");
           d.appendChild(img);
         }
-        // box kind is already handled by fill/border/etc
+
+        // box kind: nothing else to do
         root.appendChild(d);
       });
     })();
