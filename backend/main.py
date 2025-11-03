@@ -420,11 +420,89 @@ def save_layout(device: str, layout: dict, x_admin_token: str = Header(None)):
 @app.get("/designer/", response_class=HTMLResponse)
 def get_designer():
     """Serve designer HTML"""
-    path = "web/designer/overlay_designer_v3_full.html"
-    if os.path.exists(path):
-        with open(path, "r", encoding="utf-8") as f:
-            return f.read()
-    return "<h1>Designer not found</h1>"
+    paths = [
+        "backend/web/designer/overlay_designer_v3_full.html",
+        "web/designer/overlay_designer_v3_full.html",
+        "overlay_designer_v3_full.html"
+    ]
+    
+    for path in paths:
+        if os.path.exists(path):
+            logger.info(f"Serving designer from: {path}")
+            with open(path, "r", encoding="utf-8") as f:
+                return f.read()
+    
+    logger.error("Designer HTML not found in any path")
+    return "<h1>Designer not found</h1><p>Checked paths: " + ", ".join(paths) + "</p>"
+
+@app.get("/test/", response_class=HTMLResponse)
+def get_test():
+    """Serve test page"""
+    return """<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Test Designer</title>
+<style>
+body{margin:0;padding:20px;font-family:sans-serif;background:#1a1a1a;color:#fff}
+#canvas{position:relative;width:800px;height:480px;background:linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);border:2px solid #333;margin:20px auto}
+.el{position:absolute;cursor:move;border:2px solid red}
+.el.text{background:rgba(255,255,255,0.9);padding:10px;font-size:20px;color:#000}
+button{padding:10px 20px;margin:5px;background:#2d8cf0;color:white;border:none;cursor:pointer;border-radius:4px}
+button:hover{background:#1a6ec0}
+#status{margin:10px;padding:10px;background:#333;border-radius:4px}
+</style></head><body>
+<h1>Designer Test</h1>
+<div id="status">Ready</div>
+<button onclick="testAddText()">Add Text</button>
+<button onclick="testAddBox()">Add Box</button>
+<button onclick="testFetchData()">Fetch Data</button>
+<button onclick="testListSVGs()">List SVGs</button>
+<div id="canvas"></div>
+<script>
+const canvas = document.getElementById('canvas');
+const status = document.getElementById('status');
+function log(msg) { status.textContent = msg; console.log(msg); }
+function testAddText() {
+  const el = document.createElement('div');
+  el.className = 'el text';
+  el.style.left = '100px';
+  el.style.top = '100px';
+  el.style.width = '200px';
+  el.style.height = '40px';
+  el.textContent = 'Test Text';
+  canvas.appendChild(el);
+  log('Added text element - count: ' + canvas.children.length);
+}
+function testAddBox() {
+  const el = document.createElement('div');
+  el.className = 'el box';
+  el.style.left = '200px';
+  el.style.top = '200px';
+  el.style.width = '150px';
+  el.style.height = '100px';
+  el.style.background = 'rgba(255,255,255,0.2)';
+  el.style.border = '2px solid blue';
+  canvas.appendChild(el);
+  log('Added box element - count: ' + canvas.children.length);
+}
+async function testFetchData() {
+  try {
+    const response = await fetch('/v1/render_data?device=familydisplay');
+    const data = await response.json();
+    log('Fetch OK: temp=' + data.weather.temp + ', joke=' + data.dad_joke.substring(0,30));
+  } catch (error) {
+    log('Fetch ERROR: ' + error.message);
+  }
+}
+async function testListSVGs() {
+  try {
+    const response = await fetch('/api/list-svgs');
+    const data = await response.json();
+    log('SVGs: ' + data.svgs.length + ' found - ' + data.svgs.slice(0,3).join(', '));
+  } catch (error) {
+    log('SVG List ERROR: ' + error.message);
+  }
+}
+log('Test page loaded - canvas ready');
+</script></body></html>"""
 
 if os.path.exists("web"):
     app.mount("/web", StaticFiles(directory="web"), name="web")
