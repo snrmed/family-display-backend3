@@ -228,9 +228,10 @@
         return;
       }
 
-      // Set background
-      if (data.bg_url) {
-        bg.src = data.bg_url;
+      // Set background (prefer dynamic Pexels selection)
+      const backgroundUrl = (data.pexels && data.pexels.url) || data.bg_url;
+      if (backgroundUrl) {
+        bg.src = backgroundUrl;
       }
 
       const layout = data.layout;

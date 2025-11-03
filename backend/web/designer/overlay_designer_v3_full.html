@@ -650,6 +650,11 @@ button:disabled:hover {
               <div class="quick-add-btn-label">Weather</div>
             </button>
           </div>
+          <label style="display:block;margin-top:12px;">
+            <span style="display:block;font-size:11px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;">Background Category</span>
+            <select id="pexelsCategorySelect" style="width:100%;margin-top:6px"></select>
+          </label>
+          <div class="help-text" style="margin-top:4px">Random images from this Pexels category will be used for the display background.</div>
         </div>
       </div>
 
@@ -951,6 +956,10 @@ let svgLibraryBase = '/gcs/assets/svgs';
 let weatherIconBase = '/gcs/assets/weather-icons';
 let presetBaseUrl = '';
 const FALLBACK_WEATHER_ICON = '/designer/svgs/weather_card_blue.svg';
+const DEFAULT_PEXELS_CATEGORIES = ['abstract', 'geometric', 'kids-shapes', 'minimal', 'paper-collage'];
+const pexelsCategorySelect = document.getElementById('pexelsCategorySelect');
+let availablePexelsCategories = [...DEFAULT_PEXELS_CATEGORIES];
+let currentPexelsCategory = availablePexelsCategories[0] || '';
 
 // --- Setup Modal Logic ---
 function showSetupModal() {
@@ -1023,6 +1032,28 @@ document.getElementById('setupTogglePasskey').addEventListener('click', () => {
 });
 document.getElementById('editSettingsBtn').addEventListener('click', showSetupModal);
 
+if (pexelsCategorySelect) {
+  pexelsCategorySelect.addEventListener('change', (event) => {
+    const value = (event.target.value || '').trim();
+    const previous = currentPexelsCategory;
+    currentPexelsCategory = value;
+
+    if (value && !availablePexelsCategories.includes(value)) {
+      availablePexelsCategories.push(value);
+    }
+
+    if (previous !== value) {
+      saveAction(`Background category → ${formatPexelsLabel(value)}`);
+    }
+
+    if (value) {
+      setStatus(`Background category: ${formatPexelsLabel(value)}`, 1500);
+    } else {
+      setStatus('Background category cleared', 1500);
+    }
+  });
+}
+
 function checkSetupNeeded() {
   if (FORCE_SETUP_ON_LOAD) {
     setTimeout(showSetupModal, 400);
@@ -1051,6 +1082,79 @@ function setStatus(msg, timeout = 0, isError = false) {
       statusText.classList.remove('error');
     }, timeout);
   }
+}
+
+function formatPexelsLabel(category) {
+  if (!category) return 'Default';
+  return category
+    .split('-')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+function renderPexelsCategoryOptions() {
+  if (!pexelsCategorySelect) return;
+
+  const unique = Array.from(new Set(availablePexelsCategories.filter(Boolean)));
+  availablePexelsCategories = unique.length ? unique : [...DEFAULT_PEXELS_CATEGORIES];
+
+  const previous = currentPexelsCategory || pexelsCategorySelect.value;
+
+  pexelsCategorySelect.innerHTML = '';
+
+  if (!availablePexelsCategories.length) {
+    const option = document.createElement('option');
+    option.value = '';
+    option.textContent = 'No categories available';
+    pexelsCategorySelect.appendChild(option);
+    pexelsCategorySelect.disabled = true;
+    currentPexelsCategory = '';
+    return;
+  }
+
+  pexelsCategorySelect.disabled = false;
+
+  availablePexelsCategories.forEach(category => {
+    const option = document.createElement('option');
+    option.value = category;
+    option.textContent = formatPexelsLabel(category);
+    pexelsCategorySelect.appendChild(option);
+  });
+
+  if (previous && availablePexelsCategories.includes(previous)) {
+    currentPexelsCategory = previous;
+  } else {
+    currentPexelsCategory = availablePexelsCategories[0];
+  }
+
+  pexelsCategorySelect.value = currentPexelsCategory || '';
+}
+
+async function loadPexelsCategories() {
+  if (!pexelsCategorySelect) return;
+
+  try {
+    const response = await fetch('/api/pexels/categories');
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+    const data = await response.json();
+    const categories = (data.categories || []).filter(Boolean);
+
+    if (categories.length) {
+      availablePexelsCategories = categories;
+    }
+
+    if (currentPexelsCategory && !availablePexelsCategories.includes(currentPexelsCategory)) {
+      availablePexelsCategories.unshift(currentPexelsCategory);
+    }
+  } catch (error) {
+    console.warn('Failed to load Pexels categories:', error.message);
+    if (currentPexelsCategory && !availablePexelsCategories.includes(currentPexelsCategory)) {
+      availablePexelsCategories.unshift(currentPexelsCategory);
+    }
+  }
+
+  renderPexelsCategoryOptions();
 }
 
 function rgbToHex(rgb) {
@@ -1112,6 +1216,15 @@ async function fetchRenderData() {
     renderData = await response.json();
     if (renderData.svg_base) {
       svgLibraryBase = renderData.svg_base;
+    }
+
+    const metaCategory = renderData?.layout?.meta?.pexelsCategory;
+    if (metaCategory) {
+      currentPexelsCategory = metaCategory;
+      if (!availablePexelsCategories.includes(metaCategory)) {
+        availablePexelsCategories.push(metaCategory);
+      }
+      renderPexelsCategoryOptions();
     }
 
     availableInfoTypes = ['CUSTOM'];
@@ -1785,6 +1898,7 @@ async function loadSVGLibrary() {
 
 // --- Import/Export & Save/Load ---
 function exportToJSON() {
+  const selectedCategory = (currentPexelsCategory || pexelsCategorySelect?.value || '').trim();
   const elements = Array.from(canvas.querySelectorAll('.el')).map(el => {
     const domKind = el.classList.contains('text') ? 'text' :
             el.classList.contains('icon') ? 'icon' :
@@ -1865,7 +1979,8 @@ function exportToJSON() {
     meta: {
       width: 800,
       height: 480,
-      iconTheme: 'happy-skies' // This should be editable
+      iconTheme: 'happy-skies', // This should be editable
+      pexelsCategory: selectedCategory || null
     },
     elements: elements
   };
@@ -1878,7 +1993,18 @@ async function loadFromJSON(data) {
   if (data.meta && data.meta.name) {
     currentPresetName = data.meta.name;
   }
-  
+
+  const metaCategory = data.meta?.pexelsCategory || '';
+  if (metaCategory) {
+    currentPexelsCategory = metaCategory;
+    if (!availablePexelsCategories.includes(metaCategory)) {
+      availablePexelsCategories.push(metaCategory);
+    }
+  } else if (!currentPexelsCategory) {
+    currentPexelsCategory = availablePexelsCategories[0] || '';
+  }
+  renderPexelsCategoryOptions();
+
   const elementPromises = (data.elements || []).map(async (elem) => {
     const elementKind = elem.kind === 'svg-overlay' ? 'svg' : elem.kind;
     const options = { ...elem };
@@ -2709,7 +2835,8 @@ async function init() {
   setupPanelToggles();
   checkSetupNeeded();
   autoCollapsePanels(); // Collapse all on start
-  
+  renderPexelsCategoryOptions();
+
   // Disable API-dependent buttons by default
   document.getElementById('applyTemplateBtn').disabled = true;
   document.getElementById('quickAddFancyBox').disabled = true;
@@ -2722,9 +2849,10 @@ async function init() {
       loadPresets(),
       loadSVGLibrary(),
       loadWeatherThemes(),
+      loadPexelsCategories(),
       fetchRenderData()
     ]);
-    
+
     console.log('Initialization complete.');
     setStatus('Ready', 0);
     

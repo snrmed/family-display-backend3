@@ -44,6 +44,22 @@ RENDER_WIDTH = int(os.getenv("RENDER_WIDTH", "800"))
 RENDER_HEIGHT = int(os.getenv("RENDER_HEIGHT", "480"))
 RENDER_PATH = os.getenv("RENDER_PATH", "backend/web/layouts/base.html")
 
+_DEFAULT_PEXELS_CATEGORIES = [
+    "abstract",
+    "geometric",
+    "kids-shapes",
+    "minimal",
+    "paper-collage",
+]
+PEXELS_CATEGORIES = [
+    c.strip()
+    for c in os.getenv("PEXELS_CATEGORIES", ",".join(_DEFAULT_PEXELS_CATEGORIES)).split(",")
+    if c.strip()
+]
+PEXELS_PER_CATEGORY = int(os.getenv("PEXELS_PER_CATEGORY", "8"))
+PEXELS_ORIENTATION = os.getenv("PEXELS_ORIENTATION", "landscape")
+PEXELS_IMAGE_SIZE = os.getenv("PEXELS_IMAGE_SIZE", "large")
+
 storage_enabled = False
 gcs_bucket = None
 playwright_browser = None
@@ -102,6 +118,201 @@ def make_public_url(path: str) -> str:
         return path
     base = PUBLIC_BASE_URL.rstrip("/") if PUBLIC_BASE_URL else f"http://localhost:{PORT}"
     return f"{base}/{path.lstrip('/')}"
+
+
+def get_pexels_categories() -> list[str]:
+    """Return list of configured or discovered Pexels categories"""
+    categories = set(PEXELS_CATEGORIES)
+
+    if storage_enabled and ENABLE_PEXELS:
+        try:
+            blobs = gcs_bucket.list_blobs(prefix="pexels/current/", delimiter="/")
+            prefixes: list[str] = []
+            for page in blobs.pages:
+                prefixes.extend(page.prefixes)
+            for prefix in prefixes:
+                name = prefix.rstrip("/").split("/")[-1]
+                if name:
+                    categories.add(name)
+        except Exception as exc:
+            logger.warning(f"Failed to list Pexels categories: {exc}")
+
+    if not categories:
+        categories = set(_DEFAULT_PEXELS_CATEGORIES)
+
+    return sorted(categories)
+
+
+def _list_pexels_objects(category: str) -> list[str]:
+    """List blob names for a category under pexels/current"""
+    if not storage_enabled or not ENABLE_PEXELS:
+        return []
+
+    safe_category = category.strip("/")
+    prefix = f"pexels/current/{safe_category}/"
+    names: list[str] = []
+
+    try:
+        blobs = gcs_bucket.list_blobs(prefix=prefix)
+        for blob in blobs:
+            if blob.name.endswith("/"):
+                continue
+            if blob.size == 0:
+                continue
+            names.append(blob.name)
+    except Exception as exc:
+        logger.warning(f"Failed to list Pexels objects for {category}: {exc}")
+
+    return names
+
+
+def choose_pexels_background(category: str | None) -> dict | None:
+    """Select a random background image for the requested category"""
+    if not ENABLE_PEXELS or not storage_enabled:
+        return None
+
+    categories = get_pexels_categories()
+    if not categories:
+        return None
+
+    selected_category = category or ""
+    if selected_category not in categories:
+        selected_category = categories[0]
+
+    blob_names = _list_pexels_objects(selected_category)
+
+    if not blob_names:
+        # Fallback to the first category that has files
+        for fallback in categories:
+            blob_names = _list_pexels_objects(fallback)
+            if blob_names:
+                selected_category = fallback
+                break
+
+    if not blob_names:
+        return None
+
+    blob_name = random.choice(blob_names)
+    image_name = Path(blob_name).name
+    public_path = f"gcs/{blob_name}"
+
+    return {
+        "category": selected_category,
+        "image": image_name,
+        "path": public_path,
+        "url": make_public_url(public_path),
+        "categories": categories,
+    }
+
+
+def rollover_pexels_current(categories: list[str], date_stamp: str) -> dict[str, int]:
+    """Move current images to cache/date/category"""
+    moved: dict[str, int] = {category: 0 for category in categories}
+
+    if not storage_enabled or not ENABLE_PEXELS:
+        return moved
+
+    for category in categories:
+        prefix = f"pexels/current/{category.strip('/')}/"
+        cache_prefix = f"pexels/cache/{date_stamp}/{category.strip('/')}/"
+
+        try:
+            blobs = gcs_bucket.list_blobs(prefix=prefix)
+            for blob in blobs:
+                if blob.name.endswith("/") or blob.size == 0:
+                    continue
+                destination = cache_prefix + Path(blob.name).name
+                gcs_bucket.copy_blob(blob, gcs_bucket, destination)
+                blob.delete()
+                moved[category] += 1
+        except Exception as exc:
+            logger.warning(f"Failed to rollover Pexels images for {category}: {exc}")
+
+    return moved
+
+
+async def fetch_pexels_category(
+    client: httpx.AsyncClient,
+    category: str,
+    api_key: str,
+) -> tuple[int, list[str]]:
+    """Fetch new images for a category and upload to GCS"""
+    headers = {"Authorization": api_key}
+    params = {
+        "query": category.replace("-", " "),
+        "per_page": max(1, PEXELS_PER_CATEGORY),
+        "orientation": PEXELS_ORIENTATION,
+        "size": PEXELS_IMAGE_SIZE,
+    }
+
+    saved_files: list[str] = []
+
+    try:
+        response = await client.get(
+            "https://api.pexels.com/v1/search",
+            headers=headers,
+            params=params,
+            timeout=20,
+        )
+        response.raise_for_status()
+    except Exception as exc:
+        logger.error(f"Pexels search failed for {category}: {exc}")
+        return 0, saved_files
+
+    data = response.json()
+    photos = data.get("photos", [])
+    if not photos:
+        logger.warning(f"No Pexels photos returned for {category}")
+        return 0, saved_files
+
+    random.shuffle(photos)
+    selected = photos[: PEXELS_PER_CATEGORY]
+
+    for index, photo in enumerate(selected):
+        src = photo.get("src", {})
+        image_url = src.get("landscape") or src.get("large") or src.get("large2x")
+        if not image_url:
+            continue
+
+        filename = f"{category}_{photo.get('id', index)}.jpg"
+        object_name = f"pexels/current/{category}/{filename}"
+
+        try:
+            image_response = await client.get(image_url, timeout=30)
+            image_response.raise_for_status()
+            gcs_write_bytes(object_name, image_response.content, "image/jpeg")
+            saved_files.append(object_name)
+        except Exception as exc:
+            logger.warning(f"Failed to download Pexels image {image_url}: {exc}")
+
+    return len(saved_files), saved_files
+
+
+async def refresh_pexels_assets(categories: list[str]) -> dict[str, dict[str, int | list[str]]]:
+    """Rollover current images and fetch new ones for each category"""
+    summary: dict[str, dict[str, int | list[str]]] = {}
+
+    if not storage_enabled or not ENABLE_PEXELS:
+        return summary
+
+    api_key = os.getenv("PEXELS_API_KEY")
+    if not api_key:
+        raise RuntimeError("PEXELS_API_KEY not configured")
+
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    rollover_counts = rollover_pexels_current(categories, today)
+
+    async with httpx.AsyncClient() as client:
+        for category in categories:
+            downloaded, files = await fetch_pexels_category(client, category, api_key)
+            summary[category] = {
+                "rolled": rollover_counts.get(category, 0),
+                "downloaded": downloaded,
+                "files": files,
+            }
+
+    return summary
+
 
 def gcs_read_json(key: str) -> dict:
     """Read JSON from GCS"""
@@ -200,8 +411,27 @@ async def build_render_data(device: str = "familydisplay") -> dict:
     weather["city"] = city
     
     dad_joke = await get_joke()
-    
-    bg_url = make_public_url("gcs/pexels/current/abstract_0.jpg")
+
+    layout_meta = layout.get("meta", {}) if isinstance(layout, dict) else {}
+    selected_category = layout_meta.get("pexelsCategory")
+    pexels_info = None
+
+    if ENABLE_PEXELS and storage_enabled:
+        pexels_info = choose_pexels_background(selected_category)
+
+    if pexels_info:
+        bg_url = pexels_info["url"]
+    else:
+        bg_url = make_public_url("gcs/pexels/current/abstract_0.jpg")
+        if ENABLE_PEXELS:
+            categories = get_pexels_categories()
+            pexels_info = {
+                "category": selected_category or (categories[0] if categories else None),
+                "image": None,
+                "path": None,
+                "url": bg_url,
+                "categories": categories,
+            }
     
     now = datetime.now()
     date_str = now.strftime("%a, %d %b")
@@ -217,6 +447,7 @@ async def build_render_data(device: str = "familydisplay") -> dict:
         "dad_joke": dad_joke,
         "date": date_str,
         "bg_url": bg_url,
+        "pexels": pexels_info,
         "svg_base": svg_base,
         "timestamp": now.isoformat()
     }
@@ -490,6 +721,59 @@ def list_weather_themes():
         icon_base = "/gcs/assets/weather-icons" if storage_enabled else "/designer/weather-icons"
 
     return {"themes": themes, "icon_base": icon_base}
+
+
+@app.get("/api/pexels/categories")
+def list_pexels_categories():
+    """Expose available Pexels categories to the designer"""
+    categories = get_pexels_categories()
+    return {
+        "categories": categories,
+        "enabled": ENABLE_PEXELS and storage_enabled,
+    }
+
+
+async def _run_pexels_prefetch(token: str | None):
+    if token != ADMIN_TOKEN:
+        raise HTTPException(status_code=403, detail="Invalid token")
+
+    if not ENABLE_PEXELS:
+        raise HTTPException(status_code=503, detail="Pexels disabled")
+
+    if not storage_enabled:
+        raise HTTPException(status_code=503, detail="GCS not configured")
+
+    categories = get_pexels_categories()
+    if not categories:
+        raise HTTPException(status_code=404, detail="No Pexels categories configured")
+
+    try:
+        summary = await refresh_pexels_assets(categories)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.error(f"Pexels prefetch failed: {exc}")
+        raise HTTPException(status_code=500, detail="Pexels prefetch failed") from exc
+
+    return {
+        "status": "ok",
+        "categories": categories,
+        "summary": summary,
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+    }
+
+
+@app.post("/admin/prefetch")
+async def admin_prefetch_post(token: str = None):
+    """Trigger rollover + fetch of Pexels assets"""
+    return await _run_pexels_prefetch(token)
+
+
+@app.get("/admin/prefetch")
+async def admin_prefetch_get(token: str = None):
+    """GET-compatible trigger for schedulers"""
+    return await _run_pexels_prefetch(token)
+
 
 @app.get("/layouts/{device}")
 def get_layout(device: str, x_admin_token: str = Header(None)):
