@@ -227,7 +227,7 @@ header{
   position:relative;
   width:800px;
   height:480px;
-  background:linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  background:linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%) !important;
   border:1px solid var(--border);
   box-shadow:0 10px 40px rgba(0,0,0,0.3);
   overflow:hidden;
@@ -1278,8 +1278,8 @@ function addElement(kind, x, y, w, h, options = {}) {
     el.dataset.textShadowType = options.textShadowType || 'none';
     el.dataset.textShadowColor = options.textShadowColor || '#000000';
     el.dataset.textShadowIntensity = options.textShadowIntensity || 1;
-    applyTextShadow(content);
-    el.appendChild(content);
+    el.appendChild(content);  // ← APPEND FIRST
+    applyTextShadow(content); // ← THEN APPLY SHADOW
     console.log('Created text/icon element with content:', content.textContent);
   } else if (kind === 'box') {
     el.style.backgroundColor = options.bgColor || 'rgba(255,255,255,0.16)';
@@ -1300,6 +1300,15 @@ function addElement(kind, x, y, w, h, options = {}) {
     el.dataset.gradEnd = options.gradEnd || '#1a6ec0';
     el.dataset.gradAngle = options.gradAngle || 135;
     el.dataset.svgName = options.svgName || 'svg';
+    
+    // Make SVG visible
+    const svg = el.querySelector('svg');
+    if (svg) {
+      svg.style.width = '100%';
+      svg.style.height = '100%';
+      svg.style.display = 'block';
+    }
+    
     updateSVGContent(el);
     console.log('Created SVG element:', options.svgName);
   }
@@ -1353,13 +1362,11 @@ function updateSVGContent(el) {
   const fillType = el.dataset.fillType || 'none';
   
   if (fillType === 'none') {
-    svg.querySelectorAll('*').forEach(elem => {
-      elem.removeAttribute('fill');
-      elem.style.fill = '';
-    });
+    // Don't remove original SVG colors - just don't override them
+    // This preserves the original SVG appearance
   } else if (fillType === 'solid') {
     const color = el.dataset.fillColor || '#2d8cf0';
-    svg.querySelectorAll('*').forEach(elem => {
+    svg.querySelectorAll('path, circle, rect, polygon, ellipse').forEach(elem => {
       elem.setAttribute('fill', color);
     });
   } else if (fillType === 'gradient') {
@@ -1388,10 +1395,8 @@ function updateSVGContent(el) {
       </linearGradient>
     `;
     
-    svg.querySelectorAll('*').forEach(elem => {
-      if (elem.tagName !== 'defs' && elem.tagName !== 'linearGradient' && elem.tagName !== 'stop') {
-        elem.setAttribute('fill', `url(#${gradId})`);
-      }
+    svg.querySelectorAll('path, circle, rect, polygon, ellipse').forEach(elem => {
+      elem.setAttribute('fill', `url(#${gradId})`);
     });
   }
 }
