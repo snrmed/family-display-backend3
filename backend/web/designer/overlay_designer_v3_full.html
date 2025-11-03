@@ -1475,52 +1475,27 @@ async function loadSVGLibrary() {
   const library = document.getElementById('svgLibrary');
   library.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:10px;color:var(--muted);font-size:11px">Loading...</div>';
   
-  const svgPaths = [
-    '/assets/svgs/',
-    '/svgs/',
-    '/web/svgs/'
-  ];
-  
-  let svgList = [];
-  let foundPath = null;
-  
-  for (const path of svgPaths) {
-    try {
-      const response = await fetch(path);
-      if (response.ok) {
-        const html = await response.text();
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, 'text/html');
-        const links = doc.querySelectorAll('a');
-        
-        const found = Array.from(links)
-          .map(link => link.getAttribute('href'))
-          .filter(href => href && href.endsWith('.svg'))
-          .map(href => href.split('/').pop());
-        
-        if (found.length > 0) {
-          svgList = found;
-          foundPath = path;
-          console.log('Found SVGs at:', path, svgList.length, 'files');
-          break;
-        }
-      }
-    } catch (error) {
-      console.log('Failed to load from:', path);
+  try {
+    const response = await fetch('/api/list-svgs');
+    if (!response.ok) throw new Error('Failed to list SVGs');
+    
+    const data = await response.json();
+    availableSVGs = data.svgs || [];
+    
+    if (availableSVGs.length === 0) {
+      library.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:20px;color:var(--muted);font-size:11px">No SVGs found in bucket</div>';
+      return;
     }
-  }
-  
-  if (svgList.length === 0) {
-    library.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:20px;color:var(--muted);font-size:11px">No SVGs found in bucket</div>';
+    
+    renderSVGLibrary();
+  } catch (error) {
+    console.error('Failed to load SVG library:', error);
+    library.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:20px;color:var(--muted);font-size:11px">Error loading SVGs</div>';
     availableSVGs = [];
-    return;
   }
-  
-  availableSVGs = svgList;
-  renderSVGLibrary(foundPath);
 }
 
-function renderSVGLibrary(basePath) {
+function renderSVGLibrary() {
   const library = document.getElementById('svgLibrary');
   library.innerHTML = '';
   
@@ -1530,7 +1505,7 @@ function renderSVGLibrary(basePath) {
     item.title = svgName;
     item.textContent = '...';
     
-    const svgUrl = `${basePath}${svgName}`;
+    const svgUrl = `/gcs/assets/svgs/${svgName}`;
     
     fetch(svgUrl)
       .then(r => {
