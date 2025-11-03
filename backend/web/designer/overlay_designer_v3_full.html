@@ -949,6 +949,7 @@ let availableInfoTypes = [];
 let renderData = null;
 let svgLibraryBase = '/gcs/assets/svgs';
 let weatherIconBase = '/gcs/assets/weather-icons';
+let presetBaseUrl = '';
 const FALLBACK_WEATHER_ICON = '/designer/svgs/weather_card_blue.svg';
 
 // --- Setup Modal Logic ---
@@ -1589,24 +1590,42 @@ function redo() {
 
 // --- Presets, SVGs, Themes (API) ---
 async function loadPresets() {
+  try {
+    const response = await fetch('/api/list-presets');
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+    const data = await response.json();
+    availablePresets = data.presets || [];
+    presetBaseUrl = data.base_url || '';
+
+    if (availablePresets.length > 0) {
+      console.log(`Loaded ${availablePresets.length} presets from API`);
+      renderPresetOptions();
+      return;
+    }
+  } catch (error) {
+    console.warn('Preset API unavailable, falling back to static scan:', error.message);
+  }
+
   const paths = ['/presets/', '/web/presets/', '/designer/presets/'];
-  
+
   for (const path of paths) {
     try {
       const response = await fetch(path);
       if (!response.ok) continue;
-      
+
       const html = await response.text();
       const parser = new DOMParser();
       const doc = parser.parseFromString(html, 'text/html');
       const links = doc.querySelectorAll('a');
-      
+
       availablePresets = Array.from(links)
         .map(link => link.getAttribute('href'))
         .filter(href => href && href.endsWith('.json'))
         .map(href => href.split('/').pop().replace('.json', ''));
-      
+
       if (availablePresets.length > 0) {
+        presetBaseUrl = path.replace(/\/$/, '');
         console.log(`Found ${availablePresets.length} presets at ${path}`);
         renderPresetOptions();
         return; // Success
@@ -1615,9 +1634,10 @@ async function loadPresets() {
       console.warn(`Failed to load from ${path}:`, error.message);
     }
   }
-  
+
   console.warn('No presets found in any path');
   availablePresets = [];
+  presetBaseUrl = '';
   renderPresetOptions();
   setStatus('No presets available locally', 2000, true);
 }
@@ -1642,9 +1662,19 @@ function renderPresetOptions() {
 
 async function applyTemplate(key) {
   if (!key) return;
-  
-  const paths = [`/presets/${key}.json`, `/web/presets/${key}.json`, `/designer/presets/${key}.json`];
-  
+
+  const fallbackPaths = [`/presets/${key}.json`, `/web/presets/${key}.json`, `/designer/presets/${key}.json`];
+  const paths = [];
+
+  if (presetBaseUrl) {
+    const base = presetBaseUrl.replace(/\/$/, '');
+    paths.push(`${base}/${key}.json`);
+  }
+
+  fallbackPaths.forEach(path => {
+    if (!paths.includes(path)) paths.push(path);
+  });
+
   for (const path of paths) {
     try {
       const response = await fetch(path);

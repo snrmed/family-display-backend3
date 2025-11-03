@@ -363,6 +363,24 @@ def _discover_local_svgs() -> list[str]:
     return []
 
 
+def _discover_local_presets() -> tuple[list[str], str | None]:
+    search_dirs: list[tuple[Path, str]] = [
+        (Path("backend/web/designer/presets"), "/designer/presets"),
+        (Path("web/presets"), "/presets"),
+        (Path("web/designer/presets"), "/web/designer/presets"),
+    ]
+
+    for directory, base_url in search_dirs:
+        if not directory.exists():
+            continue
+
+        presets = sorted([p.stem for p in directory.glob("*.json")])
+        if presets:
+            return presets, base_url
+
+    return [], None
+
+
 @app.get("/api/list-svgs")
 def list_svgs():
     """List all SVG files available to the designer"""
@@ -390,6 +408,46 @@ def list_svgs():
             logger.info(f"Using {len(svgs)} local SVGs")
 
     return {"svgs": svgs, "base_url": base_url}
+
+
+@app.get("/api/list-presets")
+def list_presets():
+    """List layout presets from GCS or local bundles"""
+    presets: list[str] = []
+    base_url: str | None = None
+
+    if storage_enabled:
+        try:
+            blobs = gcs_bucket.list_blobs(prefix="presets/")
+            for blob in blobs:
+                name = blob.name
+                if not name.endswith(".json"):
+                    continue
+
+                relative = name[len("presets/"):]
+                if not relative or relative.endswith("/"):
+                    continue
+
+                if "/" in relative:
+                    relative = relative.split("/")[-1]
+
+                presets.append(Path(relative).stem)
+
+            if presets:
+                presets = sorted(set(presets))
+                base_url = "/gcs/presets"
+                logger.info(f"Found {len(presets)} presets in bucket")
+        except Exception as e:
+            logger.error(f"Failed to list presets from GCS: {e}")
+
+    if not presets:
+        local_presets, local_base = _discover_local_presets()
+        presets = local_presets
+        base_url = local_base
+        if presets:
+            logger.info(f"Using {len(presets)} local presets")
+
+    return {"presets": presets, "base_url": base_url}
 
 
 def _discover_local_weather_themes() -> list[str]:
