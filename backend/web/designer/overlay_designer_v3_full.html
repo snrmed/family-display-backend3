@@ -572,26 +572,6 @@ button:disabled:hover {
     </div>
   </div>
 
-  <!-- --- Add Weather Modal --- -->
-  <div class="modal-overlay hidden" id="addWeatherModal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <div class="modal-title">
-          <h2>Add Weather Icon</h2>
-          <p>Select icon theme</p>
-        </div>
-      </div>
-      <div class="modal-body">
-        <div class="selector-grid" id="weatherThemeSelector">
-          <!-- Content will be populated by JS -->
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button id="cancelAddWeather">Cancel</button>
-      </div>
-    </div>
-  </div>
-
   <!-- --- Header --- -->
   <header>
     <div class="brand">
@@ -954,15 +934,12 @@ let availableSVGs = [];
 let availableInfoTypes = [];
 let renderData = null;
 let svgLibraryBase = '/gcs/assets/svgs';
-let weatherIconBase = '/gcs/assets/weather-icons';
 let presetBaseUrl = '';
 const FALLBACK_WEATHER_ICON = '/designer/svgs/weather_card_blue.svg';
 const DEFAULT_PEXELS_CATEGORIES = ['abstract', 'geometric', 'kids-shapes', 'minimal', 'paper-collage'];
 const pexelsCategorySelect = document.getElementById('pexelsCategorySelect');
 let availablePexelsCategories = [...DEFAULT_PEXELS_CATEGORIES];
 let currentPexelsCategory = availablePexelsCategories[0] || '';
-let currentWeatherTheme = 'happy-skies';
-let availableWeatherThemes = [];
 let fineMovementActive = false;
 
 // --- Setup Modal Logic ---
@@ -1181,6 +1158,9 @@ function getDynamicTextForType(type) {
 
   switch (type) {
     case 'TEMP':
+      if (weather.temp_min != null && weather.temp_max != null) {
+        return `${weather.temp_min}° / ${weather.temp_max}°`;
+      }
       return weather.temp != null ? `${weather.temp}°C` : '--°C';
     case 'FEELS_LIKE':
       return weather.feels_like != null ? `${weather.feels_like}°C` : '--°C';
@@ -1232,42 +1212,6 @@ function applyDynamicTextToCanvas() {
   elements.forEach(applyDynamicTextToElement);
 }
 
-function updateWeatherThemeSelection() {
-  const selector = document.getElementById('weatherThemeSelector');
-  if (!selector) return;
-
-  selector.querySelectorAll('.selector-item[data-placeholder="true"]').forEach(item => {
-    const theme = item.dataset.theme;
-    if (!theme) return;
-    const occurrences = selector.querySelectorAll(`.selector-item[data-theme="${theme}"]`);
-    if (occurrences.length > 1) {
-      item.remove();
-    }
-  });
-
-  if (currentWeatherTheme && !selector.querySelector(`.selector-item[data-theme="${currentWeatherTheme}"]`)) {
-    const placeholder = document.createElement('div');
-    placeholder.className = 'selector-item selected';
-    placeholder.dataset.theme = currentWeatherTheme;
-    placeholder.dataset.placeholder = 'true';
-    placeholder.innerHTML = `
-      <div class="selector-item-icon">🌤</div>
-      <div class="selector-item-label">${currentWeatherTheme}</div>
-    `;
-    selector.prepend(placeholder);
-  }
-
-  selector.querySelectorAll('.selector-item').forEach(item => {
-    const theme = item.dataset.theme;
-    if (!theme) return;
-    if (theme === currentWeatherTheme) {
-      item.classList.add('selected');
-    } else {
-      item.classList.remove('selected');
-    }
-  });
-}
-
 function drawGrid() {
   gridOverlay.innerHTML = '';
   const w = 800;
@@ -1300,10 +1244,32 @@ function buildSvgUrl(svgName) {
   return `${base}/${svgName.replace(/^\//, '')}`;
 }
 
-function buildWeatherIconUrl(theme, code = '01d') {
-  const safeTheme = theme || 'happy-skies';
-  const base = (weatherIconBase || '/gcs/assets/weather-icons').replace(/\/$/, '');
-  return `${base}/${safeTheme}/${code}.svg`;
+function buildWeatherIconPreviewMarkup(url) {
+  const safeUrl = (url || FALLBACK_WEATHER_ICON).replace(/"/g, '&quot;');
+  return `<img src="${safeUrl}" alt="Weather icon" style="width:100%;height:100%;object-fit:contain;pointer-events:none;" />`;
+}
+
+function getWeatherIconPreviewUrl() {
+  const direct = renderData?.weather?.icon_url;
+  if (direct && typeof direct === 'string') {
+    return direct;
+  }
+
+  const iconCode = renderData?.weather?.icon;
+  if (iconCode) {
+    return `https://openweathermap.org/img/wn/${iconCode}@4x.png`;
+  }
+
+  return FALLBACK_WEATHER_ICON;
+}
+
+function refreshWeatherIconPreviews() {
+  const previewUrl = getWeatherIconPreviewUrl();
+  const markup = buildWeatherIconPreviewMarkup(previewUrl);
+  canvas.querySelectorAll('.el[data-src="weather-icon"]').forEach(el => {
+    el.innerHTML = markup;
+    el.dataset.previewSrc = previewUrl;
+  });
 }
 
 // --- Data Fetching ---
@@ -1316,11 +1282,6 @@ async function fetchRenderData() {
     renderData = await response.json();
     if (renderData.svg_base) {
       svgLibraryBase = renderData.svg_base;
-    }
-
-    const themeFromLayout = renderData?.layout?.meta?.iconTheme;
-    if (themeFromLayout) {
-      currentWeatherTheme = themeFromLayout;
     }
 
     const metaCategory = renderData?.layout?.meta?.pexelsCategory;
@@ -1344,6 +1305,7 @@ async function fetchRenderData() {
 
     updateInfoTypeDropdown();
     applyDynamicTextToCanvas();
+    refreshWeatherIconPreviews();
     return renderData;
   } catch (error) {
     console.warn('Failed to fetch render data:', error.message);
@@ -1543,6 +1505,32 @@ function clearResizeHandles(el) {
   el.querySelectorAll('.resize-handle').forEach(handle => handle.remove());
 }
 
+function computeElementLayer(el) {
+  if (!el) return 10;
+  if (el.classList.contains('text') || el.classList.contains('icon')) {
+    return 30;
+  }
+
+  if (el.classList.contains('svg-overlay')) {
+    const src = (el.dataset.src || el.dataset.svgName || '').toString();
+    if (src === 'weather-icon' || src.startsWith('weather-')) {
+      return 35;
+    }
+    return 20;
+  }
+
+  if (el.classList.contains('box')) {
+    return 15;
+  }
+
+  return 10;
+}
+
+function applyElementLayer(el) {
+  if (!el) return;
+  el.style.zIndex = String(computeElementLayer(el));
+}
+
 function startResize(e, handleType) {
   e.stopPropagation();
   isResizing = true;
@@ -1627,9 +1615,8 @@ function addElement(kind, x, y, w, h, options = {}) {
   el.style.width = w + 'px';
   el.style.height = h + 'px';
   el.style.opacity = options.opacity !== undefined ? options.opacity : 1;
-  el.style.zIndex = '10'; // All elements on same z-index, selection outline handles visibility
   el.dataset.rotation = options.rotation || 0;
-  
+
   if (actualKind === 'text' || actualKind === 'icon') {
     const content = document.createElement('div');
     content.className = 'el-content';
@@ -1666,7 +1653,21 @@ function addElement(kind, x, y, w, h, options = {}) {
     el.dataset.gradEnd = options.gradEnd || '#1a6ec0';
     el.dataset.gradAngle = options.gradAngle || 135;
     el.dataset.svgName = options.svgName || 'svg';
-    
+
+    let srcValue = options.src;
+    if (!srcValue && options.svgName && options.svgName.startsWith('weather-')) {
+      srcValue = 'weather-icon';
+    }
+    if (srcValue && srcValue.startsWith('weather-')) {
+      srcValue = 'weather-icon';
+    }
+    if (srcValue) {
+      el.dataset.src = srcValue;
+    }
+    if (options.previewSrc) {
+      el.dataset.previewSrc = options.previewSrc;
+    }
+
     const svg = el.querySelector('svg');
     if (svg) {
       svg.style.width = '100%';
@@ -1678,7 +1679,8 @@ function addElement(kind, x, y, w, h, options = {}) {
     updateSVGContent(el);
     console.log('Created SVG element:', options.svgName);
   }
-  
+
+  applyElementLayer(el);
   canvas.appendChild(el);
   console.log('Element appended to canvas. Total elements:', canvas.querySelectorAll('.el').length);
   selectEl(el);
@@ -1920,73 +1922,6 @@ async function applyTemplate(key) {
   setStatus('Failed to load preset', 2000, true);
 }
 
-async function loadWeatherThemes() {
-  try {
-    const response = await fetch('/api/list-weather-themes');
-    if (!response.ok) throw new Error('Failed to list weather themes');
-
-    const data = await response.json();
-    weatherIconBase = data.icon_base || weatherIconBase;
-    let themes = data.themes || [];
-    if (!themes.length) {
-      themes = ['happy-skies', 'soft-skies', 'sunny-day', 'blue-sky-pro'];
-    }
-    availableWeatherThemes = themes;
-
-    const themeEmojis = {
-      'happy-skies': '😊',
-      'soft-skies': '🌈',
-      'sunny-day': '☀️',
-      'blue-sky-pro': '🌤'
-    };
-    
-    const themeLabels = {
-      'happy-skies': 'Happy Skies',
-      'soft-skies': 'Soft Skies',
-      'sunny-day': 'Sunny Day',
-      'blue-sky-pro': 'Blue Sky Pro'
-    };
-    
-    const selector = document.getElementById('weatherThemeSelector');
-    selector.innerHTML = ''; // Clear previous
-    
-    themes.forEach(theme => {
-      const item = document.createElement('div');
-      item.className = 'selector-item';
-      item.dataset.theme = theme;
-      item.innerHTML = `
-        <div class="selector-item-icon">${themeEmojis[theme] || '🌤'}</div>
-        <div class="selector-item-label">${themeLabels[theme] || theme}</div>
-      `;
-      // Click listener is now added in the 'quickAddIcon' listener
-      selector.appendChild(item);
-    });
-
-    updateWeatherThemeSelection();
-    console.log('Loaded weather themes:', themes, 'base:', weatherIconBase);
-    document.getElementById('quickAddIcon').disabled = false;
-  } catch (error) {
-    console.error('Failed to load weather themes:', error);
-    weatherIconBase = '/designer/weather-icons';
-    const fallbackThemes = ['happy-skies', 'soft-skies', 'sunny-day', 'blue-sky-pro'];
-    availableWeatherThemes = fallbackThemes;
-    const selector = document.getElementById('weatherThemeSelector');
-    selector.innerHTML = '';
-    fallbackThemes.forEach(theme => {
-      const item = document.createElement('div');
-      item.className = 'selector-item';
-      item.dataset.theme = theme;
-      item.innerHTML = `
-        <div class="selector-item-icon">🌤</div>
-        <div class="selector-item-label">${theme}</div>
-      `;
-      selector.appendChild(item);
-    });
-    updateWeatherThemeSelection();
-    document.getElementById('quickAddIcon').disabled = false;
-  }
-}
-
 async function loadSVGLibrary() {
   try {
     const response = await fetch('/api/list-svgs');
@@ -2073,7 +2008,16 @@ function exportToJSON() {
       const svgName = el.dataset.svgName || 'svg';
       base.kind = 'svg';
       base.svgName = svgName;
-      base.src = svgName;
+      const storedSrc = el.dataset.src || svgName;
+      base.src = storedSrc;
+      if (storedSrc === 'weather-icon' || svgName.startsWith('weather-')) {
+        base.svgName = 'weather-icon';
+        base.src = 'weather-icon';
+        base.fillType = 'none';
+        if (el.dataset.previewSrc) {
+          base.previewSrc = el.dataset.previewSrc;
+        }
+      }
       base.fillType = el.dataset.fillType || 'none';
       if (base.fillType === 'solid') {
         base.fillColor = el.dataset.fillColor;
@@ -2094,7 +2038,6 @@ function exportToJSON() {
     meta: {
       width: 800,
       height: 480,
-      iconTheme: currentWeatherTheme || renderData?.layout?.meta?.iconTheme || 'happy-skies', // This should be editable
       pexelsCategory: selectedCategory || null
     },
     elements: elements
@@ -2107,18 +2050,6 @@ async function loadFromJSON(data) {
   
   if (data.meta && data.meta.name) {
     currentPresetName = data.meta.name;
-  }
-
-  if (data.meta && data.meta.iconTheme) {
-    currentWeatherTheme = data.meta.iconTheme;
-  } else {
-    const weatherElement = (data.elements || []).find(el => {
-      const name = el.svgName || el.src || '';
-      return typeof name === 'string' && name.startsWith('weather-');
-    });
-    if (weatherElement) {
-      currentWeatherTheme = (weatherElement.svgName || weatherElement.src).replace('weather-', '') || currentWeatherTheme;
-    }
   }
 
   const metaCategory = data.meta?.pexelsCategory || '';
@@ -2137,47 +2068,53 @@ async function loadFromJSON(data) {
     const options = { ...elem };
 
     if (elementKind === 'svg') {
-      const svgName = elem.svgName || elem.src || '';
-      options.svgName = svgName;
-
-      try {
-        let svgUrl = '';
-        if (svgName && svgName.startsWith('weather-')) {
-          const theme = svgName.replace('weather-', '') || 'happy-skies';
-          svgUrl = buildWeatherIconUrl(theme);
-        } else {
-          svgUrl = buildSvgUrl(svgName);
-        }
-
-        if (svgUrl) {
-          const response = await fetch(svgUrl);
-          if (response.ok) {
-            options.svgContent = await response.text();
+      const storedSrc = elem.src || elem.svgName || '';
+      const svgName = elem.svgName || '';
+      options.svgName = svgName || storedSrc;
+      const isWeatherIcon = storedSrc === 'weather-icon' || (typeof svgName === 'string' && svgName.startsWith('weather-'));
+      if (isWeatherIcon) {
+        const preview = elem.previewSrc || getWeatherIconPreviewUrl();
+        options.svgContent = buildWeatherIconPreviewMarkup(preview);
+        options.svgName = 'weather-icon';
+        options.src = 'weather-icon';
+        options.fillType = 'none';
+        options.previewSrc = preview;
+      } else {
+        const svgTarget = svgName || storedSrc;
+        if (svgTarget) {
+          try {
+            const svgUrl = buildSvgUrl(svgTarget);
+            if (svgUrl) {
+              const response = await fetch(svgUrl);
+              if (response.ok) {
+                options.svgContent = await response.text();
+              }
+            }
+          } catch (error) {
+            console.warn('Failed to hydrate SVG element', svgTarget, error);
           }
         }
-      } catch (error) {
-        console.warn('Failed to hydrate SVG element', svgName, error);
-      }
 
-      if (!options.svgContent && FALLBACK_WEATHER_ICON) {
-        try {
-          const fallbackResponse = await fetch(FALLBACK_WEATHER_ICON);
-          if (fallbackResponse.ok) {
-            options.svgContent = await fallbackResponse.text();
+        if (!options.svgContent && FALLBACK_WEATHER_ICON) {
+          try {
+            const fallbackResponse = await fetch(FALLBACK_WEATHER_ICON);
+            if (fallbackResponse.ok) {
+              options.svgContent = await fallbackResponse.text();
+            }
+          } catch (fallbackError) {
+            console.warn('Fallback SVG load failed', fallbackError);
           }
-        } catch (fallbackError) {
-          console.warn('Fallback SVG load failed', fallbackError);
         }
       }
     }
 
     addElement(elementKind, elem.x, elem.y, elem.w, elem.h, options);
   });
-  
+
   await Promise.all(elementPromises);
   selectEl(null);
   applyDynamicTextToCanvas();
-  updateWeatherThemeSelection();
+  refreshWeatherIconPreviews();
 }
 
 async function saveToCloud() {
@@ -2372,65 +2309,17 @@ document.getElementById('cancelAddInfo').addEventListener('click', () => {
 });
 
 // Weather Icon (was quickAddIcon)
-document.getElementById('quickAddIcon').addEventListener('click', async () => {
-  const modal = document.getElementById('addWeatherModal');
-  const selector = document.getElementById('weatherThemeSelector');
-  
-  // Selector is populated by loadWeatherThemes() on init
-  
-  // Add click handlers to theme items
-  selector.querySelectorAll('.selector-item').forEach(item => {
-    const theme = item.dataset.theme;
-    if (!theme) return;
-    
-    // Clone to remove old listeners and prevent duplicates
-    const newItem = item.cloneNode(true);
-    item.replaceWith(newItem);
-    
-    newItem.addEventListener('click', async () => {
-      const svgUrl = buildWeatherIconUrl(theme);
-
-      try {
-        let svgContent = '';
-        try {
-          const response = await fetch(svgUrl);
-          if (response.ok) {
-            svgContent = await response.text();
-          } else {
-            throw new Error(`HTTP ${response.status}`);
-          }
-        } catch (networkError) {
-          console.warn('Weather icon fetch failed, using fallback', networkError);
-          const fallbackResponse = await fetch(FALLBACK_WEATHER_ICON);
-          if (fallbackResponse.ok) {
-            svgContent = await fallbackResponse.text();
-          } else {
-            throw new Error('Fallback icon not available');
-          }
-        }
-
-        currentWeatherTheme = theme;
-        updateWeatherThemeSelection();
-        addElement('svg', 100, 100, 120, 120, {
-          svgContent,
-          svgName: `weather-${theme}`,
-          fillType: 'none'
-        });
-
-        modal.classList.add('hidden');
-        setStatus(`Added weather icon: ${theme}`, 1500);
-      } catch (error) {
-        console.error('Failed to load weather icon:', error);
-        setStatus(`Failed to load icon: ${error.message}`, 2000, true);
-      }
-    });
+document.getElementById('quickAddIcon').addEventListener('click', () => {
+  const previewUrl = getWeatherIconPreviewUrl();
+  addElement('svg', 100, 100, 120, 120, {
+    svgContent: buildWeatherIconPreviewMarkup(previewUrl),
+    svgName: 'weather-icon',
+    fillType: 'none',
+    src: 'weather-icon',
+    previewSrc: previewUrl
   });
-  
-  modal.classList.remove('hidden');
-});
-
-document.getElementById('cancelAddWeather').addEventListener('click', () => {
-  document.getElementById('addWeatherModal').classList.add('hidden');
+  refreshWeatherIconPreviews();
+  setStatus('Added weather icon', 1500);
 });
 
 // --- Inspector Event Listeners ---
@@ -2481,7 +2370,8 @@ document.getElementById('duplicateBtn').addEventListener('click', () => {
   // Remove selection state from clone
   clone.classList.remove('selected');
   clone.querySelectorAll('.resize-handle').forEach(h => h.remove());
-  
+
+  applyElementLayer(clone);
   canvas.appendChild(clone);
   selectEl(clone); // Select the new clone
   saveAction('Duplicate');
@@ -2934,7 +2824,6 @@ async function init() {
   // Disable API-dependent buttons by default
   document.getElementById('applyTemplateBtn').disabled = true;
   document.getElementById('quickAddFancyBox').disabled = true;
-  document.getElementById('quickAddIcon').disabled = true;
   
   console.log('Initializing Kin:D Designer...');
   
@@ -2942,7 +2831,6 @@ async function init() {
     await Promise.all([
       loadPresets(),
       loadSVGLibrary(),
-      loadWeatherThemes(),
       loadPexelsCategories(),
       fetchRenderData()
     ]);
@@ -2952,7 +2840,7 @@ async function init() {
     }
 
     applyDynamicTextToCanvas();
-    updateWeatherThemeSelection();
+    refreshWeatherIconPreviews();
     console.log('Initialization complete.');
     setStatus('Ready', 0);
 
