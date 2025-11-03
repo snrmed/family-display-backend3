@@ -1471,6 +1471,48 @@ async function applyTemplate(key) {
   }
 }
 
+async function loadWeatherThemes() {
+  try {
+    const response = await fetch('/api/list-weather-themes');
+    if (!response.ok) throw new Error('Failed to list weather themes');
+    
+    const data = await response.json();
+    const themes = data.themes || ['happy-skies', 'soft-skies', 'sunny-day', 'blue-sky-pro'];
+    
+    const themeEmojis = {
+      'happy-skies': '😊',
+      'soft-skies': '🌈',
+      'sunny-day': '☀️',
+      'blue-sky-pro': '🌤'
+    };
+    
+    const themeLabels = {
+      'happy-skies': 'Happy Skies',
+      'soft-skies': 'Soft Skies',
+      'sunny-day': 'Sunny Day',
+      'blue-sky-pro': 'Blue Sky Pro'
+    };
+    
+    const selector = document.getElementById('weatherThemeSelector');
+    selector.innerHTML = '';
+    
+    themes.forEach(theme => {
+      const item = document.createElement('div');
+      item.className = 'selector-item';
+      item.dataset.theme = theme;
+      item.innerHTML = `
+        <div class="selector-item-icon">${themeEmojis[theme] || '🌤'}</div>
+        <div class="selector-item-label">${themeLabels[theme] || theme}</div>
+      `;
+      selector.appendChild(item);
+    });
+    
+    console.log('Loaded weather themes:', themes);
+  } catch (error) {
+    console.error('Failed to load weather themes:', error);
+  }
+}
+
 async function loadSVGLibrary() {
   const library = document.getElementById('svgLibrary');
   library.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:10px;color:var(--muted);font-size:11px">Loading...</div>';
@@ -2305,6 +2347,7 @@ async function init() {
   await Promise.all([
     loadPresets(),
     loadSVGLibrary(),
+    loadWeatherThemes(),
     fetchRenderData()
   ]);
   
