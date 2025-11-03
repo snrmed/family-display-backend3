@@ -607,6 +607,7 @@ button:disabled{
       <span id="zoomLabel" class="value-pill">100%</span>
     </label>
     <button id="fitBtn" class="tiny">Fit</button>
+    <button id="testBtn" class="tiny" style="background:#e74c3c">TEST</button>
 
     <div class="divider"></div>
 
@@ -1251,6 +1252,7 @@ function drawGrid() {
 }
 
 function addElement(kind, x, y, w, h, options = {}) {
+  console.log('addElement called:', kind, x, y, w, h, options);
   saveAction(`Add ${kind}`);
   
   const el = document.createElement('div');
@@ -1260,23 +1262,25 @@ function addElement(kind, x, y, w, h, options = {}) {
   el.style.width = w + 'px';
   el.style.height = h + 'px';
   el.style.opacity = options.opacity !== undefined ? options.opacity : 1;
+  el.style.zIndex = '10';
   el.dataset.rotation = options.rotation || 0;
   
   if (kind === 'text' || kind === 'icon') {
     const content = document.createElement('div');
     content.className = 'el-content';
     content.textContent = options.text || 'Text';
-    content.style.fontSize = (options.fontSize || 16) + 'px';
-    content.style.color = options.color || lastUsedTextColor;
+    content.style.fontSize = (options.fontSize || 20) + 'px';
+    content.style.color = options.color || '#000000';
     content.style.textAlign = options.align || 'center';
     content.style.fontFamily = options.fontFamily || 'Inter';
-    content.style.fontWeight = options.fontWeight || '400';
+    content.style.fontWeight = options.fontWeight || '600';
     el.dataset.type = options.type || 'CUSTOM';
     el.dataset.textShadowType = options.textShadowType || 'none';
     el.dataset.textShadowColor = options.textShadowColor || '#000000';
     el.dataset.textShadowIntensity = options.textShadowIntensity || 1;
     applyTextShadow(content);
     el.appendChild(content);
+    console.log('Created text/icon element with content:', content.textContent);
   } else if (kind === 'box') {
     el.style.backgroundColor = options.bgColor || 'rgba(255,255,255,0.16)';
     el.style.borderColor = options.borderColor || 'rgba(0,0,0,0.2)';
@@ -1287,6 +1291,7 @@ function addElement(kind, x, y, w, h, options = {}) {
     el.dataset.boxShadowColor = options.boxShadowColor || '#000000';
     el.dataset.boxShadowIntensity = options.boxShadowIntensity || 1;
     applyBoxShadow(el);
+    console.log('Created box element');
   } else if (kind === 'svg-overlay') {
     el.innerHTML = options.svgContent || '<svg></svg>';
     el.dataset.fillType = options.fillType || 'none';
@@ -1296,10 +1301,13 @@ function addElement(kind, x, y, w, h, options = {}) {
     el.dataset.gradAngle = options.gradAngle || 135;
     el.dataset.svgName = options.svgName || 'svg';
     updateSVGContent(el);
+    console.log('Created SVG element:', options.svgName);
   }
   
   canvas.appendChild(el);
+  console.log('Element appended to canvas. Total elements:', canvas.querySelectorAll('.el').length);
   selectEl(el);
+  setStatus(`Added ${kind}`, 1500);
 }
 
 function applyTextShadow(content) {
@@ -2163,6 +2171,29 @@ document.getElementById('fitBtn').addEventListener('click', () => {
   document.getElementById('zoomSlider').value = 100;
   canvas.style.transform = 'scale(1)';
   document.getElementById('zoomLabel').textContent = '100%';
+});
+
+document.getElementById('testBtn').addEventListener('click', () => {
+  console.log('TEST BUTTON CLICKED');
+  console.log('Canvas:', canvas);
+  console.log('Canvas children:', canvas.children.length);
+  
+  // Test 1: Add simple text
+  addElement('text', 50, 50, 200, 50, {
+    text: 'TEST TEXT',
+    fontSize: 24,
+    color: '#000000',
+    fontWeight: '700'
+  });
+  
+  // Test 2: Add box
+  addElement('box', 300, 100, 150, 100, {
+    bgColor: 'rgba(255,0,0,0.3)',
+    borderColor: '#ff0000',
+    borderWidth: 3
+  });
+  
+  setStatus('Test elements added - check console', 3000);
 });
 
 document.getElementById('undoBtn').addEventListener('click', undo);
