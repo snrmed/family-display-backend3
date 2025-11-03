@@ -3,6 +3,7 @@ import json
 import random
 import logging
 from datetime import datetime
+from pathlib import Path
 from typing import Dict, Any
 from urllib.parse import quote
 
@@ -205,7 +206,10 @@ async def build_render_data(device: str = "familydisplay") -> dict:
     now = datetime.now()
     date_str = now.strftime("%a, %d %b")
     
-    svg_base = make_public_url("gcs/assets/svgs")
+    if storage_enabled:
+        svg_base = make_public_url("gcs/assets/svgs")
+    else:
+        svg_base = make_public_url("designer/svgs")
     
     return {
         "layout": layout,
@@ -345,41 +349,89 @@ def get_gcs_asset(path: str):
         }
     )
 
+def _discover_local_svgs() -> list[str]:
+    search_dirs = [
+        Path("backend/web/designer/svgs"),
+        Path("web/designer/svgs"),
+        Path("web/svgs"),
+    ]
+    for directory in search_dirs:
+        if directory.exists():
+            svgs = sorted([p.name for p in directory.glob("*.svg")])
+            if svgs:
+                return svgs
+    return []
+
+
 @app.get("/api/list-svgs")
 def list_svgs():
-    """List all SVG files in GCS bucket"""
-    if not storage_enabled:
-        return {"svgs": []}
-    
-    try:
-        blobs = gcs_bucket.list_blobs(prefix="assets/svgs/")
-        svgs = [
-            blob.name.split("/")[-1]
-            for blob in blobs
-            if blob.name.endswith(".svg")
-        ]
-        logger.info(f"Found {len(svgs)} SVGs in bucket")
-        return {"svgs": svgs}
-    except Exception as e:
-        logger.error(f"Failed to list SVGs: {e}")
-        return {"svgs": []}
+    """List all SVG files available to the designer"""
+    svgs: list[str] = []
+    base_url = None
+
+    if storage_enabled:
+        try:
+            blobs = gcs_bucket.list_blobs(prefix="assets/svgs/")
+            svgs = [
+                blob.name.split("/")[-1]
+                for blob in blobs
+                if blob.name.endswith(".svg")
+            ]
+            if svgs:
+                base_url = "/gcs/assets/svgs"
+                logger.info(f"Found {len(svgs)} SVGs in bucket")
+        except Exception as e:
+            logger.error(f"Failed to list SVGs from GCS: {e}")
+
+    if not svgs:
+        svgs = _discover_local_svgs()
+        if svgs:
+            base_url = "/designer/svgs"
+            logger.info(f"Using {len(svgs)} local SVGs")
+
+    return {"svgs": svgs, "base_url": base_url}
+
+
+def _discover_local_weather_themes() -> list[str]:
+    base_dir = Path("backend/web/designer/weather-icons")
+    if not base_dir.exists():
+        return []
+    return sorted([p.name for p in base_dir.iterdir() if p.is_dir()])
+
 
 @app.get("/api/list-weather-themes")
 def list_weather_themes():
     """List available weather icon themes"""
-    if not storage_enabled:
-        return {"themes": ["happy-skies", "soft-skies", "sunny-day", "blue-sky-pro"]}
-    
-    try:
-        blobs = gcs_bucket.list_blobs(prefix="assets/weather-icons/", delimiter="/")
-        themes = [
-            prefix.split("/")[-2]
-            for prefix in blobs.prefixes
-        ]
-        return {"themes": themes}
-    except Exception as e:
-        logger.error(f"Failed to list weather themes: {e}")
-        return {"themes": ["happy-skies", "soft-skies", "sunny-day", "blue-sky-pro"]}
+    themes: list[str] = []
+    icon_base = None
+
+    if storage_enabled:
+        try:
+            blobs = gcs_bucket.list_blobs(prefix="assets/weather-icons/", delimiter="/")
+            prefixes: list[str] = []
+            for page in blobs.pages:
+                prefixes.extend(page.prefixes)
+            themes = [
+                prefix.rstrip("/").split("/")[-1]
+                for prefix in prefixes
+            ]
+            if themes:
+                icon_base = "/gcs/assets/weather-icons"
+        except Exception as e:
+            logger.error(f"Failed to list weather themes from GCS: {e}")
+
+    if not themes:
+        themes = _discover_local_weather_themes()
+        if themes:
+            icon_base = "/designer/weather-icons"
+
+    if not themes:
+        themes = ["happy-skies", "soft-skies", "sunny-day", "blue-sky-pro"]
+
+    if icon_base is None:
+        icon_base = "/gcs/assets/weather-icons" if storage_enabled else "/designer/weather-icons"
+
+    return {"themes": themes, "icon_base": icon_base}
 
 @app.get("/layouts/{device}")
 def get_layout(device: str, x_admin_token: str = Header(None)):
@@ -512,6 +564,27 @@ if os.path.exists("web/presets"):
 
 if os.path.exists("web/svgs"):
     app.mount("/svgs", StaticFiles(directory="web/svgs"), name="svgs")
+
+if os.path.exists("backend/web/designer/presets"):
+    app.mount(
+        "/designer/presets",
+        StaticFiles(directory="backend/web/designer/presets", html=True),
+        name="designer-presets",
+    )
+
+if os.path.exists("backend/web/designer/svgs"):
+    app.mount(
+        "/designer/svgs",
+        StaticFiles(directory="backend/web/designer/svgs"),
+        name="designer-svgs",
+    )
+
+if os.path.exists("backend/web/designer/weather-icons"):
+    app.mount(
+        "/designer/weather-icons",
+        StaticFiles(directory="backend/web/designer/weather-icons"),
+        name="designer-weather-icons",
+    )
 
 if __name__ == "__main__":
     import uvicorn
