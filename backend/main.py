@@ -203,6 +203,37 @@ async def get_weather(city: str) -> dict:
                 
                 if r.status_code == 200:
                     data = r.json()
+                    
+                    # Get forecast for tomorrow
+                    lat = data["coord"]["lat"]
+                    lon = data["coord"]["lon"]
+                    forecast_url = f"https://api.openweathermap.org/data/2.5/forecast"
+                    forecast_params = {
+                        "lat": lat,
+                        "lon": lon,
+                        "appid": api_key,
+                        "units": "metric"
+                    }
+                    forecast_r = await client.get(forecast_url, params=forecast_params, timeout=10)
+                    
+                    tomorrow_forecast = None
+                    if forecast_r.status_code == 200:
+                        forecast_data = forecast_r.json()
+                        # Get tomorrow's forecast (roughly 24 hours from now)
+                        for item in forecast_data.get("list", []):
+                            dt = datetime.fromtimestamp(item["dt"], tz=timezone.utc)
+                            if dt.date() == (datetime.now(timezone.utc) + timedelta(days=1)).date():
+                                if not tomorrow_forecast:
+                                    tomorrow_forecast = {
+                                        "temp_min": round(item["main"]["temp_min"]),
+                                        "temp_max": round(item["main"]["temp_max"]),
+                                        "desc": item["weather"][0]["description"].title()
+                                    }
+                                else:
+                                    # Update min/max if we find better values
+                                    tomorrow_forecast["temp_min"] = min(tomorrow_forecast["temp_min"], round(item["main"]["temp_min"]))
+                                    tomorrow_forecast["temp_max"] = max(tomorrow_forecast["temp_max"], round(item["main"]["temp_max"]))
+                    
                     weather = {
                         "temp": round(data["main"]["temp"]),
                         "feels_like": round(data["main"]["feels_like"]),
@@ -214,7 +245,8 @@ async def get_weather(city: str) -> dict:
                         "desc_extended": data["weather"][0]["description"].title(),
                         "temp_min": round(data["main"]["temp_min"]),
                         "temp_max": round(data["main"]["temp_max"]),
-                        "timezone_offset": data.get("timezone", 0)
+                        "timezone_offset": data.get("timezone", 0),
+                        "tomorrow": tomorrow_forecast
                     }
                     return weather
         except Exception as e:
@@ -233,6 +265,11 @@ async def get_weather(city: str) -> dict:
         "temp_min": 30,
         "temp_max": 36,
         "timezone_offset": 0,
+        "tomorrow": {
+            "temp_min": 29,
+            "temp_max": 35,
+            "desc": "Partly Cloudy"
+        }
     }
 
 
@@ -276,131 +313,122 @@ def get_pexels_categories() -> list:
         logger.info(f"📂 Found {len(sorted_categories)} Pexels categories: {sorted_categories}")
         return sorted_categories if sorted_categories else ["abstract", "geometric", "minimal"]
     except Exception as e:
-        logger.warning(f"Failed to list Pexels categories: {e}")
+        logger.warning(f"Could not list Pexels categories: {e}")
         return ["abstract", "geometric", "minimal"]
 
 
-def choose_pexels_background(category: str = None) -> dict:
-    """Choose a random Pexels image from specified category"""
+def choose_pexels_background(selected_category: str = None) -> dict:
+    """Choose a random Pexels background from the selected category"""
     if not storage_enabled:
         return None
     
     try:
-        # Get available categories if none specified
-        categories = get_pexels_categories()
+        prefix = "pexels/current/"
         
-        if not category or category not in categories:
-            category = categories[0] if categories else "abstract"
+        # If a specific category is selected, filter by it
+        if selected_category:
+            blobs = list(bucket.list_blobs(prefix=prefix))
+            category_blobs = [
+                blob for blob in blobs 
+                if blob.name.split("/")[-1].startswith(f"{selected_category}_")
+            ]
+        else:
+            category_blobs = list(bucket.list_blobs(prefix=prefix))
         
-        # List all files in the category
-        prefix = f"pexels/current/{category}_"
-        blobs = list(bucket.list_blobs(prefix=prefix))
+        if category_blobs:
+            chosen = random.choice(category_blobs)
+            filename = chosen.name.split("/")[-1]
+            category = filename.split("_")[0] if "_" in filename else "unknown"
+            
+            return {
+                "url": make_public_url(f"gcs/{chosen.name}"),
+                "category": category,
+                "filename": filename
+            }
+    except Exception as e:
+        logger.warning(f"Could not choose Pexels background: {e}")
+    
+    return None
+
+
+async def build_render_data(device: str = "familydisplay") -> dict:
+    """Build complete render data for a device"""
+    try:
+        device_config = get_device_config(device)
+        city = device_config.get("location", {}).get("city", "Darwin")
+        tz_name = device_config.get("location", {}).get("timezone", "Australia/Darwin")
+        icon_theme = device_config.get("preferences", {}).get("iconTheme", DEFAULT_ICON_THEME)
         
-        if not blobs:
-            logger.warning(f"No Pexels images found for category: {category}")
-            return None
+        logger.info(f"Building render data for {device}: {city} ({tz_name})")
         
-        # Pick random image from category
-        selected_blob = random.choice(blobs)
-        url = make_public_url(f"gcs/{selected_blob.name}")
+        # Load layout
+        layout_key = f"devices/{device}/layouts/current.json"
+        try:
+            layout = gcs_read_json(layout_key)
+        except:
+            layout = {"name": "Default", "elements": []}
+        
+        # Get weather
+        weather = await get_weather(f"{city},AU")
+        
+        # Add weather icon URL
+        icon_code = weather.get("icon", "01d")
+        weather["icon_url"] = resolve_weather_icon_url(icon_theme, icon_code)
+        weather["city"] = city
+
+        # Calculate local time using device timezone
+        try:
+            tz = ZoneInfo(tz_name)
+            now = datetime.now(tz)
+        except Exception as e:
+            logger.warning(f"Invalid timezone {tz_name}: {e}, using UTC")
+            now = datetime.now(timezone.utc)
+        
+        weather["local_datetime"] = now.isoformat()
+
+        # Get joke
+        dad_joke = await get_joke()
+
+        # Get Pexels background
+        selected_category = layout.get("meta", {}).get("pexelsCategory")
+        pexels_info = None
+
+        if ENABLE_PEXELS and storage_enabled:
+            pexels_info = choose_pexels_background(selected_category)
+
+        if pexels_info:
+            bg_url = pexels_info["url"]
+        else:
+            bg_url = make_public_url("gcs/pexels/current/abstract_0.jpg")
+        
+        # Get all available categories for frontend
+        categories = get_pexels_categories() if ENABLE_PEXELS else []
+        
+        if ENABLE_PEXELS:
+            pexels_info = pexels_info or {}
+            pexels_info["categories"] = categories
+        
+        date_str = now.strftime("%a, %d %b")
+        
+        if storage_enabled:
+            svg_base = make_public_url("gcs/assets/svgs")
+        else:
+            svg_base = make_public_url("designer/svgs")
         
         return {
-            "category": category,
-            "image": selected_blob.name.split("/")[-1],
-            "path": selected_blob.name,
-            "url": url
+            "layout": layout,
+            "weather": weather,
+            "dad_joke": dad_joke,
+            "date": date_str,
+            "bg_url": bg_url,
+            "pexels": pexels_info,
+            "svg_base": svg_base,
+            "device": device_config,
+            "timestamp": now.isoformat()
         }
     except Exception as e:
-        logger.warning(f"Pexels background selection failed: {e}")
-        return None
-
-
-# ============================================================================
-# RENDER DATA
-# ============================================================================
-
-async def build_render_data(device_id: str = "familydisplay") -> dict:
-    """Build complete data context for rendering - uses device config"""
-    
-    # Load device config FIRST
-    device_config = get_device_config(device_id)
-    
-    city = device_config["location"]["city"]
-    tz_name = device_config["location"]["timezone"]
-    icon_theme = device_config["preferences"].get("iconTheme", DEFAULT_ICON_THEME)
-    
-    logger.info(f"Building render data for {device_id}: {city} ({tz_name})")
-    
-    # Load layout
-    layout_key = f"devices/{device_id}/layouts/current.json"
-    
-    try:
-        layout = gcs_read_json(layout_key)
-    except:
-        logger.warning(f"Layout not found: {layout_key}, using default")
-        layout = {
-            "name": "default",
-            "meta": {},
-            "elements": []
-        }
-    
-    # Get weather data using device city
-    weather = await get_weather(city)
-    icon_code = weather.get("icon", "01d")
-    weather["icon_theme"] = icon_theme
-    weather["icon_url"] = resolve_weather_icon_url(icon_theme, icon_code)
-    weather["city"] = city
-
-    # Calculate local time using device timezone
-    try:
-        tz = ZoneInfo(tz_name)
-        now = datetime.now(tz)
-    except Exception as e:
-        logger.warning(f"Invalid timezone {tz_name}: {e}, using UTC")
-        now = datetime.now(timezone.utc)
-    
-    weather["local_datetime"] = now.isoformat()
-
-    # Get joke
-    dad_joke = await get_joke()
-
-    # Get Pexels background
-    selected_category = layout.get("meta", {}).get("pexelsCategory")
-    pexels_info = None
-
-    if ENABLE_PEXELS and storage_enabled:
-        pexels_info = choose_pexels_background(selected_category)
-
-    if pexels_info:
-        bg_url = pexels_info["url"]
-    else:
-        bg_url = make_public_url("gcs/pexels/current/abstract_0.jpg")
-    
-    # Get all available categories for frontend
-    categories = get_pexels_categories() if ENABLE_PEXELS else []
-    
-    if ENABLE_PEXELS:
-        pexels_info = pexels_info or {}
-        pexels_info["categories"] = categories
-    
-    date_str = now.strftime("%a, %d %b")
-    
-    if storage_enabled:
-        svg_base = make_public_url("gcs/assets/svgs")
-    else:
-        svg_base = make_public_url("designer/svgs")
-    
-    return {
-        "layout": layout,
-        "weather": weather,
-        "dad_joke": dad_joke,
-        "date": date_str,
-        "bg_url": bg_url,
-        "pexels": pexels_info,
-        "svg_base": svg_base,
-        "device": device_config,
-        "timestamp": now.isoformat()
-    }
+        logger.error(f"Failed to build render data: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 async def render_html_to_png(html_path: str, context: Dict[str, Any]) -> bytes:
@@ -541,9 +569,9 @@ async def api_frame(device: str = "familydisplay"):
 @app.get("/designer/", response_class=HTMLResponse)
 async def designer():
     """Serve designer HTML"""
-    designer_path = Path("backend/web/designer/overlay_designer_v4_clean.html")
+    designer_path = Path("web/designer/overlay_designer_v4_clean.html")
     if not designer_path.exists():
-        designer_path = Path("web/designer/overlay_designer_v4_clean.html")
+        designer_path = Path("../web/designer/overlay_designer_v4_clean.html")
     
     if designer_path.exists():
         return HTMLResponse(content=designer_path.read_text())
@@ -578,22 +606,17 @@ async def list_svgs():
 @app.get("/api/list-presets")
 async def list_presets():
     """List available preset layouts"""
-    presets_dir = Path("backend/web/presets")
-    if not presets_dir.exists():
-        presets_dir = Path("web/presets")
+    presets_dir = Path("web/presets")
     
     if presets_dir.exists():
         presets = []
         for file in presets_dir.glob("*.json"):
-            presets.append({
-                "name": file.stem,
-                "path": f"/presets/{file.name}"
-            })
+            presets.append(file.stem)
         return {"presets": presets}
     return {"presets": []}
 
 
-# NEW: Pexels Categories Route
+# Pexels Categories Route
 @app.get("/api/list-pexels-categories")
 async def list_pexels_categories():
     """List available Pexels categories"""
@@ -605,9 +628,22 @@ async def list_pexels_categories():
         return {"categories": ["abstract", "geometric", "minimal"]}
 
 
-# Static Files
-app.mount("/presets", StaticFiles(directory="backend/web/presets" if Path("backend/web/presets").exists() else "web/presets"), name="presets")
-app.mount("/fonts", StaticFiles(directory="backend/web/fonts" if Path("backend/web/fonts").exists() else "web/fonts"), name="fonts")
+# Static Files - FIXED for container working directory
+try:
+    presets_dir = Path("web/presets")
+    if presets_dir.exists() and presets_dir.is_dir():
+        app.mount("/presets", StaticFiles(directory="web/presets"), name="presets")
+        logger.info(f"✓ Mounted /presets from {presets_dir}")
+except Exception as e:
+    logger.warning(f"Could not mount /presets: {e}")
+
+try:
+    fonts_dir = Path("web/fonts")
+    if fonts_dir.exists() and fonts_dir.is_dir():
+        app.mount("/fonts", StaticFiles(directory="web/fonts"), name="fonts")
+        logger.info(f"✓ Mounted /fonts from {fonts_dir}")
+except Exception as e:
+    logger.warning(f"Could not mount /fonts: {e}")
 
 
 # GCS Asset Proxy
