@@ -1238,6 +1238,50 @@ function updateTimezoneHint() {
 // RENDER DATA
 // ========================================================================
 
+function deriveAvailableInfoTypes(data) {
+  const types = new Set(['CUSTOM']);
+  const weather = data?.weather;
+
+  if (weather) {
+    if (weather.temp != null) types.add('TEMP');
+
+    if (weather.temp_min != null && weather.temp_max != null) {
+      types.add('WEATHER_MINMAX');
+    }
+
+    if (weather.city || deviceConfig?.location?.city) {
+      types.add('CITY');
+    }
+
+    if (weather.desc) types.add('WEATHER_DESC');
+
+    if (weather.desc_extended) {
+      types.add('WEATHER_DESC_EXTENDED');
+    }
+
+    const tomorrow = weather.tomorrow;
+    if (tomorrow) {
+      if (tomorrow.desc) {
+        types.add('TOMORROW_DESC');
+      }
+      if (tomorrow.temp_min != null && tomorrow.temp_max != null) {
+        types.add('TOMORROW_TEMP');
+      }
+    }
+
+    if (weather.humidity != null) types.add('HUMIDITY');
+    if (weather.rain != null) types.add('RAIN');
+    if (weather.wind != null) types.add('WIND');
+  }
+
+  if (data?.date) types.add('DATE');
+  if (data?.dad_joke) types.add('JOKE');
+
+  return Array.from(types);
+}
+
+window.deriveAvailableInfoTypes = deriveAvailableInfoTypes;
+
 async function fetchRenderData() {
   try {
     const response = await fetch(`/v1/render_data?device=${deviceId}`);
@@ -1247,21 +1291,10 @@ async function fetchRenderData() {
     console.log('Render data loaded:', renderData);
     
     // Build available info types
-    availableInfoTypes = ['CUSTOM'];
-    
-    if (renderData.weather) {
-      availableInfoTypes.push('TEMP', 'CITY', 'WEATHER_DESC');
-      
-      if (renderData.weather.temp_min != null && renderData.weather.temp_max != null) {
-        availableInfoTypes.push('WEATHER_MINMAX');
-      }
-    }
-    
-    if (renderData.date) availableInfoTypes.push('DATE');
-    if (renderData.dad_joke) availableInfoTypes.push('JOKE');
-    
+    availableInfoTypes = deriveAvailableInfoTypes(renderData);
+
     updateInfoTypeDropdown();
-    
+
     return renderData;
     
   } catch (error) {
@@ -1297,26 +1330,56 @@ function updateInfoTypeDropdown() {
 
 function getDynamicText(type) {
   const weather = renderData?.weather;
-  
+
   switch (type) {
     case 'TEMP':
       return weather?.temp != null ? `${weather.temp}°C` : '--°C';
-    
+
     case 'WEATHER_MINMAX':
       if (weather?.temp_min != null && weather?.temp_max != null) {
         return `${weather.temp_min}° / ${weather.temp_max}°`;
       }
       return '--° / --°';
-    
+
     case 'CITY':
       return weather?.city || deviceConfig?.location?.city || 'City';
-    
+
     case 'WEATHER_DESC':
       return weather?.desc || 'Sunny';
-    
+
+    case 'WEATHER_DESC_EXTENDED':
+      return weather?.desc_extended || weather?.desc || 'Sunny with clear skies';
+
+    case 'TOMORROW_DESC':
+      return weather?.tomorrow?.desc || 'Partly cloudy, 24°-31°C';
+
+    case 'TOMORROW_TEMP':
+      if (weather?.tomorrow?.temp_min != null && weather?.tomorrow?.temp_max != null) {
+        return `${weather.tomorrow.temp_min}° / ${weather.tomorrow.temp_max}°`;
+      }
+      return '--° / --°';
+
+    case 'HUMIDITY':
+      if (weather?.humidity != null) {
+        return `Humidity: ${weather.humidity}%`;
+      }
+      return 'Humidity: --%';
+
+    case 'RAIN':
+      if (weather?.rain != null) {
+        return `Rain: ${weather.rain}mm`;
+      }
+      return 'Rain: --mm';
+
+    case 'WIND':
+      if (weather?.wind != null) {
+        return `Wind: ${weather.wind}km/h`;
+      }
+      return 'Wind: --km/h';
+
     case 'DATE':
       return renderData?.date || '';
-    
+
     case 'JOKE':
       return renderData?.dad_joke || 'No joke today.';
     
@@ -2174,21 +2237,14 @@ init();
 
   // Derive availableInfoTypes from render data
   function deriveTypesFromData(d) {
-    const t = [];
-    if (d && d.weather) {
-      t.push('CUSTOM','TEMP','WEATHER_MINMAX','CITY','WEATHER_DESC');
-      if (d.weather.desc_extended) t.push('WEATHER_DESC_EXTENDED');
-      if (d.weather.tomorrow) {
-        t.push('TOMORROW_DESC');
-        if (d.weather.tomorrow.temp_min != null && d.weather.tomorrow.temp_max != null) {
-          t.push('TOMORROW_TEMP');
-        }
+    try {
+      if (typeof window.deriveAvailableInfoTypes === 'function') {
+        return window.deriveAvailableInfoTypes(d);
       }
-      if (d.weather.humidity != null) t.push('HUMIDITY');
-      if (d.weather.rain != null) t.push('RAIN');
-      if (d.weather.wind != null) t.push('WIND');
+    } catch (e) {
+      console.warn('[designer] deriveAvailableInfoTypes failed, falling back to full list', e);
     }
-    return t;
+    return Object.keys(TYPE_LABELS);
   }
 
   async function bootstrapDesigner() {
@@ -2197,12 +2253,18 @@ init();
 
     // 2) Fetch live data; if successful, set availableInfoTypes and repopulate with gating
     try {
-      const resp = await fetch('/v1/render_data', {cache:'no-store'});
+      const endpoint = deviceId ? `/v1/render_data?device=${encodeURIComponent(deviceId)}` : '/v1/render_data';
+      const resp = await fetch(endpoint, {cache:'no-store'});
       if (!resp.ok) throw new Error('HTTP '+resp.status);
       const data = await resp.json();
       const gated = deriveTypesFromData(data);
+      availableInfoTypes = gated;
       window.availableInfoTypes = gated;
       console.debug('[designer] availableInfoTypes from backend →', gated);
+
+      if (typeof updateInfoTypeDropdown === 'function') {
+        updateInfoTypeDropdown();
+      }
 
       // If you still want gating, uncomment next lines to repopulate gated only:
       // const sel = document.getElementById('textType');
@@ -2219,7 +2281,8 @@ init();
       // }
     } catch (e) {
       console.warn('[designer] fetch /v1/render_data failed, keeping full list', e);
-      window.availableInfoTypes = Object.keys(TYPE_LABELS);
+      availableInfoTypes = Object.keys(TYPE_LABELS);
+      window.availableInfoTypes = availableInfoTypes;
     }
   }
 
