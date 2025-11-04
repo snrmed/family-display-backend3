@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Family Display Render</title>
+  <title>Kin:D Family Display Render</title>
   <style>
     * {
       margin: 0;
@@ -15,7 +15,7 @@
       width: 800px;
       height: 480px;
       overflow: hidden;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif;
       background: #fff;
     }
     
@@ -101,6 +101,7 @@
     
     /**
      * Resolve relative/absolute paths to full URLs
+     * CRITICAL: This function enables SVG rendering in Playwright's file:// context
      */
     function resolveUrl(path, svg_base) {
       if (!path) return "";
@@ -132,24 +133,49 @@
     }
 
     /**
-     * Get text content based on element type
+     * Apply text shadow or glow effect
+     * NEW: Supports text shadows and glows from designer
      */
-    function textFromType(el, data) {
-      const type = el.type || "CUSTOM";
+    function applyTextShadow(element, shadowType, shadowColor, shadowIntensity) {
+      if (!shadowType || shadowType === 'none') {
+        element.style.textShadow = 'none';
+        element.style.filter = 'none';
+        return;
+      }
       
+      const intensity = parseFloat(shadowIntensity || 1);
+      const color = shadowColor || '#000000';
+      const blur = Math.round(intensity * 4);
+      
+      if (shadowType === 'shadow') {
+        // Drop shadow
+        element.style.textShadow = `2px 2px ${blur}px ${color}`;
+      } else if (shadowType === 'glow') {
+        // Glow effect using multiple text-shadows
+        element.style.textShadow = `
+          0 0 ${blur}px ${color},
+          0 0 ${blur * 2}px ${color},
+          0 0 ${blur * 3}px ${color}
+        `;
+      }
+    }
+
+    /**
+     * Get text content based on element type
+     * UPDATED: Includes new weather types (WEATHER_DESC_EXTENDED, TOMORROW_DESC, TOMORROW_TEMP)
+     */
+    function getDynamicText(type, data) {
       switch (type) {
         case "WEATHER_CITY":
         case "CITY":
-          return data.weather?.city || "City";
+          return data.weather?.city || data.device?.location?.city || "City";
         
         case "TEMP":
-          // Use current temperature only
           return data.weather?.temp != null
             ? data.weather.temp + "°C"
             : "--°C";
         
         case "WEATHER_MINMAX":
-          // Display min/max temperatures
           if (data.weather?.temp_min != null && data.weather?.temp_max != null) {
             return data.weather.temp_min + "° / " + data.weather.temp_max + "°";
           }
@@ -178,6 +204,21 @@
         case "WEATHER_DESC":
           return data.weather?.desc || "Sunny";
         
+        // NEW: Extended weather description with forecast
+        case "WEATHER_DESC_EXTENDED":
+          return data.weather?.desc_extended || data.weather?.desc || "Sunny with clear skies";
+        
+        // NEW: Tomorrow's forecast description
+        case "TOMORROW_DESC":
+          return data.weather?.tomorrow?.desc || "Partly cloudy, 24°-31°C";
+        
+        // NEW: Tomorrow's temperature range
+        case "TOMORROW_TEMP":
+          if (data.weather?.tomorrow?.temp_min && data.weather?.tomorrow?.temp_max) {
+            return data.weather.tomorrow.temp_min + "° / " + data.weather.tomorrow.temp_max + "°";
+          }
+          return "--° / --°";
+        
         case "JOKE":
           return data.dad_joke || "No joke today.";
         
@@ -185,12 +226,16 @@
           return data.date || "";
 
         default:
-          return el.text || "";
+          return "";
       }
     }
 
+    /**
+     * Calculate z-index based on element type
+     */
     function getLayerZIndex(el, providedKind) {
       const kind = (providedKind || el.kind || "").toLowerCase();
+      
       if (kind === "text" || kind === "icon") {
         return 30;
       }
@@ -213,13 +258,7 @@
     /**
      * Load SVG from URL and inline it
      */
-    function getWeatherIcon(data) {
-      if (data.weather?.tomorrow?.icon) return data.weather.tomorrow.icon;
-      return data.weather?.icon || "01d";
-    }
-    
     async function inlineSvgInto(elDiv, url) {
-        
       console.log("📥 Fetching SVG:", url);
       
       try {
@@ -251,32 +290,8 @@
 
     /**
      * Render the complete layout
+     * UPDATED: Includes text shadow support and new weather types
      */
-    
-    // ============================================================
-    // TEXT EFFECTS (Shadow/Glow)
-    // ============================================================
-    function applyTextShadow(element, shadowType, shadowColor, shadowIntensity) {
-      if (!shadowType || shadowType === 'none') {
-        element.style.textShadow = 'none';
-        element.style.filter = 'none';
-        return;
-      }
-      const intensity = parseFloat(shadowIntensity || 1);
-      const color = shadowColor || '#000000';
-      const blur = Math.round(intensity * 4);
-      if (shadowType === 'shadow') {
-        element.style.textShadow = `2px 2px ${blur}px ${color}`;
-      } else if (shadowType === 'glow') {
-        element.style.textShadow = `
-          0 0 ${blur}px ${color},
-          0 0 ${blur * 2}px ${color},
-          0 0 ${blur * 3}px ${color}
-        `;
-      }
-    }
-    
-
     async function renderLayout(data) {
       const canvas = document.getElementById('canvas');
       const layout = data.layout || {};
@@ -284,75 +299,108 @@
       const svg_base = data.svg_base || "";
       
       console.log('SVG Base:', svg_base);
+      console.log('Rendering', elements.length, 'elements');
       
       // Add background image if provided
       if (data.bg_url) {
         const bgImg = document.createElement('img');
         bgImg.src = data.bg_url;
         bgImg.className = 'background-image';
+        bgImg.onerror = () => {
+          console.warn('Background image failed to load:', data.bg_url);
+        };
         canvas.appendChild(bgImg);
       }
       
       // Process each element
       for (const el of elements) {
         const elDiv = document.createElement('div');
-        elDiv.className = 'el ' + (el.kind || 'box');
+        elDiv.className = 'el';
+        
+        const kind = (el.kind || 'box').toLowerCase();
+        elDiv.classList.add(kind);
         
         // Position and size
         elDiv.style.left = (el.x || 0) + 'px';
         elDiv.style.top = (el.y || 0) + 'px';
-        elDiv.style.width = (el.width || 100) + 'px';
-        elDiv.style.height = (el.height || 100) + 'px';
+        elDiv.style.width = (el.w || el.width || 100) + 'px';
+        elDiv.style.height = (el.h || el.height || 100) + 'px';
         
         // Z-index
-        const zIndex = getLayerZIndex(el, el.kind);
+        const zIndex = el.zIndex || getLayerZIndex(el, kind);
         elDiv.style.zIndex = zIndex;
         
-        // Apply styles
-        if (el.background) {
-          elDiv.style.background = el.background;
-        }
-        if (el.borderRadius) {
-          elDiv.style.borderRadius = el.borderRadius + 'px';
-        }
+        // Opacity
         if (el.opacity != null) {
           elDiv.style.opacity = el.opacity;
         }
         
-        const kind = (el.kind || '').toLowerCase();
-        
         // Handle different element types
         if (kind === 'text' || kind === 'icon') {
-          const text = textFromType(el, data);
-          elDiv.textContent = text;
-          
-          
-          // NEW: text shadow/glow support
-          if (el.textShadowType && el.textShadowType !== 'none') {
-            applyTextShadow(elDiv, el.textShadowType, el.textShadowColor, el.textShadowIntensity);
+          // Get text content (dynamic or static)
+          let textContent;
+          if (el.type && el.type !== 'CUSTOM') {
+            textContent = getDynamicText(el.type, data);
+          } else {
+            textContent = el.text || 'Text';
           }
-} else if (el.textAlign === 'right') {
+          
+          elDiv.textContent = textContent;
+          elDiv.style.fontSize = (el.fontSize || 16) + 'px';
+          elDiv.style.color = el.color || '#000000';
+          elDiv.style.fontWeight = el.weight || el.fontWeight || '400';
+          elDiv.style.fontFamily = el.fontFamily || 'Inter, sans-serif';
+          elDiv.style.display = 'flex';
+          elDiv.style.alignItems = 'center';
+          elDiv.style.justifyContent = 'center';
+          elDiv.style.textAlign = 'center';
+          elDiv.style.padding = '4px';
+          elDiv.style.lineHeight = '1.2';
+          elDiv.style.wordBreak = 'break-word';
+          
+          // Handle text alignment
+          if (el.textAlign) {
+            elDiv.style.textAlign = el.textAlign;
+            if (el.textAlign === 'left') {
+              elDiv.style.justifyContent = 'flex-start';
+            } else if (el.textAlign === 'right') {
               elDiv.style.justifyContent = 'flex-end';
             }
           }
           
+          // NEW: Apply text shadow/glow if specified
+          if (el.textShadowType && el.textShadowType !== 'none') {
+            applyTextShadow(elDiv, el.textShadowType, el.textShadowColor, el.textShadowIntensity);
+          }
+          
+        } else if (kind === 'box') {
+          // Box element
+          if (el.background || el.fill) {
+            elDiv.style.background = el.background || el.fill;
+          }
+          if (el.borderColor) {
+            elDiv.style.border = '1px solid ' + el.borderColor;
+          }
+          if (el.borderRadius || el.radius) {
+            elDiv.style.borderRadius = (el.borderRadius || el.radius) + 'px';
+          }
+          
         } else if (kind === 'svg' || kind === 'svg-overlay' || kind === 'image') {
+          // SVG or image element
           let src = el.src || el.svgName || '';
           
           // Handle weather icon special case
           if (src === 'weather-icon') {
-            const iconTheme = (data.weather && data.weather.icon_theme) ? data.weather.icon_theme : 'happy-skies';
-            const iconCode = getWeatherIcon(data);
-            // If an explicit URL was provided use it, otherwise build from theme/code under /gcs/assets/weather-icons/
-            if (!data.weather?.icon_url) {
-              src = `/gcs/assets/weather-icons/${iconTheme}/${iconCode}.svg`;
-            } else {
+            if (data.weather?.icon_url) {
               src = data.weather.icon_url;
+              elDiv.classList.add('weather-icon');
+            } else {
+              console.warn('No weather icon URL available');
+              continue;
             }
-            elDiv.classList.add('weather-icon');
           }
           
-          // Resolve URL
+          // Resolve URL to absolute path
           const fullUrl = resolveUrl(src, svg_base);
           
           if (fullUrl.endsWith('.svg')) {
@@ -365,6 +413,9 @@
             img.style.width = '100%';
             img.style.height = '100%';
             img.style.objectFit = 'contain';
+            img.onerror = () => {
+              console.error('Image failed to load:', fullUrl);
+            };
             elDiv.appendChild(img);
           }
         }
@@ -372,7 +423,7 @@
         canvas.appendChild(elDiv);
       }
       
-      console.log('Layout rendered successfully');
+      console.log('✓ Layout rendered successfully');
     }
   </script>
 </body>
