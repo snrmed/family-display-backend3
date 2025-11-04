@@ -46,22 +46,16 @@ RENDER_WIDTH = int(os.getenv("RENDER_WIDTH", "800"))
 RENDER_HEIGHT = int(os.getenv("RENDER_HEIGHT", "480"))
 RENDER_PATH = os.getenv("RENDER_PATH", "backend/web/layouts/base.html")
 
-# UPDATED: Expanded Pexels categories
-PEXELS_CATEGORIES = [
-    "abstract",
-    "geometric",
-    "paper-collage",
-    "kids-shapes",
-    "minimal"
-]
-
 LOCAL_JOKES = [
     "Why don't scientists trust atoms? Because they make up everything!",
     "What do you call a fake noodle? An impasta!",
     "Why did the scarecrow win an award? He was outstanding in his field!",
 ]
 
-# Storage
+# ============================================================================
+# GOOGLE CLOUD STORAGE
+# ============================================================================
+
 storage_enabled = False
 bucket = None
 playwright_browser = None
@@ -70,38 +64,20 @@ try:
     storage_client = storage.Client()
     bucket = storage_client.bucket(GCS_BUCKET)
     storage_enabled = True
-    logger.info(f"✓ GCS enabled: {GCS_BUCKET}")
+    logger.info(f"✅ GCS connected: {GCS_BUCKET}")
 except Exception as e:
-    logger.warning(f"GCS disabled: {e}")
-
-if ENABLE_RENDERING:
-    try:
-        from playwright.async_api import async_playwright
-        logger.info("✓ Playwright available")
-    except ImportError:
-        logger.warning("Playwright not installed, rendering disabled")
-        ENABLE_RENDERING = False
+    logger.warning(f"⚠️ GCS disabled: {e}")
 
 # ============================================================================
-# UTILITY FUNCTIONS
+# UTILITIES
 # ============================================================================
 
 def make_public_url(path: str) -> str:
-    """Create public URL for asset"""
-    if path.startswith("http://") or path.startswith("https://"):
-        return path
-    
+    """Generate public URL for assets"""
     if PUBLIC_BASE_URL:
-        base = PUBLIC_BASE_URL.rstrip("/")
-        return f"{base}/{path.lstrip('/')}"
-    
-    return f"/{path.lstrip('/')}"
+        return f"{PUBLIC_BASE_URL}/{path}"
+    return f"/{path}"
 
-def resolve_weather_icon_url(theme: str, icon_code: str) -> str:
-    """Resolve weather icon URL"""
-    if storage_enabled:
-        return make_public_url(f"gcs/assets/weather-icons/{theme}/{icon_code}.svg")
-    return make_public_url(f"designer/weather-icons/{theme}/{icon_code}.svg")
 
 def gcs_read_json(key: str) -> dict:
     """Read JSON from GCS"""
@@ -110,7 +86,8 @@ def gcs_read_json(key: str) -> dict:
     blob = bucket.blob(key)
     if not blob.exists():
         raise FileNotFoundError(f"Blob not found: {key}")
-    return json.loads(blob.download_as_text(encoding='utf-8'))
+    return json.loads(blob.download_as_text())
+
 
 def gcs_write_json(key: str, data: dict):
     """Write JSON to GCS"""
@@ -118,284 +95,130 @@ def gcs_write_json(key: str, data: dict):
         raise RuntimeError("GCS not enabled")
     blob = bucket.blob(key)
     blob.upload_from_string(json.dumps(data, indent=2), content_type="application/json")
-    logger.info(f"✓ Wrote JSON to {key}")
+    logger.info(f"💾 Saved: {key}")
 
-def gcs_write_bytes(key: str, data: bytes, content_type: str = "application/octet-stream"):
+
+def gcs_write_bytes(key: str, data: bytes, content_type: str = "image/png"):
     """Write bytes to GCS"""
     if not storage_enabled:
         raise RuntimeError("GCS not enabled")
     blob = bucket.blob(key)
     blob.upload_from_string(data, content_type=content_type)
-    logger.info(f"✓ Wrote {len(data)} bytes to {key}")
+    logger.info(f"💾 Saved: {key}")
+
 
 # ============================================================================
-# DEVICE CONFIG
+# DEVICE CONFIGURATION
 # ============================================================================
 
-def get_device_config(device_id: str) -> dict:
-    """Get device configuration"""
-    key = f"devices/{device_id}/config.json"
+DEFAULT_DEVICE_CONFIG = {
+    "location": {
+        "city": "Darwin",
+        "timezone": "Australia/Darwin"
+    },
+    "preferences": {
+        "iconTheme": "happy-skies"
+    }
+}
+
+def get_device_config(device_id: str = "familydisplay") -> dict:
+    """Load device configuration"""
+    if not storage_enabled:
+        return DEFAULT_DEVICE_CONFIG
     
     try:
-        return gcs_read_json(key)
-    except FileNotFoundError:
-        # Return default config for Darwin
-        logger.info(f"Creating default config for device: {device_id}")
-        default_config = {
-            "deviceId": device_id,
-            "location": {
-                "city": "Darwin",
-                "timezone": "Australia/Darwin"
-            },
-            "preferences": {
-                "iconTheme": DEFAULT_ICON_THEME
-            }
-        }
-        # Save it
-        try:
-            gcs_write_json(key, default_config)
-        except:
-            pass
-        return default_config
+        config_key = f"devices/{device_id}/config.json"
+        config = gcs_read_json(config_key)
+        logger.info(f"✅ Loaded config for {device_id}")
+        return config
+    except:
+        logger.info(f"Using default config for {device_id}")
+        return DEFAULT_DEVICE_CONFIG
+
 
 def save_device_config(device_id: str, config: dict):
     """Save device configuration"""
-    key = f"devices/{device_id}/config.json"
+    if not storage_enabled:
+        raise RuntimeError("GCS not enabled")
     
-    # Validate config
-    if "location" not in config or "city" not in config["location"]:
-        raise ValueError("Config must include location.city")
-    
-    gcs_write_json(key, config)
-    logger.info(f"✓ Saved device config for {device_id}")
+    config_key = f"devices/{device_id}/config.json"
+    gcs_write_json(config_key, config)
+    logger.info(f"✅ Saved config for {device_id}")
+
 
 # ============================================================================
-# DATA PROVIDERS
+# RENDERING & BROWSER
 # ============================================================================
 
-async def generate_extended_description(city: str, lat: float, lon: float, api_key: str, current_data: dict) -> str:
-    """Generate extended weather description from forecast - NEW"""
+if ENABLE_RENDERING:
     try:
-        async with httpx.AsyncClient() as client:
-            # Get forecast
-            forecast_url = f"https://api.openweathermap.org/data/2.5/forecast?lat={lat}&lon={lon}&appid={api_key}&units=metric"
-            forecast_resp = await client.get(forecast_url, timeout=5)
-            forecast_resp.raise_for_status()
-            forecast_data = forecast_resp.json()
-            
-            # Current description
-            current_desc = current_data["weather"][0]["description"].title()
-            current_temp = round(current_data["main"]["temp"])
-            
-            # Analyze next 6-9 hours (next 3 forecast entries)
-            rain_chance = 0
-            max_rain = 0
-            temp_trend = []
-            
-            for i, entry in enumerate(forecast_data["list"][:3]):
-                # Rain probability
-                if "pop" in entry:
-                    rain_chance = max(rain_chance, entry["pop"] * 100)
-                
-                # Rain amount
-                if "rain" in entry:
-                    max_rain = max(max_rain, entry["rain"].get("3h", 0))
-                
-                # Temperature trend
-                temp_trend.append(round(entry["main"]["temp"]))
-            
-            # Build description
-            parts = [f"{current_desc}, {current_temp}°C"]
-            
-            # Add rain forecast
-            if rain_chance > 30:
-                if max_rain > 5:
-                    parts.append(f"{round(rain_chance)}% chance of heavy rain later")
-                elif max_rain > 0:
-                    parts.append(f"{round(rain_chance)}% chance of rain later")
-                else:
-                    parts.append(f"{round(rain_chance)}% chance of showers later")
-            
-            # Add temperature trend
-            if len(temp_trend) >= 3:
-                future_temp = temp_trend[-1]
-                temp_change = future_temp - current_temp
-                
-                if temp_change >= 4:
-                    parts.append(f"warming to {future_temp}°C")
-                elif temp_change <= -4:
-                    parts.append(f"cooling to {future_temp}°C")
-            
-            return " with ".join(parts) if len(parts) > 1 else parts[0]
-    
+        from playwright.async_api import async_playwright
+        
+        async def init_browser():
+            global playwright_browser
+            pw = await async_playwright().start()
+            playwright_browser = await pw.chromium.launch(
+                args=['--no-sandbox', '--disable-dev-shm-usage']
+            )
+            logger.info("🎭 Playwright browser initialized")
+        
+        @app.on_event("startup")
+        async def startup():
+            await init_browser()
+        
+        @app.on_event("shutdown")
+        async def shutdown():
+            if playwright_browser:
+                await playwright_browser.close()
     except Exception as e:
-        logger.warning(f"Extended description failed: {e}")
-        return f"{current_desc}, {current_temp}°C"
+        logger.warning(f"⚠️ Playwright disabled: {e}")
+        ENABLE_RENDERING = False
 
 
-async def get_tomorrow_forecast(city: str, lat: float, lon: float, api_key: str, tz_offset: int) -> dict:
-    """Get tomorrow's weather forecast - NEW"""
-    try:
-        async with httpx.AsyncClient() as client:
-            forecast_url = f"https://api.openweathermap.org/data/2.5/forecast?lat={lat}&lon={lon}&appid={api_key}&units=metric"
-            forecast_resp = await client.get(forecast_url, timeout=5)
-            forecast_resp.raise_for_status()
-            forecast_data = forecast_resp.json()
-            
-            # Get tomorrow's date in local timezone
-            local_timezone = timezone(timedelta(seconds=tz_offset))
-            tomorrow_date = (
-                datetime.now(timezone.utc)
-                .astimezone(local_timezone)
-                + timedelta(days=1)
-            ).date()
-            
-            # Find all entries for tomorrow
-            tomorrow_entries = []
-            for entry in forecast_data.get("list", []):
-                dt_val = entry.get("dt")
-                if dt_val:
-                    local_dt = datetime.fromtimestamp(dt_val, tz=timezone.utc).astimezone(local_timezone)
-                    if local_dt.date() == tomorrow_date:
-                        tomorrow_entries.append(entry)
-            
-            if not tomorrow_entries:
-                return None
-            
-            # Calculate tomorrow's min/max temps
-            temps = [round(e["main"]["temp"]) for e in tomorrow_entries]
-            
-            # Get most common weather condition for tomorrow
-            conditions = [e["weather"][0]["description"] for e in tomorrow_entries]
-            most_common = max(set(conditions), key=conditions.count)
-            
-            # Check for rain tomorrow
-            rain_chance = max([e.get("pop", 0) * 100 for e in tomorrow_entries])
-            
-            # Build tomorrow's description
-            desc_parts = [f"{most_common.title()}, {min(temps)}°-{max(temps)}°C"]
-            if rain_chance > 30:
-                desc_parts.append(f"{round(rain_chance)}% chance of rain")
-            
-            return {
-                "temp_min": min(temps),
-                "temp_max": max(temps),
-                "desc": " with ".join(desc_parts),
-                "icon": tomorrow_entries[len(tomorrow_entries)//2]["weather"][0]["icon"]
-            }
-    
-    except Exception as e:
-        logger.warning(f"Tomorrow forecast failed: {e}")
-        return None
+# ============================================================================
+# CONTENT PROVIDERS
+# ============================================================================
+
+def resolve_weather_icon_url(theme: str, code: str) -> str:
+    """Resolve weather icon URL"""
+    path = f"assets/weather-icons/{theme}/{code}.svg"
+    return make_public_url(f"gcs/{path}")
 
 
 async def get_weather(city: str) -> dict:
-    """Get weather data with extended description and tomorrow's forecast - UPDATED"""
-    if ENABLE_OPENWEATHER:
-        api_key = os.getenv("OPENWEATHER_KEY")
-        if api_key:
-            try:
-                async with httpx.AsyncClient() as client:
-                    # Current weather
-                    url = f"https://api.openweathermap.org/data/2.5/weather?q={city},AU&appid={api_key}&units=metric"
-                    r = await client.get(url, timeout=5)
-                    if r.status_code == 200:
-                        data = r.json()
-                        weather: dict[str, Any] = {
-                            "temp": round(data["main"].get("temp", 0)),
-                            "feels_like": round(data["main"].get("feels_like", 0)),
-                            "humidity": data.get("main", {}).get("humidity"),
-                            "rain": data.get("rain", {}).get("1h", 0),
-                            "wind": round(data.get("wind", {}).get("speed", 0)),
-                            "icon": data.get("weather", [{}])[0].get("icon", "01d"),
-                            "desc": data.get("weather", [{}])[0].get("description", "").title() or "Sunny",
-                        }
-
-                        tz_offset = data.get("timezone", 0)
-                        weather["timezone_offset"] = tz_offset
-
-                        # Get coordinates
-                        coord = data.get("coord", {})
-                        lat = coord.get("lat")
-                        lon = coord.get("lon")
-
-                        if lat is not None and lon is not None:
-                            # Get today's min/max from forecast
-                            try:
-                                forecast_url = f"https://api.openweathermap.org/data/2.5/forecast?lat={lat}&lon={lon}&appid={api_key}&units=metric"
-                                forecast_resp = await client.get(forecast_url, timeout=5)
-                                forecast_resp.raise_for_status()
-                                forecast_data = forecast_resp.json()
-
-                                target_date = (
-                                    datetime.now(timezone.utc)
-                                    .astimezone(timezone(timedelta(seconds=tz_offset)))
-                                    .date()
-                                )
-
-                                min_samples: list[float] = []
-                                max_samples: list[float] = []
-                                local_timezone = timezone(timedelta(seconds=tz_offset))
-
-                                for entry in forecast_data.get("list", []):
-                                    dt_val = entry.get("dt")
-                                    if dt_val is None:
-                                        continue
-
-                                    local_dt = datetime.fromtimestamp(dt_val, tz=timezone.utc).astimezone(local_timezone)
-                                    if local_dt.date() != target_date:
-                                        continue
-
-                                    main_block = entry.get("main", {})
-                                    min_val = main_block.get("temp_min")
-                                    max_val = main_block.get("temp_max")
-
-                                    if isinstance(min_val, (int, float)):
-                                        min_samples.append(float(min_val))
-                                    if isinstance(max_val, (int, float)):
-                                        max_samples.append(float(max_val))
-
-                                if min_samples:
-                                    weather["temp_min"] = round(min(min_samples))
-                                if max_samples:
-                                    weather["temp_max"] = round(max(max_samples))
-                                    
-                            except Exception as exc:
-                                logger.warning(f"OpenWeather forecast failed: {exc}")
-                                api_min = data.get("main", {}).get("temp_min")
-                                api_max = data.get("main", {}).get("temp_max")
-                                if isinstance(api_min, (int, float)):
-                                    weather["temp_min"] = round(api_min)
-                                if isinstance(api_max, (int, float)):
-                                    weather["temp_max"] = round(api_max)
-
-                            # NEW: Generate extended description
-                            try:
-                                extended_desc = await generate_extended_description(
-                                    city, lat, lon, api_key, data
-                                )
-                                weather["desc_extended"] = extended_desc
-                            except Exception as e:
-                                logger.warning(f"Extended description failed: {e}")
-                                weather["desc_extended"] = weather["desc"]
-                            
-                            # NEW: Get tomorrow's forecast
-                            try:
-                                tomorrow = await get_tomorrow_forecast(city, lat, lon, api_key, tz_offset)
-                                if tomorrow:
-                                    weather["tomorrow"] = tomorrow
-                            except Exception as e:
-                                logger.warning(f"Tomorrow forecast failed: {e}")
-
-                        # Ensure temp_min and temp_max exist
-                        if "temp_min" not in weather:
-                            weather["temp_min"] = weather["temp"]
-                        if "temp_max" not in weather:
-                            weather["temp_max"] = weather["temp"]
-
-                        return weather
-            except Exception as e:
-                logger.warning(f"OpenWeather failed: {e}")
+    """Get weather data from OpenWeather API"""
+    api_key = os.getenv("OPENWEATHER_KEY")
+    
+    if ENABLE_OPENWEATHER and api_key:
+        try:
+            async with httpx.AsyncClient() as client:
+                # Get current weather
+                current_url = f"https://api.openweathermap.org/data/2.5/weather"
+                params = {
+                    "q": city,
+                    "appid": api_key,
+                    "units": "metric"
+                }
+                r = await client.get(current_url, params=params, timeout=10)
+                
+                if r.status_code == 200:
+                    data = r.json()
+                    weather = {
+                        "temp": round(data["main"]["temp"]),
+                        "feels_like": round(data["main"]["feels_like"]),
+                        "humidity": data["main"]["humidity"],
+                        "rain": data.get("rain", {}).get("1h", 0),
+                        "wind": round(data["wind"]["speed"]),
+                        "icon": data["weather"][0]["icon"],
+                        "desc": data["weather"][0]["description"].title(),
+                        "desc_extended": data["weather"][0]["description"].title(),
+                        "temp_min": round(data["main"]["temp_min"]),
+                        "temp_max": round(data["main"]["temp_max"]),
+                        "timezone_offset": data.get("timezone", 0)
+                    }
+                    return weather
+        except Exception as e:
+            logger.warning(f"OpenWeather failed: {e}")
 
     # Fallback data
     return {
@@ -431,17 +254,45 @@ async def get_joke() -> str:
     return random.choice(LOCAL_JOKES)
 
 
+def get_pexels_categories() -> list:
+    """Get available Pexels categories from GCS bucket"""
+    if not storage_enabled:
+        return ["abstract", "geometric", "minimal"]
+    
+    try:
+        # List all folders in pexels/current/
+        blobs = bucket.list_blobs(prefix="pexels/current/", delimiter="/")
+        
+        # Extract unique category names from file prefixes
+        categories = set()
+        for blob in blobs:
+            # File format: pexels/current/category_number.jpg
+            filename = blob.name.split("/")[-1]
+            if "_" in filename:
+                category = filename.split("_")[0]
+                categories.add(category)
+        
+        sorted_categories = sorted(list(categories))
+        logger.info(f"📂 Found {len(sorted_categories)} Pexels categories: {sorted_categories}")
+        return sorted_categories if sorted_categories else ["abstract", "geometric", "minimal"]
+    except Exception as e:
+        logger.warning(f"Failed to list Pexels categories: {e}")
+        return ["abstract", "geometric", "minimal"]
+
+
 def choose_pexels_background(category: str = None) -> dict:
-    """Choose a random Pexels image from specified category - FIXED"""
+    """Choose a random Pexels image from specified category"""
     if not storage_enabled:
         return None
     
     try:
-        # Default to first category if none specified
-        if not category or category not in PEXELS_CATEGORIES:
-            category = PEXELS_CATEGORIES[0]
+        # Get available categories if none specified
+        categories = get_pexels_categories()
         
-        # List all files in the category folder
+        if not category or category not in categories:
+            category = categories[0] if categories else "abstract"
+        
+        # List all files in the category
         prefix = f"pexels/current/{category}_"
         blobs = list(bucket.list_blobs(prefix=prefix))
         
@@ -463,10 +314,6 @@ def choose_pexels_background(category: str = None) -> dict:
         logger.warning(f"Pexels background selection failed: {e}")
         return None
 
-
-def get_pexels_categories() -> list:
-    """Get available Pexels categories"""
-    return PEXELS_CATEGORIES
 
 # ============================================================================
 # RENDER DATA
@@ -529,15 +376,12 @@ async def build_render_data(device_id: str = "familydisplay") -> dict:
     else:
         bg_url = make_public_url("gcs/pexels/current/abstract_0.jpg")
     
+    # Get all available categories for frontend
+    categories = get_pexels_categories() if ENABLE_PEXELS else []
+    
     if ENABLE_PEXELS:
-        categories = get_pexels_categories()
-        pexels_info = {
-            "category": selected_category or (categories[0] if categories else None),
-            "image": pexels_info.get("image") if pexels_info else None,
-            "path": pexels_info.get("path") if pexels_info else None,
-            "url": bg_url,
-            "categories": categories,
-        }
+        pexels_info = pexels_info or {}
+        pexels_info["categories"] = categories
     
     date_str = now.strftime("%a, %d %b")
     
@@ -582,6 +426,7 @@ async def render_html_to_png(html_path: str, context: Dict[str, Any]) -> bytes:
     finally:
         await page.close()
 
+
 # ============================================================================
 # API ROUTES
 # ============================================================================
@@ -595,12 +440,8 @@ async def root():
         "storage_enabled": storage_enabled,
         "features": {
             "device_config": True,
-            "australian_cities": True,
-            "timezone_support": True,
-            "extended_weather": True,
-            "tomorrow_forecast": True,
             "pexels_randomization": True,
-            "text_shadows": True
+            "dynamic_categories": True
         }
     }
 
@@ -623,7 +464,7 @@ async def api_save_device_config(device_id: str, request: Request):
     try:
         config = await request.json()
         save_device_config(device_id, config)
-        return {"status": "success", "message": f"Device config saved for {device_id}"}
+        return {"status": "saved", "device_id": device_id}
     except Exception as e:
         logger.error(f"Failed to save device config: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -633,12 +474,12 @@ async def api_save_device_config(device_id: str, request: Request):
 @app.get("/v1/devices/{device_id}/layouts/current")
 def api_get_layout(device_id: str):
     """Get current layout for device"""
-    layout_key = f"devices/{device_id}/layouts/current.json"
     try:
+        layout_key = f"devices/{device_id}/layouts/current.json"
         layout = gcs_read_json(layout_key)
         return JSONResponse(content=layout)
     except FileNotFoundError:
-        return JSONResponse(content={"name": "default", "meta": {}, "elements": []})
+        raise HTTPException(status_code=404, detail="Layout not found")
     except Exception as e:
         logger.error(f"Failed to get layout: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -651,7 +492,7 @@ async def api_save_layout(device_id: str, request: Request):
         layout = await request.json()
         layout_key = f"devices/{device_id}/layouts/current.json"
         gcs_write_json(layout_key, layout)
-        return {"status": "success", "message": f"Layout saved for {device_id}"}
+        return {"status": "saved", "device_id": device_id}
     except Exception as e:
         logger.error(f"Failed to save layout: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -659,8 +500,8 @@ async def api_save_layout(device_id: str, request: Request):
 
 # Render Data Route
 @app.get("/v1/render_data")
-async def get_render_data(device: str = "familydisplay"):
-    """Get complete render data for a device"""
+async def api_render_data(device: str = "familydisplay"):
+    """Get complete render data"""
     try:
         data = await build_render_data(device)
         return JSONResponse(content=data)
@@ -669,25 +510,30 @@ async def get_render_data(device: str = "familydisplay"):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# Frame Route
+# Frame Render Route
 @app.get("/v1/frame")
-async def get_frame(device: str = "familydisplay"):
-    """Render and return PNG frame"""
+async def api_frame(device: str = "familydisplay"):
+    """Render PNG frame"""
     if not ENABLE_RENDERING:
         raise HTTPException(status_code=503, detail="Rendering disabled")
     
     try:
-        context = await build_render_data(device)
-        png_bytes = await render_html_to_png(RENDER_PATH, context)
+        data = await build_render_data(device)
+        
+        render_path = Path(RENDER_PATH)
+        if not render_path.exists():
+            render_path = Path("web/layouts/base.html")
+        
+        png_bytes = await render_html_to_png(str(render_path), data)
         
         # Save to GCS
         if storage_enabled:
             render_key = f"devices/{device}/renders/latest.png"
-            gcs_write_bytes(render_key, png_bytes, "image/png")
+            gcs_write_bytes(render_key, png_bytes)
         
         return Response(content=png_bytes, media_type="image/png")
     except Exception as e:
-        logger.error(f"Render failed: {e}")
+        logger.error(f"Failed to render frame: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -747,6 +593,23 @@ async def list_presets():
     return {"presets": []}
 
 
+# NEW: Pexels Categories Route
+@app.get("/api/list-pexels-categories")
+async def list_pexels_categories():
+    """List available Pexels categories"""
+    try:
+        categories = get_pexels_categories()
+        return {"categories": categories}
+    except Exception as e:
+        logger.error(f"Failed to list Pexels categories: {e}")
+        return {"categories": ["abstract", "geometric", "minimal"]}
+
+
+# Static Files
+app.mount("/presets", StaticFiles(directory="backend/web/presets" if Path("backend/web/presets").exists() else "web/presets"), name="presets")
+app.mount("/fonts", StaticFiles(directory="backend/web/fonts" if Path("backend/web/fonts").exists() else "web/fonts"), name="fonts")
+
+
 # GCS Asset Proxy
 @app.get("/gcs/{path:path}")
 async def gcs_proxy(path: str):
@@ -782,81 +645,16 @@ async def gcs_proxy(path: str):
 
 # Admin Routes
 @app.get("/admin/render_now")
-async def admin_render_now(token: str, device: str = "familydisplay"):
-    """Force immediate render"""
+async def admin_render_now(token: str = None, device: str = "familydisplay"):
+    """Force render now"""
     if token != ADMIN_TOKEN:
-        raise HTTPException(status_code=403, detail="Invalid token")
-    
-    if not ENABLE_RENDERING:
-        raise HTTPException(status_code=503, detail="Rendering disabled")
+        raise HTTPException(status_code=401, detail="Invalid token")
     
     try:
-        context = await build_render_data(device)
-        png_bytes = await render_html_to_png(RENDER_PATH, context)
-        
-        # Save to GCS
-        if storage_enabled:
-            render_key = f"devices/{device}/renders/latest.png"
-            gcs_write_bytes(render_key, png_bytes, "image/png")
-            
-            # Also save dated version
-            now = datetime.now(timezone.utc)
-            dated_key = f"devices/{device}/renders/{now.strftime('%Y-%m-%d_%H-%M-%S')}.png"
-            gcs_write_bytes(dated_key, png_bytes, "image/png")
-        
-        return {"status": "success", "message": f"Rendered {device}", "size": len(png_bytes)}
+        await api_frame(device)
+        return {"status": "rendered", "device": device}
     except Exception as e:
-        logger.error(f"Admin render failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
-
-# Static file mounts
-if os.path.exists("web"):
-    app.mount("/web", StaticFiles(directory="web"), name="web")
-
-if os.path.exists("web/presets"):
-    app.mount("/presets", StaticFiles(directory="web/presets", html=True), name="presets")
-
-if os.path.exists("backend/web/designer/svgs"):
-    app.mount(
-        "/designer/svgs",
-        StaticFiles(directory="backend/web/designer/svgs"),
-        name="designer-svgs",
-    )
-
-if os.path.exists("backend/web/designer/weather-icons"):
-    app.mount(
-        "/designer/weather-icons",
-        StaticFiles(directory="backend/web/designer/weather-icons"),
-        name="designer-weather-icons",
-    )
-
-
-# Playwright lifecycle
-@app.on_event("startup")
-async def startup():
-    """Initialize Playwright on startup"""
-    global playwright_browser
-    
-    if ENABLE_RENDERING:
-        try:
-            from playwright.async_api import async_playwright
-            playwright = await async_playwright().start()
-            playwright_browser = await playwright.chromium.launch()
-            logger.info("✓ Playwright browser launched")
-        except Exception as e:
-            logger.error(f"Failed to launch Playwright: {e}")
-            playwright_browser = None
-
-
-@app.on_event("shutdown")
-async def shutdown():
-    """Cleanup Playwright on shutdown"""
-    global playwright_browser
-    
-    if playwright_browser:
-        await playwright_browser.close()
-        logger.info("✓ Playwright browser closed")
 
 
 if __name__ == "__main__":
