@@ -134,95 +134,98 @@ body{
   background:var(--brand-hover);
 }
 
-.status-indicator{
-  display:flex;
-  align-items:center;
-  gap:8px;
-  padding:6px 12px;
-  background:var(--panel-hover);
-  border-radius:var(--radius);
-  font-size:12px;
-}
-
-.status-dot{
-  width:8px;
-  height:8px;
-  border-radius:50%;
-  background:var(--success);
-  animation:pulse 2s infinite;
-}
-
-@keyframes pulse{
-  0%,100%{opacity:1}
-  50%{opacity:0.5}
-}
-
-.status-dot.error{
+.btn-danger{
   background:var(--danger);
-  animation:none;
+  border-color:var(--danger);
+  color:#fff;
 }
 
-/* === LAYOUT === */
-.main{
-  display:grid;
-  grid-template-columns:300px 1fr 340px;
-  height:calc(100vh - 65px);
-  overflow:hidden;
+.btn-danger:hover{
+  background:#c0392b;
 }
 
-/* === SIDEBAR === */
-.sidebar{
+.btn-success{
+  background:var(--success);
+  border-color:var(--success);
+  color:#fff;
+}
+
+.btn-success:hover{
+  background:#229954;
+}
+
+/* === MAIN LAYOUT === */
+.main-container{
+  display:flex;
+  height:calc(100vh - 70px);
+}
+
+.toolbar{
+  width:260px;
   background:var(--panel);
   border-right:2px solid var(--border);
   overflow-y:auto;
-  overflow-x:hidden;
-}
-
-.section{
-  border-bottom:1px solid var(--border);
   padding:20px;
 }
 
-.section-header{
+.canvas-area{
+  flex:1;
   display:flex;
   align-items:center;
-  justify-content:space-between;
-  margin-bottom:16px;
-  cursor:pointer;
-  user-select:none;
+  justify-content:center;
+  position:relative;
+  overflow:auto;
 }
 
-.section-title{
-  font-size:14px;
+.inspector{
+  width:300px;
+  background:var(--panel);
+  border-left:2px solid var(--border);
+  overflow-y:auto;
+  padding:20px;
+}
+
+/* === TOOLBAR === */
+.toolbar-title{
+  font-size:16px;
   font-weight:600;
+  margin-bottom:16px;
+  color:var(--brand);
+}
+
+.tool-group{
+  margin-bottom:24px;
+}
+
+.tool-group-title{
+  font-size:13px;
+  color:var(--text-muted);
+  margin-bottom:12px;
+  text-transform:uppercase;
+  letter-spacing:0.5px;
+  font-weight:600;
+}
+
+.tool-btn{
+  width:100%;
+  padding:12px;
+  margin-bottom:8px;
+  background:var(--panel-hover);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
   color:var(--text);
+  font-size:14px;
+  cursor:pointer;
+  transition:all 0.2s;
   display:flex;
   align-items:center;
   gap:8px;
 }
 
-.section-icon{
-  font-size:16px;
-}
-
-.section-toggle{
-  color:var(--text-muted);
-  font-size:12px;
-  transition:transform 0.2s;
-}
-
-.section.collapsed .section-toggle{
-  transform:rotate(-90deg);
-}
-
-.section.collapsed .section-content{
-  display:none;
-}
-
-/* Device Settings Highlight */
-.section.device-settings{
-  background:linear-gradient(135deg, rgba(45,140,240,0.05) 0%, rgba(45,140,240,0.02) 100%);
-  border-left:3px solid var(--brand);
+.tool-btn:hover{
+  background:var(--brand);
+  border-color:var(--brand);
+  color:#fff;
 }
 
 .form-group{
@@ -232,137 +235,43 @@ body{
 .form-label{
   display:block;
   font-size:12px;
-  font-weight:600;
-  color:var(--text);
-  margin-bottom:6px;
-}
-
-.form-hint{
-  display:block;
-  font-size:11px;
   color:var(--text-muted);
-  margin-top:4px;
-  line-height:1.4;
+  margin-bottom:6px;
+  text-transform:uppercase;
+  letter-spacing:0.5px;
+  font-weight:600;
 }
 
-.form-input,
-.form-select{
+.form-select, .form-input{
   width:100%;
-  padding:10px 12px;
-  background:var(--bg);
+  padding:8px 12px;
+  background:var(--panel-hover);
   border:1px solid var(--border);
   border-radius:var(--radius);
   color:var(--text);
   font-size:13px;
-  transition:border-color 0.2s;
 }
 
-.form-input:focus,
-.form-select:focus{
+.form-select:focus, .form-input:focus{
   outline:none;
   border-color:var(--brand);
 }
 
-.form-input:disabled,
-.form-select:disabled{
-  opacity:0.5;
-  cursor:not-allowed;
-}
-
-.info-box{
-  background:rgba(45,140,240,0.1);
-  border:1px solid rgba(45,140,240,0.3);
-  border-radius:var(--radius);
-  padding:12px;
-  font-size:12px;
-  color:var(--brand);
-  line-height:1.5;
-  margin-top:12px;
-}
-
-.info-box-icon{
-  display:inline-block;
-  margin-right:6px;
-}
-
-/* Quick Add Grid */
-.quick-grid{
-  display:grid;
-  grid-template-columns:repeat(2,1fr);
-  gap:10px;
-}
-
-.quick-btn{
-  aspect-ratio:1;
-  background:var(--panel-hover);
-  border:1px solid var(--border);
-  border-radius:var(--radius);
-  cursor:pointer;
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  justify-content:center;
-  gap:6px;
-  transition:all 0.2s;
-}
-
-.quick-btn:hover{
-  background:var(--brand);
-  border-color:var(--brand);
-  transform:translateY(-2px);
-  box-shadow:var(--shadow);
-}
-
-.quick-btn:hover .quick-icon{
-  transform:scale(1.1);
-}
-
-.quick-btn:disabled{
-  opacity:0.4;
-  cursor:not-allowed;
-  transform:none;
-}
-
-.quick-icon{
-  font-size:28px;
-  transition:transform 0.2s;
-}
-
-.quick-label{
-  font-size:11px;
-  color:var(--text-muted);
-  font-weight:500;
-}
-
-.quick-btn:hover .quick-label{
-  color:#fff;
-}
-
 /* === CANVAS === */
-.canvas-area{
-  background:var(--bg);
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  padding:40px;
-  overflow:auto;
-  position:relative;
-}
-
 .canvas-container{
-  position:relative;
-  display:inline-block;
-}
-
-.canvas{
   position:relative;
   width:800px;
   height:480px;
-  background:linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
-  border:2px solid var(--border);
-  border-radius:4px;
-  box-shadow:0 20px 60px rgba(0,0,0,0.5);
+}
+
+.canvas{
+  width:800px;
+  height:480px;
+  background:#fff;
+  position:relative;
   overflow:hidden;
+  background-size:cover;
+  background-position:center;
 }
 
 .grid-overlay{
@@ -372,25 +281,19 @@ body{
   width:100%;
   height:100%;
   pointer-events:none;
-  opacity:0;
-  transition:opacity 0.2s;
-}
-
-.grid-overlay.visible{
-  opacity:1;
 }
 
 .grid-overlay line{
-  stroke:rgba(255,255,255,0.1);
+  stroke:var(--grid);
   stroke-width:1;
+  opacity:0.3;
 }
 
-/* Canvas Elements */
+/* === ELEMENTS === */
 .el{
   position:absolute;
   cursor:move;
   user-select:none;
-  box-sizing:border-box;
 }
 
 .el.selected{
@@ -398,79 +301,52 @@ body{
   outline-offset:2px;
 }
 
-.el-content{
-  width:100%;
-  height:100%;
+.el.text, .el.icon{
   display:flex;
   align-items:center;
   justify-content:center;
-  overflow:hidden;
-  pointer-events:none;
-  word-wrap:break-word;
 }
 
-.el.text .el-content,
-.el.icon .el-content{
+.el.box{
+  border:2px solid;
+}
+
+.el.svg-overlay{
+  pointer-events:all;
+}
+
+.el-content{
+  pointer-events:none;
   white-space:pre-wrap;
   text-align:center;
 }
 
-.el.box{
-  border:1px solid rgba(255,255,255,0.2);
-  background:rgba(255,255,255,0.1);
-  border-radius:12px;
-}
-
-.el.svg-overlay,
-.el.svg{
-  display:flex;
-  align-items:center;
-  justify-content:center;
-}
-
-.el.svg-overlay svg,
-.el.svg svg{
-  width:100%;
-  height:100%;
-  object-fit:contain;
-}
-
-/* Resize Handles */
 .resize-handle{
   position:absolute;
-  width:10px;
-  height:10px;
+  width:12px;
+  height:12px;
   background:var(--brand);
   border:2px solid #fff;
   border-radius:50%;
-  z-index:100;
-  margin:-6px;
+  cursor:pointer;
+  z-index:1000;
 }
 
-.resize-handle.tl{top:0;left:0;cursor:nwse-resize}
-.resize-handle.tr{top:0;right:0;cursor:nesw-resize}
-.resize-handle.bl{bottom:0;left:0;cursor:nesw-resize}
-.resize-handle.br{bottom:0;right:0;cursor:nwse-resize}
+.resize-handle.tl{top:-6px;left:-6px;cursor:nwse-resize}
+.resize-handle.tr{top:-6px;right:-6px;cursor:nesw-resize}
+.resize-handle.bl{bottom:-6px;left:-6px;cursor:nesw-resize}
+.resize-handle.br{bottom:-6px;right:-6px;cursor:nwse-resize}
 
 /* === INSPECTOR === */
-.inspector{
-  background:var(--panel);
-  border-left:2px solid var(--border);
-  overflow-y:auto;
-  padding:20px;
-}
-
 .inspector-empty{
   text-align:center;
-  color:var(--text-muted);
   padding:40px 20px;
-  font-size:13px;
+  color:var(--text-muted);
 }
 
 .inspector-empty-icon{
   font-size:48px;
-  margin-bottom:12px;
-  opacity:0.5;
+  margin-bottom:16px;
 }
 
 .panel{
@@ -482,48 +358,93 @@ body{
 }
 
 .panel-title{
-  font-size:13px;
+  font-size:14px;
   font-weight:600;
-  color:var(--text);
   margin-bottom:12px;
-  display:flex;
-  align-items:center;
-  gap:6px;
+  color:var(--brand);
 }
 
 .row{
-  display:flex;
-  gap:8px;
-  margin-bottom:8px;
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:12px;
+  margin-bottom:12px;
 }
 
-.row > *{
-  flex:1;
+.value-display{
+  color:var(--brand);
+  font-weight:600;
 }
 
-input[type="number"],
-input[type="text"],
-input[type="color"],
-select{
-  padding:8px;
-  background:var(--bg);
-  border:1px solid var(--border);
+.hidden{
+  display:none !important;
+}
+
+/* === STATUS === */
+.status{
+  position:fixed;
+  bottom:20px;
+  right:20px;
+  padding:12px 20px;
+  background:var(--panel);
+  border:2px solid var(--border);
   border-radius:var(--radius);
   color:var(--text);
-  font-size:12px;
+  font-size:14px;
+  box-shadow:var(--shadow);
+  opacity:0;
+  transition:opacity 0.3s;
+  z-index:10000;
 }
 
-input[type="number"]:focus,
-input[type="text"]:focus,
-select:focus{
-  outline:none;
-  border-color:var(--brand);
+.status.show{
+  opacity:1;
 }
 
-input[type="color"]{
-  height:36px;
+.status.success{
+  border-color:var(--success);
+  color:var(--success);
+}
+
+.status.error{
+  border-color:var(--danger);
+  color:var(--danger);
+}
+
+/* === SECTIONS === */
+.section{
+  margin-bottom:20px;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  overflow:hidden;
+}
+
+.section-header{
+  background:var(--panel-hover);
+  padding:12px 16px;
   cursor:pointer;
-  padding:4px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  font-weight:600;
+  font-size:14px;
+}
+
+.section-toggle{
+  color:var(--text-muted);
+  transition:transform 0.2s;
+}
+
+.section.collapsed .section-toggle{
+  transform:rotate(-90deg);
+}
+
+.section-content{
+  padding:16px;
+}
+
+.section.collapsed .section-content{
+  display:none;
 }
 
 input[type="range"]{
@@ -532,182 +453,22 @@ input[type="range"]{
   border-radius:3px;
   background:var(--border);
   outline:none;
-  -webkit-appearance:none;
 }
 
 input[type="range"]::-webkit-slider-thumb{
-  -webkit-appearance:none;
-  width:14px;
-  height:14px;
+  width:16px;
+  height:16px;
   border-radius:50%;
   background:var(--brand);
   cursor:pointer;
 }
 
-input[type="range"]::-moz-range-thumb{
-  width:14px;
-  height:14px;
-  border-radius:50%;
-  background:var(--brand);
-  cursor:pointer;
-  border:none;
-}
-
-.value-display{
-  display:inline-block;
-  padding:2px 8px;
-  background:var(--brand);
-  color:#fff;
-  border-radius:12px;
-  font-size:11px;
-  font-weight:600;
-  margin-left:4px;
-}
-
-/* === SCROLLBAR === */
-::-webkit-scrollbar{
-  width:10px;
-  height:10px;
-}
-
-::-webkit-scrollbar-track{
-  background:var(--panel);
-}
-
-::-webkit-scrollbar-thumb{
-  background:var(--border);
-  border-radius:5px;
-}
-
-::-webkit-scrollbar-thumb:hover{
-  background:var(--text-muted);
-}
-
-/* === MODALS === */
-.modal{
-  position:fixed;
-  top:0;
-  left:0;
+input[type="color"]{
   width:100%;
-  height:100%;
-  background:rgba(0,0,0,0.85);
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  z-index:10000;
-  backdrop-filter:blur(4px);
-}
-
-.modal.hidden{
-  display:none;
-}
-
-.modal-box{
-  background:var(--panel);
-  border:2px solid var(--border);
+  height:40px;
+  border:1px solid var(--border);
   border-radius:var(--radius);
-  padding:32px;
-  max-width:500px;
-  width:90%;
-  box-shadow:0 20px 80px rgba(0,0,0,0.6);
-}
-
-.modal-header{
-  display:flex;
-  align-items:center;
-  gap:16px;
-  margin-bottom:24px;
-}
-
-.modal-icon{
-  font-size:48px;
-}
-
-.modal-title h2{
-  font-size:24px;
-  color:var(--text);
-  margin-bottom:4px;
-}
-
-.modal-title p{
-  font-size:13px;
-  color:var(--text-muted);
-}
-
-.modal-body{
-  margin-bottom:24px;
-}
-
-.modal-footer{
-  display:flex;
-  gap:12px;
-}
-
-.modal-footer .btn{
-  flex:1;
-}
-
-/* Grid Selector */
-.grid-selector{
-  display:grid;
-  grid-template-columns:repeat(3,1fr);
-  gap:12px;
-  max-height:400px;
-  overflow-y:auto;
-  margin-top:16px;
-}
-
-.grid-item{
-  aspect-ratio:1;
-  background:var(--bg);
-  border:2px solid var(--border);
-  border-radius:var(--radius);
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  justify-content:center;
   cursor:pointer;
-  padding:12px;
-  transition:all 0.2s;
-}
-
-.grid-item:hover{
-  background:var(--panel-hover);
-  border-color:var(--brand);
-  transform:scale(1.05);
-}
-
-.grid-item.selected{
-  border-color:var(--brand);
-  background:var(--panel-hover);
-}
-
-.grid-item-icon{
-  font-size:32px;
-  margin-bottom:8px;
-}
-
-.grid-item-label{
-  font-size:11px;
-  color:var(--text-muted);
-  text-align:center;
-}
-
-.grid-item svg{
-  width:60%;
-  height:60%;
-  object-fit:contain;
-}
-
-/* Utility */
-.hidden{
-  display:none !important;
-}
-
-.divider{
-  height:1px;
-  background:var(--border);
-  margin:16px 0;
 }
 </style>
 </head>
@@ -716,167 +477,67 @@ input[type="range"]::-moz-range-thumb{
 <!-- HEADER -->
 <div class="header">
   <div class="brand">
-    <span class="brand-logo">:D</span>
-    <span class="brand-name">kin;D</span>
-    <span class="brand-tag">Designer</span>
+    <span class="brand-logo">kin;D</span>
+    <span class="brand-name">Designer</span>
+    <span class="brand-tag">v4</span>
   </div>
-  
   <div class="device-badge">
     <span>Device:</span>
-    <strong id="deviceName">loading...</strong>
+    <strong id="deviceName">familydisplay</strong>
   </div>
-  
   <div class="header-actions">
-    <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-muted)">
-      <input type="checkbox" id="gridToggle">
-      Grid
-    </label>
-    
-    <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-muted)">
-      <input type="checkbox" id="snapToggle" checked>
-      Snap
-    </label>
-    
-    <button class="btn" id="undoBtn">↶ Undo</button>
-    <button class="btn" id="redoBtn">↷ Redo</button>
-    <button class="btn btn-primary" id="saveBtn">💾 Save</button>
-  </div>
-  
-  <div class="status-indicator">
-    <div class="status-dot" id="statusDot"></div>
-    <span id="statusText">Ready</span>
+    <button class="btn" onclick="goToSetup()">⚙️ Setup</button>
+    <button class="btn" onclick="exportJSON()">💾 Export JSON</button>
+    <button class="btn" onclick="previewFrame()">👁️ Preview</button>
+    <button class="btn btn-success" onclick="saveLayout()">💾 Save Layout</button>
   </div>
 </div>
 
-<!-- MAIN LAYOUT -->
-<div class="main">
+<!-- MAIN CONTAINER -->
+<div class="main-container">
   
-  <!-- SIDEBAR -->
-  <div class="sidebar">
+  <!-- TOOLBAR -->
+  <div class="toolbar">
+    <div class="toolbar-title">🎨 Elements</div>
     
-    <!-- DEVICE SETTINGS -->
-    <div class="section device-settings">
-      <div class="section-header" onclick="toggleSection(this)">
-        <div class="section-title">
-          <span class="section-icon">⚙️</span>
-          Device Settings
-        </div>
-        <span class="section-toggle">▼</span>
-      </div>
-      <div class="section-content">
-        <div class="form-group">
-          <label class="form-label">Device ID</label>
-          <input type="text" class="form-input" id="deviceIdInput" placeholder="familydisplay" disabled>
-          <span class="form-hint">Set during initial setup</span>
-        </div>
-        
-        <div class="form-group">
-          <label class="form-label">Location (Australia)</label>
-          <select class="form-select" id="citySelect">
-            <option value="Darwin">Darwin, NT</option>
-            <option value="Adelaide">Adelaide, SA</option>
-            <option value="Brisbane">Brisbane, QLD</option>
-            <option value="Canberra">Canberra, ACT</option>
-            <option value="Hobart">Hobart, TAS</option>
-            <option value="Melbourne">Melbourne, VIC</option>
-            <option value="Perth">Perth, WA</option>
-            <option value="Sydney">Sydney, NSW</option>
-          </select>
-          <span class="form-hint" id="timezoneHint">Timezone: Australia/Darwin</span>
-        </div>
-        
-        <div class="form-group">
-          <label class="form-label">Weather Icon Theme</label>
-          <select class="form-select" id="iconThemeSelect">
-            <option value="happy-skies">😊 Happy Skies</option>
-            <option value="soft-skies">🌈 Soft Skies</option>
-            <option value="sunny-day">☀️ Sunny Day</option>
-            <option value="blue-sky-pro">🌤 Blue Sky Pro</option>
-          </select>
-          <span class="form-hint">Icons update automatically based on current weather</span>
-        </div>
-        
-        <button class="btn btn-primary" id="saveDeviceBtn" style="width:100%">
-          💾 Save Device Settings
-        </button>
-        
-        <div class="info-box">
-          <span class="info-box-icon">ℹ️</span>
-          Device settings apply to all layouts on this device. Weather and date will use your selected location.
-        </div>
-      </div>
+    <div class="tool-group">
+      <div class="tool-group-title">Add Elements</div>
+      <button class="tool-btn" onclick="addTextElement()">📝 Text</button>
+      <button class="tool-btn" onclick="addIconElement()">✨ Icon</button>
+      <button class="tool-btn" onclick="addBoxElement()">⬜ Box</button>
+      <button class="tool-btn" onclick="addSVGElement()">🎨 SVG Overlay</button>
     </div>
     
-    <!-- QUICK ADD -->
+    <!-- Presets Section -->
     <div class="section">
       <div class="section-header" onclick="toggleSection(this)">
-        <div class="section-title">
-          <span class="section-icon">✨</span>
-          Quick Add
-        </div>
-        <span class="section-toggle">▼</span>
-      </div>
-      <div class="section-content">
-        <div class="quick-grid">
-          <div class="quick-btn" onclick="quickAddText()">
-            <div class="quick-icon">T</div>
-            <div class="quick-label">Text</div>
-          </div>
-          <div class="quick-btn" onclick="quickAddBox()">
-            <div class="quick-icon">▢</div>
-            <div class="quick-label">Box</div>
-          </div>
-          <div class="quick-btn" onclick="showSVGModal()" id="quickAddSvg">
-            <div class="quick-icon">★</div>
-            <div class="quick-label">SVG</div>
-          </div>
-          <div class="quick-btn" onclick="showIconModal()" id="quickAddIcon">
-            <div class="quick-icon">🌤</div>
-            <div class="quick-label">Weather</div>
-          </div>
-        </div>
-      </div>
-    </div>
-    
-    <!-- PRESETS -->
-    <div class="section">
-      <div class="section-header" onclick="toggleSection(this)">
-        <div class="section-title">
-          <span class="section-icon">🎨</span>
-          Layout Presets
-        </div>
+        <span>📋 Presets</span>
         <span class="section-toggle">▼</span>
       </div>
       <div class="section-content">
         <div class="form-group">
-          <select class="form-select" id="presetSelect">
+          <label class="form-label">Load Preset</label>
+          <select class="form-select" id="presetSelect" onchange="loadPreset()">
             <option value="">-- Select Preset --</option>
           </select>
         </div>
-        <button class="btn" id="loadPresetBtn" style="width:100%" disabled>
-          Load Preset
-        </button>
       </div>
     </div>
     
-    <!-- BACKGROUND -->
-    <div class="section collapsed">
+    <!-- Background Section -->
+    <div class="section">
       <div class="section-header" onclick="toggleSection(this)">
-        <div class="section-title">
-          <span class="section-icon">🖼️</span>
-          Background
-        </div>
+        <span>🖼️ Background</span>
         <span class="section-toggle">▼</span>
       </div>
       <div class="section-content">
         <div class="form-group">
           <label class="form-label">Pexels Category</label>
-          <select class="form-select" id="pexelsCategorySelect">
-            <option value="abstract">Abstract</option>
-            <option value="geometric">Geometric</option>
-            <option value="minimal">Minimal</option>
+          <select class="form-select" id="pexelsCategorySelect" onchange="updateBackgroundPreview()">
+            <option value="">Loading...</option>
           </select>
         </div>
+        <button class="btn" style="width:100%" onclick="refreshBackground()">🔄 Refresh Background</button>
       </div>
     </div>
     
@@ -927,11 +588,7 @@ input[type="range"]::-moz-range-thumb{
         </div>
         <div class="form-group">
           <label class="form-label">Opacity <span class="value-display" id="elOpacityValue">1.00</span></label>
-          <input type="range" id="elOpacity" min="0" max="1" step="0.1" value="1" oninput="updateElOpacity()">
-        </div>
-        <div class="row">
-          <button class="btn" onclick="deleteElement()">🗑️ Delete</button>
-          <button class="btn" onclick="duplicateElement()">📋 Duplicate</button>
+          <input type="range" id="elOpacity" min="0" max="1" step="0.01" value="1" oninput="updateElOpacity()">
         </div>
       </div>
       
@@ -948,15 +605,18 @@ input[type="range"]::-moz-range-thumb{
             <option value="WEATHER_DESC">Weather Description</option>
             <option value="DATE">Date</option>
             <option value="JOKE">Dad Joke</option>
+            <option value="HUMIDITY">Humidity</option>
+            <option value="RAIN">Rain</option>
+            <option value="WIND">Wind</option>
           </select>
         </div>
         <div class="form-group" id="customTextGroup">
           <label class="form-label">Content</label>
-          <input type="text" class="form-input" id="textContent" placeholder="Enter text" oninput="updateTextContent()">
+          <input type="text" class="form-input" id="textContent" value="Text" onchange="updateTextContent()">
         </div>
         <div class="form-group">
           <label class="form-label">Font Size <span class="value-display" id="fontSizeValue">24px</span></label>
-          <input type="range" id="fontSize" min="10" max="120" value="24" oninput="updateTextStyle()">
+          <input type="range" id="fontSize" min="12" max="120" value="24" oninput="updateTextStyle()">
         </div>
         <div class="form-group">
           <label class="form-label">Color</label>
@@ -965,8 +625,9 @@ input[type="range"]::-moz-range-thumb{
         <div class="form-group">
           <label class="form-label">Font Weight</label>
           <select class="form-select" id="fontWeight" onchange="updateTextStyle()">
+            <option value="300">Light</option>
             <option value="400">Normal</option>
-            <option value="600">Semi-Bold</option>
+            <option value="600">Semibold</option>
             <option value="700">Bold</option>
             <option value="900">Black</option>
           </select>
@@ -975,14 +636,14 @@ input[type="range"]::-moz-range-thumb{
       
       <!-- Box Panel -->
       <div class="panel" id="boxPanel" style="display:none">
-        <div class="panel-title">▢ Box Style</div>
+        <div class="panel-title">⬜ Box</div>
         <div class="form-group">
           <label class="form-label">Background</label>
           <input type="color" id="boxBg" value="#ffffff" onchange="updateBoxStyle()">
         </div>
         <div class="form-group">
           <label class="form-label">Border Color</label>
-          <input type="color" id="boxBorder" value="#000000" onchange="updateBoxStyle()">
+          <input type="color" id="boxBorder" value="#ffffff" onchange="updateBoxStyle()">
         </div>
         <div class="form-group">
           <label class="form-label">Border Radius <span class="value-display" id="borderRadiusValue">12px</span></label>
@@ -990,447 +651,187 @@ input[type="range"]::-moz-range-thumb{
         </div>
       </div>
       
-    </div>
-  </div>
-  
-</div>
-
-<!-- SVG SELECTOR MODAL -->
-<div class="modal hidden" id="svgModal">
-  <div class="modal-box">
-    <div class="modal-header">
-      <div class="modal-icon">★</div>
-      <div class="modal-title">
-        <h2>Choose SVG</h2>
-        <p>Select a graphic to add</p>
+      <!-- Actions Panel -->
+      <div class="panel">
+        <button class="btn btn-danger" style="width:100%" onclick="deleteElement()">🗑️ Delete Element</button>
       </div>
-    </div>
-    <div class="modal-body">
-      <div class="grid-selector" id="svgGrid">
-        <!-- SVGs will be loaded here -->
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn" onclick="closeModal('svgModal')">Cancel</button>
     </div>
   </div>
 </div>
 
-<!-- WEATHER ICON MODAL -->
-<div class="modal hidden" id="iconModal">
-  <div class="modal-box">
-    <div class="modal-header">
-      <div class="modal-icon">🌤</div>
-      <div class="modal-title">
-        <h2>Add Weather Icon</h2>
-        <p>Icon updates automatically based on conditions</p>
-      </div>
-    </div>
-    <div class="modal-body">
-      <p style="color:var(--text-muted);font-size:13px;margin-bottom:16px;">
-        Weather icons show current conditions and use the theme selected in Device Settings.
-      </p>
-      <button class="btn btn-primary" onclick="addWeatherIcon()" style="width:100%">
-        Add Weather Icon
-      </button>
-    </div>
-    <div class="modal-footer">
-      <button class="btn" onclick="closeModal('iconModal')">Cancel</button>
-    </div>
-  </div>
-</div>
+<!-- STATUS -->
+<div class="status" id="status"></div>
 
 <script>
 // ========================================================================
-// CONSTANTS & STATE
+// GLOBAL STATE
 // ========================================================================
 
-const GRID_SIZE = 20;
-const CANVAS_WIDTH = 800;
-const CANVAS_HEIGHT = 480;
-
-// Australian cities with timezones
-const AUSTRALIAN_CITIES = {
-  'Darwin': { timezone: 'Australia/Darwin', display: 'Darwin, NT' },
-  'Adelaide': { timezone: 'Australia/Adelaide', display: 'Adelaide, SA' },
-  'Brisbane': { timezone: 'Australia/Brisbane', display: 'Brisbane, QLD' },
-  'Canberra': { timezone: 'Australia/Canberra', display: 'Canberra, ACT' },
-  'Hobart': { timezone: 'Australia/Hobart', display: 'Hobart, TAS' },
-  'Melbourne': { timezone: 'Australia/Melbourne', display: 'Melbourne, VIC' },
-  'Perth': { timezone: 'Australia/Perth', display: 'Perth, WA' },
-  'Sydney': { timezone: 'Australia/Sydney', display: 'Sydney, NSW' }
-};
-
-let deviceId = '';
-let deviceConfig = null;
-let currentLayout = null;
-let renderData = null;
-let selectedEl = null;
-let svgLibrary = [];
-let presets = [];
-let availableInfoTypes = [];
-
-let isDragging = false;
-let isResizing = false;
-let resizeHandle = '';
-let dragStartX = 0;
-let dragStartY = 0;
-let elStartX = 0;
-let elStartY = 0;
-let elStartW = 0;
-let elStartH = 0;
-
-let snapEnabled = true;
-let undoStack = [];
-let redoStack = [];
-
-// DOM Elements
 const canvas = document.getElementById('canvas');
 const gridOverlay = document.getElementById('gridOverlay');
-const gridToggle = document.getElementById('gridToggle');
-const snapToggle = document.getElementById('snapToggle');
-const deviceIdInput = document.getElementById('deviceIdInput');
-const deviceName = document.getElementById('deviceName');
-const citySelect = document.getElementById('citySelect');
-const timezoneHint = document.getElementById('timezoneHint');
-const iconThemeSelect = document.getElementById('iconThemeSelect');
+let selectedEl = null;
+let dragStartX = 0, dragStartY = 0;
+let elStartX = 0, elStartY = 0;
+let isDragging = false;
+let isResizing = false;
+let resizeDir = '';
+let currentLayout = null;
+let renderData = null;
+
+// Get device ID from URL or default
+const urlParams = new URLSearchParams(window.location.search);
+const deviceId = urlParams.get('device') || 'familydisplay';
+document.getElementById('deviceName').textContent = deviceId;
 
 // ========================================================================
 // INITIALIZATION
 // ========================================================================
 
 async function init() {
-  console.log('🎨 Initializing Kin:D Designer v4...');
-  
   drawGrid();
+  await loadRenderData();
+  await loadPresetsList();
+  await loadPexelsCategoriesList();
+  await loadCurrentLayout();
   setupEventListeners();
-  
-  // Get device ID from localStorage or prompt
-  deviceId = localStorage.getItem('kind_device_id');
-  
-  if (!deviceId) {
-    deviceId = prompt('Enter Device ID:', 'familydisplay') || 'familydisplay';
-    localStorage.setItem('kind_device_id', deviceId);
+}
+
+function drawGrid() {
+  const gridSize = 20;
+  for (let x = 0; x <= 800; x += gridSize) {
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', x);
+    line.setAttribute('y1', 0);
+    line.setAttribute('x2', x);
+    line.setAttribute('y2', 480);
+    gridOverlay.appendChild(line);
   }
-  
-  deviceIdInput.value = deviceId;
-  deviceName.textContent = deviceId;
-  
-  try {
-    // Load device config first
-    await loadDeviceConfig();
-    
-    // Then load other resources
-    await Promise.all([
-      loadSVGLibrary(),
-      loadPresets(),
-      fetchRenderData()
-    ]);
-    
-    // Load current layout if exists
-    if (renderData?.layout) {
-      await loadLayout(renderData.layout);
-    }
-    
-    updateStatus('✓ Ready', 'success');
-    console.log('✓ Initialization complete');
-    
-  } catch (error) {
-    console.error('Initialization error:', error);
-    updateStatus('⚠️ Connection error', 'error');
+  for (let y = 0; y <= 480; y += gridSize) {
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', 0);
+    line.setAttribute('y1', y);
+    line.setAttribute('x2', 800);
+    line.setAttribute('y2', y);
+    gridOverlay.appendChild(line);
   }
 }
 
-// ========================================================================
-// DEVICE CONFIG
-// ========================================================================
-
-async function loadDeviceConfig() {
-  try {
-    const response = await fetch(`/v1/devices/${deviceId}/config`);
-    
-    if (response.ok) {
-      deviceConfig = await response.json();
-      console.log('Loaded device config:', deviceConfig);
-    } else {
-      // Create default config
-      deviceConfig = {
-        deviceId: deviceId,
-        location: {
-          city: 'Darwin',
-          timezone: 'Australia/Darwin'
-        },
-        preferences: {
-          iconTheme: 'happy-skies'
-        }
-      };
-      console.log('Created default device config');
-    }
-    
-    // Update UI
-    citySelect.value = deviceConfig.location.city;
-    updateTimezoneHint();
-    iconThemeSelect.value = deviceConfig.preferences.iconTheme || 'happy-skies';
-    
-  } catch (error) {
-    console.warn('Could not load device config:', error);
-    // Use defaults
-    deviceConfig = {
-      deviceId: deviceId,
-      location: {
-        city: 'Darwin',
-        timezone: 'Australia/Darwin'
-      },
-      preferences: {
-        iconTheme: 'happy-skies'
-      }
-    };
-  }
-}
-
-async function saveDeviceConfig() {
-  const city = citySelect.value;
-  const cityData = AUSTRALIAN_CITIES[city];
-  
-  deviceConfig = {
-    deviceId: deviceId,
-    location: {
-      city: city,
-      timezone: cityData.timezone
-    },
-    preferences: {
-      iconTheme: iconThemeSelect.value
-    }
-  };
-  
-  try {
-    const response = await fetch(`/v1/devices/${deviceId}/config`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(deviceConfig)
-    });
-    
-    if (response.ok) {
-      updateStatus('✓ Device settings saved', 'success');
-      
-      // Reload render data with new location
-      await fetchRenderData();
-      applyDynamicText();
-    } else {
-      throw new Error('Failed to save');
-    }
-  } catch (error) {
-    console.error('Save device config error:', error);
-    updateStatus('⚠️ Failed to save settings', 'error');
-  }
-}
-
-function updateTimezoneHint() {
-  const city = citySelect.value;
-  const cityData = AUSTRALIAN_CITIES[city];
-  timezoneHint.textContent = `Timezone: ${cityData.timezone}`;
-}
-
-// ========================================================================
-// RENDER DATA
-// ========================================================================
-
-async function fetchRenderData() {
+async function loadRenderData() {
   try {
     const response = await fetch(`/v1/render_data?device=${deviceId}`);
-    if (!response.ok) throw new Error('Failed to fetch render data');
-    
-    renderData = await response.json();
-    console.log('Render data loaded:', renderData);
-    
-    // Build available info types
-    availableInfoTypes = ['CUSTOM'];
-    
-    if (renderData.weather) {
-      availableInfoTypes.push('TEMP', 'CITY', 'WEATHER_DESC');
-      
-      if (renderData.weather.temp_min != null && renderData.weather.temp_max != null) {
-        availableInfoTypes.push('WEATHER_MINMAX');
-      }
-    }
-    
-    if (renderData.date) availableInfoTypes.push('DATE');
-    if (renderData.dad_joke) availableInfoTypes.push('JOKE');
-    
-    updateInfoTypeDropdown();
-    
-    return renderData;
-    
-  } catch (error) {
-    console.error('Fetch render data error:', error);
-    throw error;
-  }
-}
-
-
-function updateInfoTypeDropdown() {
-  const select = document.getElementById('textType');
-  if (!select) return;
-
-  const currentValue = select.value || 'CUSTOM';
-
-  const typeLabels = (typeof window.TYPE_LABELS !== 'undefined' && window.TYPE_LABELS) ? window.TYPE_LABELS : {};
-  const types = (Array.isArray(window.availableInfoTypes) && window.availableInfoTypes.length)
-    ? window.availableInfoTypes
-    : Object.keys(typeLabels);
-
-  select.innerHTML = '';
-  types.forEach((key) => {
-    const opt = document.createElement('option');
-    opt.value = key;
-    opt.textContent = typeLabels[key] || key;
-    select.appendChild(opt);
-  });
-
-  if (types.includes(currentValue)) {
-    select.value = currentValue;
-  }
-}
-/* ---- end updateInfoTypeDropdown fix ---- */
-
-function getDynamicText
-(type) {
-  const weather = renderData?.weather;
-  
-  switch (type) {
-    case 'TEMP':
-      return weather?.temp != null ? `${weather.temp}°C` : '--°C';
-    
-    case 'WEATHER_MINMAX':
-      if (weather?.temp_min != null && weather?.temp_max != null) {
-        return `${weather.temp_min}° / ${weather.temp_max}°`;
-      }
-      return '--° / --°';
-    
-    case 'CITY':
-      return weather?.city || deviceConfig?.location?.city || 'City';
-    
-    case 'WEATHER_DESC':
-      return weather?.desc || 'Sunny';
-    
-    case 'DATE':
-      return renderData?.date || '';
-    
-    case 'JOKE':
-      return renderData?.dad_joke || 'No joke today.';
-    
-    default:
-      return '';
-  }
-}
-
-function applyDynamicText() {
-  canvas.querySelectorAll('.el.text, .el.icon').forEach(el => {
-    const type = el.dataset.type;
-    if (type && type !== 'CUSTOM') {
-      const text = getDynamicText(type);
-      const content = el.querySelector('.el-content');
-      if (content) content.textContent = text;
-    }
-  });
-}
-
-// ========================================================================
-// SVG & PRESETS
-// ========================================================================
-
-async function loadSVGLibrary() {
-  try {
-    const response = await fetch('/api/list-svgs');
     if (response.ok) {
-      const data = await response.json();
-      svgLibrary = data.svgs || [];
-      console.log(`Loaded ${svgLibrary.length} SVGs`);
-      document.getElementById('quickAddSvg').disabled = false;
+      renderData = await response.json();
+      console.log('Render data loaded:', renderData);
+      
+      // Set background if available
+      if (renderData.bg_url) {
+        canvas.style.backgroundImage = `url(${renderData.bg_url})`;
+      }
     }
   } catch (error) {
-    console.warn('Could not load SVG library:', error);
+    console.error('Failed to load render data:', error);
   }
 }
 
-async function loadPresets() {
+async function loadPresetsList() {
   try {
     const response = await fetch('/api/list-presets');
     if (response.ok) {
       const data = await response.json();
-      presets = data.presets || [];
-      
       const select = document.getElementById('presetSelect');
       select.innerHTML = '<option value="">-- Select Preset --</option>';
       
-      presets.forEach(preset => {
+      data.presets.forEach(preset => {
         const option = document.createElement('option');
-        option.value = preset;
-        option.textContent = preset.replace(/_/g, ' ');
+        option.value = preset.path;
+        option.textContent = preset.name;
         select.appendChild(option);
       });
       
-      document.getElementById('loadPresetBtn').disabled = false;
-      console.log(`Loaded ${presets.length} presets`);
+      console.log(`Loaded ${data.presets.length} presets`);
     }
   } catch (error) {
-    console.warn('Could not load presets:', error);
+    console.error('Failed to load presets:', error);
   }
 }
 
-function showSVGModal() {
-  const modal = document.getElementById('svgModal');
-  const grid = document.getElementById('svgGrid');
+async function loadPexelsCategoriesList() {
+  try {
+    const response = await fetch('/api/list-pexels-categories');
+    if (response.ok) {
+      const data = await response.json();
+      const select = document.getElementById('pexelsCategorySelect');
+      select.innerHTML = '';
+      
+      data.categories.forEach(category => {
+        const option = document.createElement('option');
+        option.value = category;
+        option.textContent = category.charAt(0).toUpperCase() + category.slice(1);
+        select.appendChild(option);
+      });
+      
+      console.log(`Loaded ${data.categories.length} Pexels categories`);
+    }
+  } catch (error) {
+    console.error('Failed to load Pexels categories:', error);
+    // Fallback
+    const select = document.getElementById('pexelsCategorySelect');
+    select.innerHTML = '<option value="abstract">Abstract</option><option value="geometric">Geometric</option><option value="minimal">Minimal</option>';
+  }
+}
+
+async function loadCurrentLayout() {
+  try {
+    const response = await fetch(`/v1/devices/${deviceId}/layouts/current`);
+    if (response.ok) {
+      const layout = await response.json();
+      await loadLayout(layout);
+    }
+  } catch (error) {
+    console.log('No existing layout found');
+  }
+}
+
+function setupEventListeners() {
+  canvas.addEventListener('mousedown', onCanvasMouseDown);
+  document.addEventListener('mousemove', onDocumentMouseMove);
+  document.addEventListener('mouseup', onDocumentMouseUp);
   
-  grid.innerHTML = '';
-  
-  svgLibrary.forEach(svg => {
-    const item = document.createElement('div');
-    item.className = 'grid-item';
-    item.onclick = () => {
-      addSVGElement(svg);
-      closeModal('svgModal');
-    };
-    
-    const icon = document.createElement('div');
-    icon.className = 'grid-item-icon';
-    icon.textContent = '★';
-    
-    const label = document.createElement('div');
-    label.className = 'grid-item-label';
-    label.textContent = svg.replace('.svg', '');
-    
-    item.appendChild(icon);
-    item.appendChild(label);
-    grid.appendChild(item);
+  // Keyboard shortcuts
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Delete' && selectedEl) {
+      deleteElement();
+    }
+    if (e.key === 'Escape') {
+      selectElement(null);
+    }
   });
-  
-  modal.classList.remove('hidden');
-}
-
-function showIconModal() {
-  document.getElementById('iconModal').classList.remove('hidden');
-}
-
-function closeModal(modalId) {
-  document.getElementById(modalId).classList.add('hidden');
 }
 
 // ========================================================================
-// ELEMENT CREATION
+// ADD ELEMENTS
 // ========================================================================
 
-function quickAddText() {
+function addTextElement() {
   addElement('text', 100, 100, 200, 50, {
-    text: 'Text',
-    type: 'CUSTOM',
+    text: 'Sample Text',
     fontSize: 24,
     color: '#ffffff',
-    fontWeight: '600'
+    fontWeight: '400',
+    type: 'CUSTOM'
   });
 }
 
-function quickAddBox() {
+function addIconElement() {
+  addElement('icon', 100, 100, 100, 100, {
+    text: '☀️',
+    fontSize: 72,
+    color: '#ffffff',
+    type: 'WEATHER_ICON'
+  });
+}
+
+function addBoxElement() {
   addElement('box', 100, 100, 200, 150, {
     background: 'rgba(255,255,255,0.2)',
     borderColor: '#ffffff',
@@ -1438,35 +839,26 @@ function quickAddBox() {
   });
 }
 
-function addSVGElement(svgName) {
-  addElement('svg-overlay', 100, 100, 120, 120, {
-    src: svgName
-  });
-}
-
-function addWeatherIcon() {
-  addElement('svg-overlay', 100, 100, 100, 100, {
+async function addSVGElement() {
+  // For now, add a placeholder
+  addElement('svg-overlay', 100, 100, 150, 150, {
     src: 'weather-icon'
   });
-  closeModal('iconModal');
 }
 
-function addElement(kind, x, y, w, h, options = {}) {
-  saveState();
-  
+async function addElement(kind, x, y, width, height, options = {}) {
   const el = document.createElement('div');
   el.className = `el ${kind}`;
-  el.style.left = snap(x) + 'px';
-  el.style.top = snap(y) + 'px';
-  el.style.width = w + 'px';
-  el.style.height = h + 'px';
+  el.style.left = x + 'px';
+  el.style.top = y + 'px';
+  el.style.width = width + 'px';
+  el.style.height = height + 'px';
   el.style.opacity = options.opacity || 1;
   
-  // Set z-index based on kind
-  if (kind === 'text' || kind === 'icon') {
-    el.style.zIndex = 30;
-  } else if (kind === 'svg-overlay') {
-    el.style.zIndex = options.src === 'weather-icon' ? 35 : 20;
+  if (kind === 'text') {
+    el.style.zIndex = 20;
+  } else if (kind === 'icon') {
+    el.style.zIndex = options.zIndex || 35;
   } else if (kind === 'box') {
     el.style.zIndex = 15;
   }
@@ -1491,7 +883,7 @@ function addElement(kind, x, y, w, h, options = {}) {
     el.style.borderRadius = (options.borderRadius || 12) + 'px';
   } else if (kind === 'svg-overlay' && options.src) {
     el.dataset.src = options.src;
-    loadSVGIntoElement(el, options.src);
+    await loadSVGIntoElement(el, options.src);
   }
   
   canvas.appendChild(el);
@@ -1531,6 +923,33 @@ async function loadSVGIntoElement(el, src) {
   } catch (error) {
     console.error('Failed to load SVG:', error);
     el.innerHTML = '<div style="color:red;font-size:12px;">SVG Error</div>';
+  }
+}
+
+function getDynamicText(type) {
+  if (!renderData) return 'Loading...';
+  
+  switch(type) {
+    case 'TEMP':
+      return `${renderData.weather?.temp || 0}°`;
+    case 'WEATHER_MINMAX':
+      return `${renderData.weather?.temp_min || 0}° / ${renderData.weather?.temp_max || 0}°`;
+    case 'CITY':
+      return renderData.weather?.city || 'City';
+    case 'WEATHER_DESC':
+      return renderData.weather?.desc || 'Weather';
+    case 'DATE':
+      return renderData.date || 'Date';
+    case 'JOKE':
+      return renderData.dad_joke || 'Loading joke...';
+    case 'HUMIDITY':
+      return `${renderData.weather?.humidity || 0}%`;
+    case 'RAIN':
+      return `${renderData.weather?.rain || 0}mm`;
+    case 'WIND':
+      return `${renderData.weather?.wind || 0}km/h`;
+    default:
+      return 'Text';
   }
 }
 
@@ -1607,11 +1026,11 @@ function updateInspector() {
     document.getElementById('textContent').value = content.textContent;
     document.getElementById('customTextGroup').style.display = 
       selectedEl.dataset.type === 'CUSTOM' ? 'block' : 'none';
+    
     document.getElementById('fontSize').value = parseInt(style.fontSize);
     document.getElementById('fontSizeValue').textContent = parseInt(style.fontSize) + 'px';
     document.getElementById('textColor').value = rgbToHex(style.color);
     document.getElementById('fontWeight').value = style.fontWeight;
-    
   } else if (selectedEl.classList.contains('box')) {
     textPanel.style.display = 'none';
     boxPanel.style.display = 'block';
@@ -1621,33 +1040,45 @@ function updateInspector() {
     document.getElementById('boxBorder').value = rgbToHex(style.borderColor);
     document.getElementById('borderRadius').value = parseInt(style.borderRadius);
     document.getElementById('borderRadiusValue').textContent = parseInt(style.borderRadius) + 'px';
-    
   } else {
     textPanel.style.display = 'none';
     boxPanel.style.display = 'none';
   }
 }
 
+function rgbToHex(rgb) {
+  if (rgb.startsWith('#')) return rgb;
+  
+  const match = rgb.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+  if (!match) return '#ffffff';
+  
+  const r = parseInt(match[1]).toString(16).padStart(2, '0');
+  const g = parseInt(match[2]).toString(16).padStart(2, '0');
+  const b = parseInt(match[3]).toString(16).padStart(2, '0');
+  return `#${r}${g}${b}`;
+}
+
+// ========================================================================
+// INSPECTOR UPDATES
+// ========================================================================
+
 function updateElPosition() {
   if (!selectedEl) return;
-  selectedEl.style.left = snap(parseInt(document.getElementById('elX').value)) + 'px';
-  selectedEl.style.top = snap(parseInt(document.getElementById('elY').value)) + 'px';
-  saveState();
+  selectedEl.style.left = document.getElementById('elX').value + 'px';
+  selectedEl.style.top = document.getElementById('elY').value + 'px';
 }
 
 function updateElSize() {
   if (!selectedEl) return;
-  selectedEl.style.width = parseInt(document.getElementById('elW').value) + 'px';
-  selectedEl.style.height = parseInt(document.getElementById('elH').value) + 'px';
-  saveState();
+  selectedEl.style.width = document.getElementById('elW').value + 'px';
+  selectedEl.style.height = document.getElementById('elH').value + 'px';
 }
 
 function updateElOpacity() {
   if (!selectedEl) return;
-  const value = parseFloat(document.getElementById('elOpacity').value);
-  selectedEl.style.opacity = value;
-  document.getElementById('elOpacityValue').textContent = value.toFixed(2);
-  saveState();
+  const opacity = document.getElementById('elOpacity').value;
+  selectedEl.style.opacity = opacity;
+  document.getElementById('elOpacityValue').textContent = parseFloat(opacity).toFixed(2);
 }
 
 function updateTextType() {
@@ -1656,8 +1087,8 @@ function updateTextType() {
   const type = document.getElementById('textType').value;
   selectedEl.dataset.type = type;
   
-  const customGroup = document.getElementById('customTextGroup');
-  customGroup.style.display = type === 'CUSTOM' ? 'block' : 'none';
+  document.getElementById('customTextGroup').style.display = 
+    type === 'CUSTOM' ? 'block' : 'none';
   
   const content = selectedEl.querySelector('.el-content');
   if (type === 'CUSTOM') {
@@ -1665,8 +1096,6 @@ function updateTextType() {
   } else {
     content.textContent = getDynamicText(type);
   }
-  
-  saveState();
 }
 
 function updateTextContent() {
@@ -1675,7 +1104,6 @@ function updateTextContent() {
   if (content) {
     content.textContent = document.getElementById('textContent').value;
   }
-  saveState();
 }
 
 function updateTextStyle() {
@@ -1693,8 +1121,6 @@ function updateTextStyle() {
   content.style.fontWeight = weight;
   
   document.getElementById('fontSizeValue').textContent = fontSize + 'px';
-  
-  saveState();
 }
 
 function updateBoxStyle() {
@@ -1706,134 +1132,117 @@ function updateBoxStyle() {
   const radius = document.getElementById('borderRadius').value;
   selectedEl.style.borderRadius = radius + 'px';
   document.getElementById('borderRadiusValue').textContent = radius + 'px';
-  
-  saveState();
 }
 
 function deleteElement() {
   if (!selectedEl) return;
-  saveState();
   selectedEl.remove();
   selectElement(null);
   updateStatus('✓ Element deleted', 'success');
-}
-
-function duplicateElement() {
-  if (!selectedEl) return;
-  saveState();
-  
-  const clone = selectedEl.cloneNode(true);
-  clone.style.left = (parseInt(selectedEl.style.left) + 20) + 'px';
-  clone.style.top = (parseInt(selectedEl.style.top) + 20) + 'px';
-  clone.classList.remove('selected');
-  
-  canvas.appendChild(clone);
-  selectElement(clone);
-  
-  updateStatus('✓ Element duplicated', 'success');
 }
 
 // ========================================================================
 // DRAG & RESIZE
 // ========================================================================
 
-function startDrag(e, el) {
+function onCanvasMouseDown(e) {
+  if (e.target === canvas || e.target === gridOverlay) {
+    selectElement(null);
+    return;
+  }
+  
+  const el = e.target.classList.contains('el') ? e.target : e.target.closest('.el');
+  if (!el) return;
+  
   if (e.target.classList.contains('resize-handle')) return;
   
-  if (selectedEl !== el) {
-    selectElement(el);
-  }
+  selectElement(el);
   
   isDragging = true;
   dragStartX = e.clientX;
   dragStartY = e.clientY;
-  elStartX = parseInt(selectedEl.style.left);
-  elStartY = parseInt(selectedEl.style.top);
+  elStartX = parseInt(el.style.left);
+  elStartY = parseInt(el.style.top);
   
   e.preventDefault();
 }
 
-function startResize(e, handle) {
-  e.stopPropagation();
+function onDocumentMouseMove(e) {
+  if (isDragging && selectedEl) {
+    const dx = e.clientX - dragStartX;
+    const dy = e.clientY - dragStartY;
+    
+    let newX = elStartX + dx;
+    let newY = elStartY + dy;
+    
+    // Snap to grid
+    newX = Math.round(newX / 20) * 20;
+    newY = Math.round(newY / 20) * 20;
+    
+    selectedEl.style.left = newX + 'px';
+    selectedEl.style.top = newY + 'px';
+    
+    document.getElementById('elX').value = newX;
+    document.getElementById('elY').value = newY;
+  }
   
-  isResizing = true;
-  resizeHandle = handle;
-  dragStartX = e.clientX;
-  dragStartY = e.clientY;
-  elStartX = parseInt(selectedEl.style.left);
-  elStartY = parseInt(selectedEl.style.top);
-  elStartW = parseInt(selectedEl.style.width);
-  elStartH = parseInt(selectedEl.style.height);
+  if (isResizing && selectedEl) {
+    const dx = e.clientX - dragStartX;
+    const dy = e.clientY - dragStartY;
+    
+    let newW = parseInt(selectedEl.style.width);
+    let newH = parseInt(selectedEl.style.height);
+    let newX = parseInt(selectedEl.style.left);
+    let newY = parseInt(selectedEl.style.top);
+    
+    if (resizeDir.includes('r')) {
+      newW = Math.max(20, elStartX + dx);
+    }
+    if (resizeDir.includes('b')) {
+      newH = Math.max(20, elStartY + dy);
+    }
+    if (resizeDir.includes('l')) {
+      const delta = dx;
+      newX = elStartX + delta;
+      newW = Math.max(20, parseInt(selectedEl.dataset.startW) - delta);
+    }
+    if (resizeDir.includes('t')) {
+      const delta = dy;
+      newY = elStartY + delta;
+      newH = Math.max(20, parseInt(selectedEl.dataset.startH) - delta);
+    }
+    
+    selectedEl.style.width = newW + 'px';
+    selectedEl.style.height = newH + 'px';
+    selectedEl.style.left = newX + 'px';
+    selectedEl.style.top = newY + 'px';
+    
+    document.getElementById('elW').value = newW;
+    document.getElementById('elH').value = newH;
+    document.getElementById('elX').value = newX;
+    document.getElementById('elY').value = newY;
+  }
 }
 
-function doDrag(e) {
-  if (!isDragging || !selectedEl) return;
-  
-  const dx = e.clientX - dragStartX;
-  const dy = e.clientY - dragStartY;
-  
-  selectedEl.style.left = snap(elStartX + dx) + 'px';
-  selectedEl.style.top = snap(elStartY + dy) + 'px';
-  
-  document.getElementById('elX').value = snap(elStartX + dx);
-  document.getElementById('elY').value = snap(elStartY + dy);
-}
-
-function doResize(e) {
-  if (!isResizing || !selectedEl) return;
-  
-  const dx = e.clientX - dragStartX;
-  const dy = e.clientY - dragStartY;
-  
-  let newX = elStartX, newY = elStartY, newW = elStartW, newH = elStartH;
-  
-  if (resizeHandle.includes('r')) newW = elStartW + dx;
-  if (resizeHandle.includes('b')) newH = elStartH + dy;
-  if (resizeHandle.includes('l')) {
-    newW = elStartW - dx;
-    newX = elStartX + dx;
-  }
-  if (resizeHandle.includes('t')) {
-    newH = elStartH - dy;
-    newY = elStartY + dy;
-  }
-  
-  newW = Math.max(20, snap(newW));
-  newH = Math.max(20, snap(newH));
-  
-  if (resizeHandle.includes('l')) {
-    newX = snap(elStartX + elStartW - newW);
-  } else {
-    newX = snap(newX);
-  }
-  
-  if (resizeHandle.includes('t')) {
-    newY = snap(elStartY + elStartH - newH);
-  } else {
-    newY = snap(newY);
-  }
-  
-  selectedEl.style.left = newX + 'px';
-  selectedEl.style.top = newY + 'px';
-  selectedEl.style.width = newW + 'px';
-  selectedEl.style.height = newH + 'px';
-  
-  document.getElementById('elX').value = newX;
-  document.getElementById('elY').value = newY;
-  document.getElementById('elW').value = newW;
-  document.getElementById('elH').value = newH;
-}
-
-function stopDragResize() {
-  if (isDragging || isResizing) {
-    saveState();
-  }
+function onDocumentMouseUp() {
   isDragging = false;
   isResizing = false;
 }
 
+function startResize(e, dir) {
+  e.stopPropagation();
+  isResizing = true;
+  resizeDir = dir;
+  dragStartX = e.clientX;
+  dragStartY = e.clientY;
+  elStartX = parseInt(selectedEl.style.width);
+  elStartY = parseInt(selectedEl.style.height);
+  selectedEl.dataset.startW = selectedEl.style.width;
+  selectedEl.dataset.startH = selectedEl.style.height;
+}
+
 // ========================================================================
-// SAVE & LOAD
+// LAYOUT OPERATIONS
 // ========================================================================
 
 function toJSON() {
@@ -1916,6 +1325,7 @@ async function loadLayout(layout) {
   // Load meta
   if (layout.meta?.pexelsCategory) {
     document.getElementById('pexelsCategorySelect').value = layout.meta.pexelsCategory;
+    await updateBackgroundPreview();
   }
   
   // Load elements
@@ -1931,16 +1341,16 @@ async function loadLayout(layout) {
 }
 
 async function loadPreset() {
-  const presetName = document.getElementById('presetSelect').value;
-  if (!presetName) return;
+  const presetPath = document.getElementById('presetSelect').value;
+  if (!presetPath) return;
   
   try {
-    const response = await fetch(`/presets/${presetName}.json`);
+    const response = await fetch(presetPath);
     if (!response.ok) throw new Error('Preset not found');
     
     const layout = await response.json();
     await loadLayout(layout);
-    
+    updateStatus('✓ Preset loaded', 'success');
   } catch (error) {
     console.error('Load preset error:', error);
     updateStatus('⚠️ Failed to load preset', 'error');
@@ -1948,303 +1358,84 @@ async function loadPreset() {
 }
 
 // ========================================================================
-// UNDO/REDO
+// BACKGROUND OPERATIONS
 // ========================================================================
 
-function saveState() {
-  const state = toJSON();
-  undoStack.push(JSON.stringify(state));
-  redoStack = [];
+async function updateBackgroundPreview() {
+  const category = document.getElementById('pexelsCategorySelect').value;
+  if (!category) return;
   
-  // Limit stack size
-  if (undoStack.length > 50) {
-    undoStack.shift();
-  }
+  // Refresh render data to get new random background
+  await loadRenderData();
+  
+  updateStatus('✓ Background updated', 'success');
 }
 
-async function undo() {
-  if (undoStack.length === 0) return;
-  
-  const currentState = toJSON();
-  redoStack.push(JSON.stringify(currentState));
-  
-  const prevState = undoStack.pop();
-  await loadLayout(JSON.parse(prevState));
-  
-  updateStatus('↶ Undo', 'success');
-}
-
-async function redo() {
-  if (redoStack.length === 0) return;
-  
-  const currentState = toJSON();
-  undoStack.push(JSON.stringify(currentState));
-  
-  const nextState = redoStack.pop();
-  await loadLayout(JSON.parse(nextState));
-  
-  updateStatus('↷ Redo', 'success');
+async function refreshBackground() {
+  await updateBackgroundPreview();
 }
 
 // ========================================================================
-// UTILITIES
+// EXPORT & NAVIGATION
 // ========================================================================
 
-function snap(value) {
-  return snapEnabled ? Math.round(value / GRID_SIZE) * GRID_SIZE : value;
+function exportJSON() {
+  const layout = toJSON();
+  const dataStr = JSON.stringify(layout, null, 2);
+  const blob = new Blob([dataStr], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `layout-${deviceId}-${Date.now()}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  
+  updateStatus('✓ Layout exported', 'success');
 }
 
-function rgbToHex(rgb) {
-  if (rgb.startsWith('#')) return rgb;
-  
-  const match = rgb.match(/\d+/g);
-  if (!match) return '#ffffff';
-  
-  const r = parseInt(match[0]);
-  const g = parseInt(match[1]);
-  const b = parseInt(match[2]);
-  
-  return '#' + [r, g, b].map(x => {
-    const hex = x.toString(16);
-    return hex.length === 1 ? '0' + hex : hex;
-  }).join('');
+function goToSetup() {
+  // Reload without designer to show setup screen
+  window.location.href = `/designer/?device=${deviceId}&setup=true`;
 }
 
-function drawGrid() {
-  gridOverlay.innerHTML = '';
-  
-  for (let x = 0; x <= CANVAS_WIDTH; x += GRID_SIZE) {
-    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    line.setAttribute('x1', x);
-    line.setAttribute('y1', 0);
-    line.setAttribute('x2', x);
-    line.setAttribute('y2', CANVAS_HEIGHT);
-    gridOverlay.appendChild(line);
+async function previewFrame() {
+  try {
+    await saveLayout();
+    window.open(`/v1/frame?device=${deviceId}`, '_blank');
+  } catch (error) {
+    console.error('Preview error:', error);
+    updateStatus('⚠️ Failed to preview', 'error');
   }
+}
+
+// ========================================================================
+// UI HELPERS
+// ========================================================================
+
+function updateStatus(message, type = '') {
+  const status = document.getElementById('status');
+  status.textContent = message;
+  status.className = `status show ${type}`;
   
-  for (let y = 0; y <= CANVAS_HEIGHT; y += GRID_SIZE) {
-    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    line.setAttribute('x1', 0);
-    line.setAttribute('y1', y);
-    line.setAttribute('x2', CANVAS_WIDTH);
-    line.setAttribute('y2', y);
-    gridOverlay.appendChild(line);
-  }
+  setTimeout(() => {
+    status.classList.remove('show');
+  }, 3000);
 }
 
 function toggleSection(header) {
-  const section = header.parentElement;
+  const section = header.closest('.section');
   section.classList.toggle('collapsed');
 }
 
-function updateStatus(message, type) {
-  const statusText = document.getElementById('statusText');
-  const statusDot = document.getElementById('statusDot');
-  
-  statusText.textContent = message;
-  
-  statusDot.className = 'status-dot';
-  if (type === 'error') {
-    statusDot.classList.add('error');
-  }
-  
-  if (type === 'success') {
-    setTimeout(() => {
-      statusText.textContent = 'Ready';
-      statusDot.className = 'status-dot';
-    }, 3000);
-  }
-}
-
 // ========================================================================
-// EVENT LISTENERS
-// ========================================================================
-
-function setupEventListeners() {
-  // Header controls
-  gridToggle.addEventListener('change', (e) => {
-    gridOverlay.classList.toggle('visible', e.target.checked);
-  });
-  
-  snapToggle.addEventListener('change', (e) => {
-    snapEnabled = e.target.checked;
-  });
-  
-  document.getElementById('saveBtn').addEventListener('click', saveLayout);
-  document.getElementById('undoBtn').addEventListener('click', undo);
-  document.getElementById('redoBtn').addEventListener('click', redo);
-  
-  // Device settings
-  citySelect.addEventListener('change', updateTimezoneHint);
-  document.getElementById('saveDeviceBtn').addEventListener('click', saveDeviceConfig);
-  
-  // Presets
-  document.getElementById('loadPresetBtn').addEventListener('click', loadPreset);
-  
-  // Canvas interactions
-  canvas.addEventListener('mousedown', (e) => {
-    if (e.target === canvas) {
-      selectElement(null);
-      return;
-    }
-    
-    const el = e.target.closest('.el');
-    if (el) {
-      startDrag(e, el);
-    }
-  });
-  
-  document.addEventListener('mousemove', (e) => {
-    if (isDragging) doDrag(e);
-    if (isResizing) doResize(e);
-  });
-  
-  document.addEventListener('mouseup', stopDragResize);
-  
-  // Keyboard shortcuts
-  document.addEventListener('keydown', (e) => {
-    if (e.target.tagName === 'INPUT') return;
-    
-    if (e.key === 'Delete' || e.key === 'Backspace') {
-      if (selectedEl) deleteElement();
-    } else if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
-      e.preventDefault();
-      undo();
-    } else if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
-      e.preventDefault();
-      redo();
-    } else if ((e.ctrlKey || e.metaKey) && e.key === 'd') {
-      e.preventDefault();
-      if (selectedEl) duplicateElement();
-    } else if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-      e.preventDefault();
-      saveLayout();
-    }
-  });
-}
-
-// ========================================================================
-// START
+// INITIALIZE
 // ========================================================================
 
 init();
-
-</script>
-<script>try{document.addEventListener('DOMContentLoaded',function(){updateInfoTypeDropdown();});}catch(e){console.warn(e);}</script>
-
-<script>
-(function(){
-  // Avoid double bootstrap
-  if (window.__designerBootstrapped) return;
-  window.__designerBootstrapped = true;
-
-  // Ensure labels exist
-  window.TYPE_LABELS = window.TYPE_LABELS || {
-    'CUSTOM':'Custom Text',
-    'TEMP':'Temperature',
-    'WEATHER_MINMAX':'Min / Max Temp',
-    'CITY':'City Name',
-    'WEATHER_DESC':'Weather Description',
-    'WEATHER_DESC_EXTENDED':'Weather Extended',
-    'TOMORROW_DESC':'Tomorrow Forecast',
-    'TOMORROW_TEMP':'Tomorrow Min/Max',
-    'DATE':'Date',
-    'JOKE':'Dad Joke',
-    'HUMIDITY':'Humidity',
-    'RAIN':'Rain',
-    'WIND':'Wind'
-  };
-
-  // Safe dropdown populate (all types)
-  function populateAllTypes() {
-    try {
-      const select = document.getElementById('textType');
-      if (!select) return;
-      select.innerHTML = '';
-      Object.entries(TYPE_LABELS).forEach(([key, label]) => {
-        const opt = document.createElement('option');
-        opt.value = key;
-        opt.textContent = label;
-        select.appendChild(opt);
-      });
-      console.debug('[designer] dropdown populated (all types)');
-    } catch(e) { console.warn('[designer] populateAllTypes failed', e); }
-  }
-
-  // Derive availableInfoTypes from render data
-  function deriveTypesFromData(d) {
-    const t = [];
-    if (d && d.weather) {
-      t.push('CUSTOM','TEMP','WEATHER_MINMAX','CITY','WEATHER_DESC');
-      if (d.weather.desc_extended) t.push('WEATHER_DESC_EXTENDED');
-      if (d.weather.tomorrow) {
-        t.push('TOMORROW_DESC');
-        if (d.weather.tomorrow.temp_min != null && d.weather.tomorrow.temp_max != null) {
-          t.push('TOMORROW_TEMP');
-        }
-      }
-      if (d.weather.humidity != null) t.push('HUMIDITY');
-      if (d.weather.rain != null) t.push('RAIN');
-      if (d.weather.wind != null) t.push('WIND');
-    }
-    return t;
-  }
-
-  async function bootstrapDesigner() {
-    // 1) Populate immediately so UI isn't empty
-    populateAllTypes();
-
-    // 2) Fetch live data; if successful, set availableInfoTypes and repopulate with gating
-    try {
-      const resp = await fetch('/v1/render_data', {cache:'no-store'});
-      if (!resp.ok) throw new Error('HTTP '+resp.status);
-      const data = await resp.json();
-      const gated = deriveTypesFromData(data);
-      window.availableInfoTypes = gated;
-      console.debug('[designer] availableInfoTypes from backend →', gated);
-
-      // If you still want gating, uncomment next lines to repopulate gated only:
-      // const sel = document.getElementById('textType');
-      // if (sel) {
-      //   sel.innerHTML = '';
-      //   gated.forEach(key => {
-      //     const label = TYPE_LABELS[key] || key;
-      //     const opt = document.createElement('option');
-      //     opt.value = key;
-      //     opt.textContent = label;
-      //     sel.appendChild(opt);
-      //   });
-      //   console.debug('[designer] dropdown repopulated (gated types)');
-      // }
-    } catch (e) {
-      console.warn('[designer] fetch /v1/render_data failed, keeping full list', e);
-      window.availableInfoTypes = Object.keys(TYPE_LABELS);
-    }
-  }
-
-  // Run after DOM is ready
-  document.addEventListener('DOMContentLoaded', bootstrapDesigner);
-  // Safety: run on window load too in case DOMContentLoaded was missed
-  window.addEventListener('load', function(){
-    if (!window.availableInfoTypes) bootstrapDesigner();
-  });
-})();
 </script>
 
-
-<script>
-document.addEventListener('DOMContentLoaded', () => {
-  try {
-    const section = document.querySelector('.section.device-settings');
-    if (section) {
-      section.classList.remove('collapsed');
-      section.scrollIntoView({behavior:'smooth', block:'start'});
-    }
-    const city = document.getElementById('citySelect');
-    if (city) city.focus();
-  } catch (e) { console.warn('device setup auto-open failed', e); }
-});
-</script>
 </body>
-
 </html>
