@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Kin:D Display</title>
+  <title>Family Display Render</title>
   <style>
     * {
       margin: 0;
@@ -15,27 +15,15 @@
       width: 800px;
       height: 480px;
       overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #fff;
+    }
+    
+    #canvas {
       position: relative;
-      background: #000;
-    }
-    
-    #bg {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      z-index: 0;
-    }
-    
-    #root {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      z-index: 1;
+      width: 800px;
+      height: 480px;
+      overflow: hidden;
     }
     
     .el {
@@ -43,75 +31,76 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      overflow: hidden;
     }
     
-    .el.wrap {
-      white-space: normal;
+    .el.text {
+      z-index: 30;
+      white-space: pre-wrap;
       word-wrap: break-word;
     }
     
-    #fallback-box {
-      display: none;
+    .el.icon {
+      z-index: 30;
+    }
+    
+    .el.box {
+      z-index: 15;
+    }
+    
+    .el.svg,
+    .el.svg-overlay,
+    .el.image {
+      z-index: 20;
+    }
+    
+    .el.weather-icon {
+      z-index: 35;
+    }
+    
+    .el svg {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+    
+    .background-image {
       position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      padding: 20px;
-      background: rgba(255,255,255,0.9);
-      border-radius: 12px;
-      font-family: Arial, sans-serif;
-      font-size: 18px;
-      color: #333;
-      text-align: center;
-      z-index: 999;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+      object-fit: cover;
     }
   </style>
 </head>
 <body>
-  <img id="bg" src="" alt="Background">
-  <div id="root"></div>
-  <div id="fallback-box">
-    <p>⚠️ No layout data</p>
-    <p style="font-size: 14px; margin-top: 10px;">Check render_data endpoint</p>
-  </div>
-
+  <div id="canvas"></div>
+  
   <script>
-    // ================================================================
-    // CRITICAL FIX: URL Resolution for Playwright
-    // ================================================================
+    // Parse data from URL query parameter
+    const urlParams = new URLSearchParams(window.location.search);
+    const encodedData = urlParams.get('data');
     
-    /**
-     * Parse data from URL query string
-     * Expected format: ?data=<url_encoded_json>
-     */
-    function getDataFromQuery() {
-      const params = new URLSearchParams(window.location.search);
-      const encoded = params.get("data");
-      
-      if (!encoded) {
-        console.error("❌ No data parameter in URL");
-        return null;
-      }
-      
+    if (!encodedData) {
+      console.error('No data parameter provided');
+      document.body.innerHTML = '<div style="padding: 20px;">Error: No render data provided</div>';
+    } else {
       try {
-        const decoded = decodeURIComponent(encoded);
-        const data = JSON.parse(decoded);
-        console.log("✅ Parsed data:", {
-          layout_elements: data.layout?.elements?.length || 0,
-          svg_base: data.svg_base || "not_set",
-          weather_icon: data.weather?.icon_url || "not_set"
-        });
-        return data;
-      } catch (e) {
-        console.error("❌ Failed to parse data:", e);
-        return null;
+        const dataJson = decodeURIComponent(encodedData);
+        const data = JSON.parse(dataJson);
+        console.log('Render data:', data);
+        
+        // Render the layout
+        renderLayout(data);
+      } catch (error) {
+        console.error('Failed to parse render data:', error);
+        document.body.innerHTML = '<div style="padding: 20px;">Error: Invalid render data</div>';
       }
     }
-
+    
     /**
-     * CRITICAL FIX: Resolve URLs properly for Playwright
-     * When running under file:// protocol, we need full absolute URLs
+     * Resolve relative/absolute paths to full URLs
      */
     function resolveUrl(path, svg_base) {
       if (!path) return "";
@@ -154,11 +143,21 @@
           return data.weather?.city || "City";
         
         case "TEMP":
-          if (data.weather?.temp_min != null && data.weather?.temp_max != null) {
-            return `${data.weather.temp_min}° / ${data.weather.temp_max}°`;
-          }
+          // Use current temperature only
           return data.weather?.temp != null
             ? data.weather.temp + "°C"
+            : "--°C";
+        
+        case "WEATHER_MINMAX":
+          // Display min/max temperatures
+          if (data.weather?.temp_min != null && data.weather?.temp_max != null) {
+            return data.weather.temp_min + "° / " + data.weather.temp_max + "°";
+          }
+          return "--° / --°";
+        
+        case "FEELS_LIKE":
+          return data.weather?.feels_like != null
+            ? data.weather.feels_like + "°C"
             : "--°C";
         
         case "HUMIDITY":
@@ -166,21 +165,28 @@
             ? "Humidity: " + data.weather.humidity + "%"
             : "Humidity: --%";
         
+        case "RAIN":
+          return data.weather?.rain != null
+            ? "Rain: " + data.weather.rain + "mm"
+            : "Rain: --mm";
+        
+        case "WIND":
+          return data.weather?.wind != null
+            ? "Wind: " + data.weather.wind + "km/h"
+            : "Wind: --km/h";
+        
+        case "WEATHER_DESC":
+          return data.weather?.desc || "Sunny";
+        
         case "JOKE":
           return data.dad_joke || "No joke today.";
         
         case "DATE":
           return data.date || "";
-        
-        case "WEATHER_MINMAX":
-          if (data.weather?.temp_min != null && data.weather?.temp_max != null) {
-            return data.weather.temp_min + "° / " + data.weather.temp_max + "°";
-          }
-          return "--° / --°";
 
         default:
           return el.text || "";
-    }
+      }
     }
 
     function getLayerZIndex(el, providedKind) {
@@ -206,7 +212,6 @@
 
     /**
      * Load SVG from URL and inline it
-     * CRITICAL FIX: Uses full absolute URLs
      */
     async function inlineSvgInto(elDiv, url) {
       console.log("📥 Fetching SVG:", url);
@@ -228,150 +233,117 @@
         if (svg) {
           svg.setAttribute("width", "100%");
           svg.setAttribute("height", "100%");
-          svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
-          console.log("✅ SVG loaded successfully");
+          svg.style.display = "block";
         }
+        
+        console.log("✓ SVG loaded successfully");
       } catch (error) {
-        console.error("❌ SVG fetch failed:", url, error);
-        // Show error visually
-        elDiv.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-size:12px;color:#ff0000;">SVG Error</div>`;
+        console.error("Failed to load SVG:", error);
+        elDiv.innerHTML = `<div style="color: red; font-size: 12px;">SVG Load Error</div>`;
       }
     }
 
     /**
-     * Main initialization
+     * Render the complete layout
      */
-    (async function init() {
-      const data = getDataFromQuery();
-      const bg = document.getElementById("bg");
-      const root = document.getElementById("root");
-      const fallback = document.getElementById("fallback-box");
-
-      if (!data) {
-        fallback.style.display = "block";
-        return;
-      }
-
-      // Set background (prefer dynamic Pexels selection)
-      const backgroundUrl = (data.pexels && data.pexels.url) || data.bg_url;
-      if (backgroundUrl) {
-        bg.src = backgroundUrl;
-      }
-
-      const layout = data.layout;
-      if (!layout || !Array.isArray(layout.elements) || layout.elements.length === 0) {
-        console.warn("⚠️  No layout elements");
-        fallback.style.display = "block";
-        return;
-      }
-
-      fallback.style.display = "none";
-
-      // CRITICAL: Get svg_base from data (should be full URL)
-      const svg_base = data.svg_base || "/gcs/assets/svgs";
-      console.log("🎨 Rendering with svg_base:", svg_base);
-
-      // Render each element
-      for (const el of layout.elements) {
-        const div = document.createElement("div");
-        div.className = "el";
-
-        // Position
-        div.style.left = (el.x || 0) + "px";
-        div.style.top = (el.y || 0) + "px";
-        
-        // Size
-        if (el.w != null) div.style.width = el.w + "px";
-        if (el.h != null) div.style.height = el.h + "px";
-
-        // Styling
-        if (el.radius != null) div.style.borderRadius = el.radius + "px";
-        if (el.fill) div.style.background = el.fill;
-        if (el.border) div.style.border = el.border;
-        if (el.shadow) div.style.boxShadow = el.shadow;
-        if (el.opacity != null) div.style.opacity = el.opacity;
-
-        const kind = (el.kind || "").toLowerCase();
-        div.style.zIndex = getLayerZIndex(el, kind);
-
-        // ============================================================
-        // TEXT ELEMENTS
-        // ============================================================
-        if (kind === "text") {
-          const span = document.createElement("div");
-          span.textContent = textFromType(el, data);
-
-          // Text styling
-          if (el.fontFamily) span.style.fontFamily = el.fontFamily;
-          if (el.fontSize) span.style.fontSize = el.fontSize + "px";
-          if (el.color) span.style.color = el.color;
-          if (el.weight) span.style.fontWeight = el.weight;
-          if (el.align) span.style.textAlign = el.align;
-          if (el.wrap) span.style.whiteSpace = "normal";
-
-          if (el.textShadowType && el.textShadowType !== "none") {
-            const intensity = parseFloat(el.textShadowIntensity ?? 1) || 1;
-            const color = el.textShadowColor || "#000000";
-            if (el.textShadowType === "drop") {
-              const blur = 4 * intensity;
-              const offset = 2 * intensity;
-              span.style.textShadow = `${offset}px ${offset}px ${blur}px ${color}`;
-            } else if (el.textShadowType === "glow") {
-              const blur = 8 * intensity;
-              span.style.textShadow = `0 0 ${blur}px ${color}`;
-            }
-          } else {
-            span.style.textShadow = "none";
-          }
-
-          span.style.width = "100%";
-          span.style.height = "100%";
-          span.style.display = "flex";
-          span.style.alignItems = "center";
-          span.style.justifyContent = "center";
-          
-          div.appendChild(span);
-        }
-        
-        // ============================================================
-        // ICON/SVG ELEMENTS - CRITICAL FIX
-        // ============================================================
-        else if (kind === "icon" || kind === "svg" || kind === "svg-overlay") {
-          let src = el.src || "";
-          
-          // Special case: weather icon shorthand
-          if (src === "weather-icon" && data.weather?.icon_url) {
-            src = data.weather.icon_url;
-          }
-          
-          // CRITICAL: Resolve URL properly
-          const resolvedUrl = resolveUrl(src, svg_base);
-          console.log(`🔗 ${kind} element:`, { original: src, resolved: resolvedUrl });
-          
-          // Load SVG
-          if (resolvedUrl.endsWith(".svg")) {
-            await inlineSvgInto(div, resolvedUrl);
-          } else {
-            // Raster image
-            const img = document.createElement("img");
-            img.src = resolvedUrl;
-            img.style.width = "100%";
-            img.style.height = "100%";
-            img.style.objectFit = "contain";
-            div.appendChild(img);
-          }
-        }
-        
-        // ============================================================
-        // BOX ELEMENTS (styling already applied above)
-        // ============================================================
-        // Boxes don't need content, just visual styling
-
-        root.appendChild(div);
+    async function renderLayout(data) {
+      const canvas = document.getElementById('canvas');
+      const layout = data.layout || {};
+      const elements = layout.elements || [];
+      const svg_base = data.svg_base || "";
+      
+      console.log('SVG Base:', svg_base);
+      
+      // Add background image if provided
+      if (data.bg_url) {
+        const bgImg = document.createElement('img');
+        bgImg.src = data.bg_url;
+        bgImg.className = 'background-image';
+        canvas.appendChild(bgImg);
       }
       
-      console.log("✅ Render complete:", layout.elements.length, "elements");
-    })();
+      // Process each element
+      for (const el of elements) {
+        const elDiv = document.createElement('div');
+        elDiv.className = 'el ' + (el.kind || 'box');
+        
+        // Position and size
+        elDiv.style.left = (el.x || 0) + 'px';
+        elDiv.style.top = (el.y || 0) + 'px';
+        elDiv.style.width = (el.width || 100) + 'px';
+        elDiv.style.height = (el.height || 100) + 'px';
+        
+        // Z-index
+        const zIndex = getLayerZIndex(el, el.kind);
+        elDiv.style.zIndex = zIndex;
+        
+        // Apply styles
+        if (el.background) {
+          elDiv.style.background = el.background;
+        }
+        if (el.borderRadius) {
+          elDiv.style.borderRadius = el.borderRadius + 'px';
+        }
+        if (el.opacity != null) {
+          elDiv.style.opacity = el.opacity;
+        }
+        
+        const kind = (el.kind || '').toLowerCase();
+        
+        // Handle different element types
+        if (kind === 'text' || kind === 'icon') {
+          const text = textFromType(el, data);
+          elDiv.textContent = text;
+          
+          if (el.fontSize) {
+            elDiv.style.fontSize = el.fontSize + 'px';
+          }
+          if (el.color) {
+            elDiv.style.color = el.color;
+          }
+          if (el.fontWeight) {
+            elDiv.style.fontWeight = el.fontWeight;
+          }
+          if (el.textAlign) {
+            elDiv.style.textAlign = el.textAlign;
+            if (el.textAlign === 'left') {
+              elDiv.style.justifyContent = 'flex-start';
+            } else if (el.textAlign === 'right') {
+              elDiv.style.justifyContent = 'flex-end';
+            }
+          }
+          
+        } else if (kind === 'svg' || kind === 'svg-overlay' || kind === 'image') {
+          let src = el.src || el.svgName || '';
+          
+          // Handle weather icon special case
+          if (src === 'weather-icon' && data.weather?.icon_url) {
+            src = data.weather.icon_url;
+            elDiv.classList.add('weather-icon');
+          }
+          
+          // Resolve URL
+          const fullUrl = resolveUrl(src, svg_base);
+          
+          if (fullUrl.endsWith('.svg')) {
+            // Load and inline SVG
+            await inlineSvgInto(elDiv, fullUrl);
+          } else {
+            // Load as image
+            const img = document.createElement('img');
+            img.src = fullUrl;
+            img.style.width = '100%';
+            img.style.height = '100%';
+            img.style.objectFit = 'contain';
+            elDiv.appendChild(img);
+          }
+        }
+        
+        canvas.appendChild(elDiv);
+      }
+      
+      console.log('Layout rendered successfully');
+    }
   </script>
 </body>
 </html>
