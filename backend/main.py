@@ -416,16 +416,33 @@ async def get_weather(city: str) -> dict:
                         wind_block = data.get("wind", {})
                         rain_block = data.get("rain", {})
 
+                        temp_val = main_block.get("temp")
+                        feels_like_val = main_block.get("feels_like")
+                        humidity_val = main_block.get("humidity")
+
                         wind_speed = wind_block.get("speed")
                         wind_kmh = None
                         if isinstance(wind_speed, (int, float)):
                             wind_kmh = round(float(wind_speed) * 3.6)
 
+                        rain_amount: float | None = None
+                        rain_1h = rain_block.get("1h")
+                        rain_3h = rain_block.get("3h")
+                        if isinstance(rain_1h, (int, float)):
+                            rain_amount = float(rain_1h)
+                        elif isinstance(rain_3h, (int, float)):
+                            rain_amount = float(rain_3h) / 3.0
+
+                        if rain_amount is not None:
+                            rain_amount = round(rain_amount, 1)
+                            if rain_amount.is_integer():
+                                rain_amount = int(rain_amount)
+
                         weather: dict[str, Any] = {
-                            "temp": round(main_block.get("temp", 0)),
-                            "feels_like": round(main_block.get("feels_like", 0)),
-                            "humidity": main_block.get("humidity"),
-                            "rain": rain_block.get("1h", 0),
+                            "temp": round(temp_val) if isinstance(temp_val, (int, float)) else None,
+                            "feels_like": round(feels_like_val) if isinstance(feels_like_val, (int, float)) else None,
+                            "humidity": int(humidity_val) if isinstance(humidity_val, (int, float)) else None,
+                            "rain": rain_amount,
                             "wind": wind_kmh,
                             "icon": data.get("weather", [{}])[0].get("icon", "01d"),
                             "desc": data.get("weather", [{}])[0].get("description", "").title() or "Sunny",
