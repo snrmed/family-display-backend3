@@ -423,12 +423,19 @@ async def build_render_data(device: str = "familydisplay") -> dict:
         # Get all available categories for frontend
         categories = get_pexels_categories() if ENABLE_PEXELS else []
         
+        if storage_enabled:
+            font_base = make_public_url("gcs/assets/fonts")
+            if font_base.startswith("/"):
+                font_base = f"https://storage.googleapis.com/{GCS_BUCKET}/assets/fonts"
+        else:
+            font_base = "../fonts"
+
         if ENABLE_PEXELS:
             pexels_info = pexels_info or {}
             pexels_info["categories"] = categories
-        
+
         date_str = now.strftime("%a, %d %b")
-        
+
         if storage_enabled:
             svg_base = make_public_url("gcs/assets/svgs")
         else:
@@ -442,6 +449,7 @@ async def build_render_data(device: str = "familydisplay") -> dict:
             "bg_url": bg_url,
             "pexels": pexels_info,
             "svg_base": svg_base,
+            "font_base": font_base,
             "device": device_config,
             "timestamp": now.isoformat()
         }

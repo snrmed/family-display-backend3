@@ -90,7 +90,9 @@
         const dataJson = decodeURIComponent(encodedData);
         const data = JSON.parse(dataJson);
         console.log('Render data:', data);
-        
+
+        injectFontFaces(data.font_base);
+
         // Render the layout
         renderLayout(data);
       } catch (error) {
@@ -127,25 +129,141 @@
     /**
      * Resolve dynamic text content
      */
+    const FONT_MANIFEST = [
+      { family: 'Space Grotesk', file: 'SpaceGrotesk/SpaceGrotesk-VariableFont_wght.ttf' },
+      { family: 'Inter', file: 'Inter/Inter-VariableFont_slnt,wght.ttf' },
+      { family: 'Plus Jakarta Sans', file: 'PlusJakartaSans/PlusJakartaSans-VariableFont_wght.ttf' },
+      { family: 'Public Sans', file: 'PublicSans/PublicSans-VariableFont_wght.ttf' },
+      { family: 'Outfit', file: 'Outfit/Outfit-VariableFont_wght.ttf' },
+      { family: 'Manrope', file: 'Manrope/Manrope-VariableFont_wght.ttf' },
+      { family: 'Roboto', file: 'Roboto/Roboto-Regular.ttf' },
+      { family: 'Source Sans 3', file: 'SourceSans3/SourceSans3-VariableFont_wght.ttf' },
+      { family: 'Atkinson Hyperlegible', file: 'AtkinsonHyperlegible/AtkinsonHyperlegible-Regular.ttf' },
+      { family: 'Merriweather', file: 'Merriweather/Merriweather-Regular.ttf' },
+      { family: 'Noto Sans', file: 'NotoSans/NotoSans-Regular.ttf' }
+    ];
+
+    function injectFontFaces(fontBase) {
+      if (document.getElementById('dynamic-fonts')) {
+        return;
+      }
+
+      const base = fontBase || '../fonts';
+      const cssChunks = FONT_MANIFEST.map(font => {
+        const url = resolveUrl(font.file, base);
+        return `@font-face { font-family: '${font.family}'; src: url('${url}') format('truetype'); font-display: swap; }`;
+      });
+
+      const style = document.createElement('style');
+      style.id = 'dynamic-fonts';
+      style.textContent = cssChunks.join('\n');
+      document.head.appendChild(style);
+    }
+
     function resolveDynamicText(type, data) {
-      switch (type) {
+      if (!type) return "";
+
+      const normalized = String(type).toUpperCase();
+      const weather = data.weather || {};
+      const tomorrow = weather.tomorrow || {};
+
+      switch (normalized) {
         case "WEATHER_TEMP":
-          return data.weather?.temp ? `${data.weather.temp}°` : "";
-        
+        case "TEMP":
+          if (weather.temp != null) {
+            return `${weather.temp}°`;
+          }
+          return "";
+
+        case "WEATHER_FEELS_LIKE":
+        case "FEELS_LIKE":
+          if (weather.feels_like != null) {
+            return `Feels like ${weather.feels_like}°`;
+          }
+          return "";
+
+        case "WEATHER_MINMAX":
+        case "TEMP_RANGE":
+          if (weather.temp_min != null && weather.temp_max != null) {
+            return `${weather.temp_min}° / ${weather.temp_max}°`;
+          }
+          return "";
+
         case "WEATHER_DESC":
-          return data.weather?.description || "";
-        
+        case "DESC":
+          return weather.desc || weather.description || "";
+
+        case "WEATHER_DESC_EXTENDED":
+        case "DESC_EXTENDED":
+          return weather.desc_extended || weather.desc || weather.description || "";
+
         case "WEATHER_CITY":
-          return data.weather?.city || "";
-        
+        case "CITY":
+          return weather.city || data.city || "";
+
+        case "TOMORROW_DESC":
+          return tomorrow.desc || "";
+
+        case "TOMORROW_TEMP":
+        case "TOMORROW_MINMAX":
+          if (tomorrow.temp_min != null && tomorrow.temp_max != null) {
+            return `${tomorrow.temp_min}° / ${tomorrow.temp_max}°`;
+          }
+          return "";
+
+        case "HUMIDITY":
+          if (weather.humidity != null) {
+            return `Humidity: ${weather.humidity}%`;
+          }
+          return "";
+
+        case "RAIN":
+          if (weather.rain != null) {
+            return `Rain: ${weather.rain}mm`;
+          }
+          return "";
+
+        case "WIND":
+          if (weather.wind != null) {
+            return `Wind: ${weather.wind}km/h`;
+          }
+          return "";
+
         case "DAD_JOKE":
+        case "JOKE":
           return data.dad_joke || "";
-        
+
         case "DATE":
           return data.date || "";
 
         default:
           return "";
+      }
+    }
+
+    function applyTextShadowStyle(element, type, color, intensity) {
+      if (!element) return;
+
+      if (!type || type === 'none') {
+        element.style.textShadow = 'none';
+        element.style.filter = 'none';
+        return;
+      }
+
+      const safeColor = color || '#000000';
+      const parsedIntensity = parseFloat(intensity);
+      const safeIntensity = Number.isFinite(parsedIntensity) ? parsedIntensity : 1;
+      const blur = Math.round(safeIntensity * 4);
+
+      if (type === 'shadow') {
+        element.style.textShadow = `2px 2px ${blur}px ${safeColor}`;
+        element.style.filter = 'none';
+      } else if (type === 'glow') {
+        element.style.textShadow = `0 0 ${blur}px ${safeColor}, 0 0 ${blur * 2}px ${safeColor}, 0 0 ${blur * 3}px ${safeColor}`;
+        element.style.filter = 'none';
+      } else {
+        element.style.textShadow = 'none';
+        element.style.filter = 'none';
       }
     }
 
@@ -258,17 +376,22 @@
           contentDiv.style.fontSize = (el.fontSize || 16) + 'px';
           contentDiv.style.color = el.color || '#000';
           contentDiv.style.fontWeight = el.fontWeight || 'normal';
+          if (el.fontFamily) {
+            contentDiv.style.fontFamily = `'${el.fontFamily}', sans-serif`;
+          }
           contentDiv.style.width = '100%';
           contentDiv.style.height = '100%';
           contentDiv.style.display = 'flex';
           contentDiv.style.alignItems = 'center';
           contentDiv.style.justifyContent = 'center';
           contentDiv.style.textAlign = 'center';
-          
-          if (el.textShadow) {
+
+          if (el.textShadowType && el.textShadowType !== 'none') {
+            applyTextShadowStyle(contentDiv, el.textShadowType, el.textShadowColor, el.textShadowIntensity);
+          } else if (el.textShadow) {
             contentDiv.style.textShadow = el.textShadow;
           }
-          
+
           elDiv.appendChild(contentDiv);
           
         } else if (kind === 'box') {
