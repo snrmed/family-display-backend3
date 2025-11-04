@@ -1267,32 +1267,34 @@ async function fetchRenderData() {
   }
 }
 
+
 function updateInfoTypeDropdown() {
   const select = document.getElementById('textType');
   if (!select) return;
+
+  const currentValue = select.value || 'CUSTOM';
+
   const typeLabels = (typeof window.TYPE_LABELS !== 'undefined' && window.TYPE_LABELS) ? window.TYPE_LABELS : {};
+  const types = (Array.isArray(window.availableInfoTypes) && window.availableInfoTypes.length)
+    ? window.availableInfoTypes
+    : Object.keys(typeLabels);
+
   select.innerHTML = '';
-  Object.entries(typeLabels).forEach(([key, label]) => {
+  types.forEach((key) => {
     const opt = document.createElement('option');
     opt.value = key;
-    opt.textContent = label;
+    opt.textContent = typeLabels[key] || key;
     select.appendChild(opt);
   });
-};
-  
-  availableInfoTypes.forEach(type => {
-    const option = document.createElement('option');
-    option.value = type;
-    option.textContent = typeLabels[type] || type;
-    select.appendChild(option);
-  });
-  
-  if (availableInfoTypes.includes(currentValue)) {
+
+  if (types.includes(currentValue)) {
     select.value = currentValue;
   }
 }
+/* ---- end updateInfoTypeDropdown fix ---- */
 
-function getDynamicText(type) {
+function getDynamicText
+(type) {
   const weather = renderData?.weather;
   
   switch (type) {
@@ -2229,5 +2231,20 @@ init();
 })();
 </script>
 
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  try {
+    const section = document.querySelector('.section.device-settings');
+    if (section) {
+      section.classList.remove('collapsed');
+      section.scrollIntoView({behavior:'smooth', block:'start'});
+    }
+    const city = document.getElementById('citySelect');
+    if (city) city.focus();
+  } catch (e) { console.warn('device setup auto-open failed', e); }
+});
+</script>
 </body>
+
 </html>
