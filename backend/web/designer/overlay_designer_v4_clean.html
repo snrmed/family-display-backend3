@@ -1001,6 +1001,13 @@ function addInfoType(type) {
   }
 }
 
+function addInfoType(type) {
+  if (!type) return;
+  if (!availableInfoTypes.includes(type)) {
+    availableInfoTypes.push(type);
+  }
+}
+
 let isDragging = false;
 let isResizing = false;
 let resizeHandle = '';
