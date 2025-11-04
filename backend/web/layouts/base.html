@@ -152,32 +152,67 @@
         case "WEATHER_CITY":
         case "CITY":
           return data.weather?.city || "City";
-        
         case "TEMP":
-          return data.weather?.temp != null 
-            ? data.weather.temp + "°C"
+          if (data.weather?.temp_min != null && data.weather?.temp_max != null) {
+            return `${data.weather.temp_min}° / ${data.weather.temp_max}°`;
+          }
+          return data.weather?.temp != null
+            ? `${data.weather.temp}°C`
             : "--°C";
-        
+        case "FEELS_LIKE":
+          return data.weather?.feels_like != null
+            ? `${data.weather.feels_like}°C`
+            : "--°C";
         case "HUMIDITY":
           return data.weather?.humidity != null
-            ? "Humidity: " + data.weather.humidity + "%"
+            ? `Humidity: ${data.weather.humidity}%`
             : "Humidity: --%";
-        
-        case "JOKE":
-          return data.dad_joke || "No joke today.";
-        
-        case "DATE":
-          return data.date || "";
-        
+        case "RAIN":
+          return data.weather?.rain != null
+            ? `Rain: ${data.weather.rain} mm`
+            : "Rain: -- mm";
+        case "WIND":
+          return data.weather?.wind != null
+            ? `Wind: ${data.weather.wind} km/h`
+            : "Wind: -- km/h";
+        case "WEATHER_DESC":
+          if (data.weather?.comment) {
+            return data.weather.comment;
+          }
+          return data.weather?.desc || "Sunny";
         case "WEATHER_MINMAX":
           if (data.weather?.temp_min != null && data.weather?.temp_max != null) {
-            return data.weather.temp_min + "° / " + data.weather.temp_max + "°";
+            return `${data.weather.temp_min}° / ${data.weather.temp_max}°`;
           }
           return "--° / --°";
-
+        case "DATE":
+          return data.date || "";
+        case "JOKE":
+          return data.dad_joke || "No joke today.";
         default:
           return el.text || "";
       }
+    }
+
+    function getLayerZIndex(el, providedKind) {
+      const kind = (providedKind || el.kind || "").toLowerCase();
+      if (kind === "text" || kind === "icon") {
+        return 30;
+      }
+
+      if (kind === "svg" || kind === "svg-overlay" || kind === "image") {
+        const source = String(el.src || el.svgName || "");
+        if (source === "weather-icon" || source.startsWith("weather-")) {
+          return 35;
+        }
+        return 20;
+      }
+
+      if (kind === "box") {
+        return 15;
+      }
+
+      return 10;
     }
 
     /**
@@ -268,6 +303,7 @@
         if (el.opacity != null) div.style.opacity = el.opacity;
 
         const kind = (el.kind || "").toLowerCase();
+        div.style.zIndex = getLayerZIndex(el, kind);
 
         // ============================================================
         // TEXT ELEMENTS

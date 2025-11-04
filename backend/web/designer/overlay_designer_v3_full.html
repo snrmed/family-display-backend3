@@ -79,6 +79,34 @@ body{
 .modal-body{
   margin-bottom:24px;
 }
+.modal-tabs{
+  display:flex;
+  gap:8px;
+  margin-bottom:16px;
+}
+.modal-tab{
+  flex:1;
+  padding:10px 12px;
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:8px;
+  cursor:pointer;
+  color:var(--text);
+  font-weight:600;
+  text-align:center;
+  transition:all 0.2s ease;
+}
+.modal-tab:hover{
+  border-color:var(--brand);
+  background:var(--hover);
+}
+.modal-tab.active{
+  border-color:var(--brand);
+  background:rgba(45,140,240,0.2);
+  color:var(--text);
+}
+.modal-section{margin-bottom:24px;}
+.modal-section.hidden{display:none;}
 .modal-body label{
   display:block;
   margin-bottom:16px;
@@ -513,7 +541,11 @@ button:disabled:hover {
           <p>Let's make a smile</p>
         </div>
       </div>
-      <div class="modal-body">
+      <div class="modal-tabs">
+        <button type="button" class="modal-tab active" data-target="credentials">Credentials</button>
+        <button type="button" class="modal-tab" data-target="location">Location</button>
+      </div>
+      <div class="modal-body modal-section" data-section="credentials">
         <label>
           <span>Device ID</span>
           <input type="text" id="setupDeviceId" placeholder="e.g., living-room, kitchen-display">
@@ -527,6 +559,19 @@ button:disabled:hover {
           </label>
           <div class="help-text">Required to save layouts to the cloud</div>
         </div>
+      </div>
+      <div class="modal-body modal-section hidden" data-section="location">
+        <label>
+          <span>Country</span>
+          <select id="setupCountry"></select>
+          <div class="help-text">Choose the country for this display to auto-fill time zone options</div>
+        </label>
+        <label>
+          <span>City</span>
+          <select id="setupCity" disabled></select>
+          <div class="help-text">Select the city to match OpenWeather data and timezone</div>
+        </label>
+        <div class="help-text" id="setupTimezoneDisplay">Select a city to see its timezone.</div>
       </div>
       <div class="modal-footer">
         <button id="setupSkip">Skip for Now</button>
@@ -568,26 +613,6 @@ button:disabled:hover {
       </div>
       <div class="modal-footer">
         <button id="cancelAddInfo">Cancel</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- --- Add Weather Modal --- -->
-  <div class="modal-overlay hidden" id="addWeatherModal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <div class="modal-title">
-          <h2>Add Weather Icon</h2>
-          <p>Select icon theme</p>
-        </div>
-      </div>
-      <div class="modal-body">
-        <div class="selector-grid" id="weatherThemeSelector">
-          <!-- Content will be populated by JS -->
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button id="cancelAddWeather">Cancel</button>
       </div>
     </div>
   </div>
@@ -927,12 +952,394 @@ const statusText = document.getElementById('statusText');
 
 const STORAGE_KEY_DEVICE = 'kindDesignerDeviceId';
 const STORAGE_KEY_TOKEN = 'kindDesignerAdminToken';
+const STORAGE_KEY_COUNTRY = 'kindDesignerCountry';
+const STORAGE_KEY_CITY = 'kindDesignerCity';
+const STORAGE_KEY_TIMEZONE = 'kindDesignerTimezone';
+
+const CITY_TIMEZONE_DATA = [
+  {
+    countryName: 'Australia',
+    countryCode: 'AU',
+    cities: [
+      { name: 'Darwin', timezone: 'Australia/Darwin' },
+      { name: 'Sydney', timezone: 'Australia/Sydney' },
+      { name: 'Melbourne', timezone: 'Australia/Melbourne' },
+      { name: 'Brisbane', timezone: 'Australia/Brisbane' },
+      { name: 'Perth', timezone: 'Australia/Perth' }
+    ]
+  },
+  {
+    countryName: 'United States',
+    countryCode: 'US',
+    cities: [
+      { name: 'New York', timezone: 'America/New_York' },
+      { name: 'Los Angeles', timezone: 'America/Los_Angeles' },
+      { name: 'Chicago', timezone: 'America/Chicago' },
+      { name: 'Denver', timezone: 'America/Denver' },
+      { name: 'Phoenix', timezone: 'America/Phoenix' }
+    ]
+  },
+  {
+    countryName: 'United Kingdom',
+    countryCode: 'GB',
+    cities: [
+      { name: 'London', timezone: 'Europe/London' },
+      { name: 'Manchester', timezone: 'Europe/London' },
+      { name: 'Edinburgh', timezone: 'Europe/London' }
+    ]
+  },
+  {
+    countryName: 'Singapore',
+    countryCode: 'SG',
+    cities: [
+      { name: 'Singapore', timezone: 'Asia/Singapore' }
+    ]
+  },
+  {
+    countryName: 'Japan',
+    countryCode: 'JP',
+    cities: [
+      { name: 'Tokyo', timezone: 'Asia/Tokyo' },
+      { name: 'Osaka', timezone: 'Asia/Tokyo' }
+    ]
+  }
+];
 
 let storedDeviceId = localStorage.getItem(STORAGE_KEY_DEVICE) || '';
 let storedAdminToken = localStorage.getItem(STORAGE_KEY_TOKEN) || '';
+let storedCountry = localStorage.getItem(STORAGE_KEY_COUNTRY) || '';
+let storedCity = localStorage.getItem(STORAGE_KEY_CITY) || '';
+let storedTimezone = localStorage.getItem(STORAGE_KEY_TIMEZONE) || '';
 
 if (storedDeviceId) deviceIdInput.value = storedDeviceId;
 if (storedAdminToken) adminTokenInput.value = storedAdminToken;
+
+const countrySelect = document.getElementById('setupCountry');
+const citySelect = document.getElementById('setupCity');
+const timezoneDisplay = document.getElementById('setupTimezoneDisplay');
+const setupTabs = Array.from(document.querySelectorAll('.modal-tab'));
+const modalSections = Array.from(document.querySelectorAll('.modal-section'));
+
+let locationState = {
+  countryCode: storedCountry || '',
+  countryName: '',
+  city: storedCity || '',
+  timezone: storedTimezone || ''
+};
+
+let renderData = null;
+
+// --- Location Helpers ---
+function getCountryConfig(code) {
+  if (!code) return null;
+  return CITY_TIMEZONE_DATA.find(entry => entry.countryCode === code) || null;
+}
+
+function getCountryName(code) {
+  const config = getCountryConfig(code);
+  return config ? config.countryName : '';
+}
+
+function getCityConfig(countryCode, cityName) {
+  if (!countryCode || !cityName) return null;
+  const config = getCountryConfig(countryCode);
+  if (!config) return null;
+  return config.cities.find(city => city.name === cityName) || null;
+}
+
+function populateCountrySelect() {
+  if (!countrySelect) return;
+  countrySelect.innerHTML = '';
+
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = 'Select a country';
+  countrySelect.appendChild(placeholder);
+
+  CITY_TIMEZONE_DATA.forEach(entry => {
+    const option = document.createElement('option');
+    option.value = entry.countryCode;
+    option.textContent = entry.countryName;
+    countrySelect.appendChild(option);
+  });
+}
+
+function populateCitySelect(countryCode, selectedCity) {
+  if (!citySelect) return;
+
+  citySelect.innerHTML = '';
+
+  if (!countryCode) {
+    citySelect.disabled = true;
+    const option = document.createElement('option');
+    option.value = '';
+    option.textContent = 'Select a country first';
+    citySelect.appendChild(option);
+    return;
+  }
+
+  const config = getCountryConfig(countryCode);
+  if (!config || !Array.isArray(config.cities) || !config.cities.length) {
+    citySelect.disabled = true;
+    const option = document.createElement('option');
+    option.value = '';
+    option.textContent = 'No cities available';
+    citySelect.appendChild(option);
+    return;
+  }
+
+  citySelect.disabled = false;
+
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = 'Select a city';
+  citySelect.appendChild(placeholder);
+
+  config.cities.forEach(city => {
+    const option = document.createElement('option');
+    option.value = city.name;
+    option.textContent = city.name;
+    citySelect.appendChild(option);
+  });
+
+  const isValidSelection = !!getCityConfig(countryCode, selectedCity || '');
+  citySelect.value = isValidSelection ? selectedCity : '';
+}
+
+function updateTimezoneDisplay() {
+  if (!timezoneDisplay) return;
+
+  if (locationState.countryCode && locationState.city && locationState.timezone) {
+    const countryName = locationState.countryName || getCountryName(locationState.countryCode);
+    const locationLabel = countryName ? `${locationState.city}, ${countryName}` : locationState.city;
+    timezoneDisplay.textContent = `Timezone: ${locationState.timezone}${locationLabel ? ` (${locationLabel})` : ''}`;
+  } else if (locationState.countryCode) {
+    timezoneDisplay.textContent = 'Select a city to see its timezone.';
+  } else {
+    timezoneDisplay.textContent = 'Select a city to see its timezone.';
+  }
+}
+
+function persistLocationState() {
+  storedCountry = locationState.countryCode || '';
+  storedCity = locationState.city || '';
+  storedTimezone = locationState.timezone || '';
+
+  if (storedCountry) {
+    localStorage.setItem(STORAGE_KEY_COUNTRY, storedCountry);
+  } else {
+    localStorage.removeItem(STORAGE_KEY_COUNTRY);
+  }
+
+  if (storedCity) {
+    localStorage.setItem(STORAGE_KEY_CITY, storedCity);
+  } else {
+    localStorage.removeItem(STORAGE_KEY_CITY);
+  }
+
+  if (storedTimezone) {
+    localStorage.setItem(STORAGE_KEY_TIMEZONE, storedTimezone);
+  } else {
+    localStorage.removeItem(STORAGE_KEY_TIMEZONE);
+  }
+}
+
+function applyLocationToRenderData() {
+  if (!renderData) return;
+
+  if (!renderData.layout) {
+    renderData.layout = { meta: {} };
+  }
+
+  if (!renderData.layout.meta) {
+    renderData.layout.meta = {};
+  }
+
+  renderData.layout.meta.city = locationState.city || null;
+  renderData.layout.meta.countryCode = locationState.countryCode || null;
+  renderData.layout.meta.countryName = locationState.countryName || null;
+  renderData.layout.meta.timezone = locationState.timezone || null;
+
+  if (!renderData.weather) {
+    return;
+  }
+
+  renderData.weather.city = locationState.city || '';
+  if (locationState.countryCode) {
+    renderData.weather.country = locationState.countryCode;
+    renderData.weather.country_code = locationState.countryCode;
+    if (locationState.countryName) {
+      renderData.weather.country_name = locationState.countryName;
+    }
+  } else {
+    delete renderData.weather.country;
+    delete renderData.weather.country_code;
+    delete renderData.weather.country_name;
+  }
+  if (locationState.timezone) {
+    renderData.weather.timezone_name = locationState.timezone;
+  } else {
+    delete renderData.weather.timezone_name;
+  }
+}
+
+function syncSetupLocationInputs() {
+  populateCountrySelect();
+  if (countrySelect) {
+    countrySelect.value = locationState.countryCode || '';
+  }
+  populateCitySelect(locationState.countryCode || '', locationState.city || '');
+  updateTimezoneDisplay();
+}
+
+function setLocationState(updates, options = {}) {
+  const { persist = true, updateUI = true } = options;
+  const next = { ...locationState, ...updates };
+  const cityExplicitlyCleared = Object.prototype.hasOwnProperty.call(updates || {}, 'city') && updates.city === '';
+
+  if (!next.countryCode) {
+    next.countryName = '';
+    next.city = '';
+    next.timezone = '';
+  } else {
+    if (!next.countryName) {
+      next.countryName = getCountryName(next.countryCode) || locationState.countryName || '';
+    }
+
+    const cityConfig = next.city ? getCityConfig(next.countryCode, next.city) : null;
+
+    if (cityExplicitlyCleared) {
+      next.city = '';
+      next.timezone = '';
+    } else if (!next.city || !cityConfig) {
+      const fallbackConfig = getCountryConfig(next.countryCode);
+      if (fallbackConfig && fallbackConfig.cities.length) {
+        next.city = fallbackConfig.cities[0].name;
+        next.timezone = fallbackConfig.cities[0].timezone;
+      } else {
+        next.city = '';
+        next.timezone = '';
+      }
+    } else if (!next.timezone) {
+      next.timezone = cityConfig.timezone;
+    }
+  }
+
+  locationState = next;
+
+  if (updateUI) {
+    syncSetupLocationInputs();
+  } else {
+    updateTimezoneDisplay();
+  }
+
+  if (persist) {
+    persistLocationState();
+  }
+
+  applyLocationToRenderData();
+  applyDynamicTextToCanvas();
+}
+
+function applyLocationMeta(meta) {
+  const layoutMeta = meta || {};
+  const metaCountry = layoutMeta.countryCode || layoutMeta.country || '';
+  const metaCity = layoutMeta.city || '';
+  const metaTimezone = layoutMeta.timezone || layoutMeta.timeZone || '';
+  const metaCountryName = layoutMeta.countryName || layoutMeta.country_name || '';
+  const hasMetaLocation = Boolean(metaCountry || metaCity || metaTimezone || metaCountryName);
+
+  const weatherCity = renderData?.weather?.city || '';
+  const weatherCountry = renderData?.weather?.country_code || renderData?.weather?.country || '';
+  const weatherTimezone = renderData?.weather?.timezone_name || '';
+  const weatherCountryName = renderData?.weather?.country_name || '';
+
+  const resolvedCountry = metaCountry || weatherCountry || locationState.countryCode || '';
+  const resolvedCity = metaCity || weatherCity || locationState.city || '';
+  const resolvedTimezone = metaTimezone || weatherTimezone || locationState.timezone || '';
+  const resolvedCountryName = metaCountryName || weatherCountryName || getCountryName(resolvedCountry) || locationState.countryName || '';
+
+  setLocationState(
+    {
+      countryCode: resolvedCountry,
+      countryName: resolvedCountryName,
+      city: resolvedCity,
+      timezone: resolvedTimezone
+    },
+    { persist: hasMetaLocation }
+  );
+}
+
+function showSetupModalTab(target) {
+  const desired = target || 'credentials';
+  setupTabs.forEach(tab => {
+    tab.classList.toggle('active', tab.dataset.target === desired);
+  });
+  modalSections.forEach(section => {
+    const sectionKey = section.dataset.section || 'credentials';
+    section.classList.toggle('hidden', sectionKey !== desired);
+  });
+}
+
+populateCountrySelect();
+setLocationState(
+  {
+    countryCode: locationState.countryCode,
+    countryName: getCountryName(locationState.countryCode) || locationState.countryName,
+    city: locationState.city,
+    timezone: locationState.timezone
+  },
+  { persist: false }
+);
+
+setupTabs.forEach(tab => {
+  tab.addEventListener('click', () => {
+    showSetupModalTab(tab.dataset.target || 'credentials');
+  });
+});
+
+if (countrySelect) {
+  countrySelect.addEventListener('change', event => {
+    const selectedCountry = event.target.value || '';
+    const config = getCountryConfig(selectedCountry);
+    const matchedCountryName = config ? config.countryName : '';
+    setLocationState(
+      {
+        countryCode: selectedCountry,
+        countryName: matchedCountryName,
+        city: locationState.city,
+        timezone: locationState.timezone
+      }
+    );
+
+    if (!selectedCountry) {
+      setStatus('Country cleared', 2000);
+    } else {
+      const cityHint = locationState.city ? ` · City: ${locationState.city}` : '';
+      setStatus(`Country set to ${matchedCountryName || selectedCountry}${cityHint}`, 2500);
+    }
+  });
+}
+
+if (citySelect) {
+  citySelect.addEventListener('change', event => {
+    const selectedCity = event.target.value || '';
+    const cityConfig = getCityConfig(locationState.countryCode, selectedCity);
+    setLocationState(
+      {
+        city: selectedCity,
+        timezone: cityConfig ? cityConfig.timezone : ''
+      }
+    );
+
+    if (selectedCity) {
+      const tzHint = cityConfig?.timezone ? ` · ${cityConfig.timezone}` : '';
+      setStatus(`City set to ${selectedCity}${tzHint}`, 2500);
+    } else {
+      setStatus('City cleared', 2000);
+    }
+  });
+}
 
 // --- State ---
 let selectedEl = null;
@@ -952,17 +1359,13 @@ let redoStack = [];
 let availablePresets = [];
 let availableSVGs = [];
 let availableInfoTypes = [];
-let renderData = null;
 let svgLibraryBase = '/gcs/assets/svgs';
-let weatherIconBase = '/gcs/assets/weather-icons';
 let presetBaseUrl = '';
 const FALLBACK_WEATHER_ICON = '/designer/svgs/weather_card_blue.svg';
 const DEFAULT_PEXELS_CATEGORIES = ['abstract', 'geometric', 'kids-shapes', 'minimal', 'paper-collage'];
 const pexelsCategorySelect = document.getElementById('pexelsCategorySelect');
 let availablePexelsCategories = [...DEFAULT_PEXELS_CATEGORIES];
 let currentPexelsCategory = availablePexelsCategories[0] || '';
-let currentWeatherTheme = 'happy-skies';
-let availableWeatherThemes = [];
 let fineMovementActive = false;
 
 // --- Setup Modal Logic ---
@@ -970,6 +1373,8 @@ function showSetupModal() {
   document.getElementById('setupModal').classList.remove('hidden');
   document.getElementById('setupDeviceId').value = storedDeviceId;
   document.getElementById('setupPasskey').value = storedAdminToken;
+  syncSetupLocationInputs();
+  showSetupModalTab('credentials');
 }
 
 function hideSetupModal() {
@@ -991,10 +1396,12 @@ function saveSetupCredentials() {
   
   localStorage.setItem(STORAGE_KEY_DEVICE, deviceId);
   localStorage.setItem(STORAGE_KEY_TOKEN, passkey);
-  
+
   deviceIdInput.value = deviceId;
   adminTokenInput.value = passkey;
-  
+
+  persistLocationState();
+
   hideSetupModal();
   updateDeviceStatusUI();
   setStatus('Setup saved successfully', 2000);
@@ -1181,17 +1588,20 @@ function getDynamicTextForType(type) {
 
   switch (type) {
     case 'TEMP':
+      if (weather.temp_min != null && weather.temp_max != null) {
+        return `${weather.temp_min}° / ${weather.temp_max}°`;
+      }
       return weather.temp != null ? `${weather.temp}°C` : '--°C';
     case 'FEELS_LIKE':
       return weather.feels_like != null ? `${weather.feels_like}°C` : '--°C';
     case 'HUMIDITY':
       return weather.humidity != null ? `Humidity: ${weather.humidity}%` : 'Humidity: --%';
     case 'RAIN':
-      return weather.rain != null ? `Rain: ${weather.rain}mm` : 'Rain: --mm';
+      return weather.rain != null ? `Rain: ${weather.rain} mm` : 'Rain: -- mm';
     case 'WIND':
-      return weather.wind != null ? `Wind: ${weather.wind}km/h` : 'Wind: --km/h';
+      return weather.wind != null ? `Wind: ${weather.wind} km/h` : 'Wind: -- km/h';
     case 'WEATHER_DESC':
-      return weather.desc || 'Sunny';
+      return weather.comment || weather.desc || 'Sunny';
     case 'CITY':
     case 'WEATHER_CITY':
       return weather.city || 'City';
@@ -1232,42 +1642,6 @@ function applyDynamicTextToCanvas() {
   elements.forEach(applyDynamicTextToElement);
 }
 
-function updateWeatherThemeSelection() {
-  const selector = document.getElementById('weatherThemeSelector');
-  if (!selector) return;
-
-  selector.querySelectorAll('.selector-item[data-placeholder="true"]').forEach(item => {
-    const theme = item.dataset.theme;
-    if (!theme) return;
-    const occurrences = selector.querySelectorAll(`.selector-item[data-theme="${theme}"]`);
-    if (occurrences.length > 1) {
-      item.remove();
-    }
-  });
-
-  if (currentWeatherTheme && !selector.querySelector(`.selector-item[data-theme="${currentWeatherTheme}"]`)) {
-    const placeholder = document.createElement('div');
-    placeholder.className = 'selector-item selected';
-    placeholder.dataset.theme = currentWeatherTheme;
-    placeholder.dataset.placeholder = 'true';
-    placeholder.innerHTML = `
-      <div class="selector-item-icon">🌤</div>
-      <div class="selector-item-label">${currentWeatherTheme}</div>
-    `;
-    selector.prepend(placeholder);
-  }
-
-  selector.querySelectorAll('.selector-item').forEach(item => {
-    const theme = item.dataset.theme;
-    if (!theme) return;
-    if (theme === currentWeatherTheme) {
-      item.classList.add('selected');
-    } else {
-      item.classList.remove('selected');
-    }
-  });
-}
-
 function drawGrid() {
   gridOverlay.innerHTML = '';
   const w = 800;
@@ -1300,10 +1674,32 @@ function buildSvgUrl(svgName) {
   return `${base}/${svgName.replace(/^\//, '')}`;
 }
 
-function buildWeatherIconUrl(theme, code = '01d') {
-  const safeTheme = theme || 'happy-skies';
-  const base = (weatherIconBase || '/gcs/assets/weather-icons').replace(/\/$/, '');
-  return `${base}/${safeTheme}/${code}.svg`;
+function buildWeatherIconPreviewMarkup(url) {
+  const safeUrl = (url || FALLBACK_WEATHER_ICON).replace(/"/g, '&quot;');
+  return `<img src="${safeUrl}" alt="Weather icon" style="width:100%;height:100%;object-fit:contain;pointer-events:none;" />`;
+}
+
+function getWeatherIconPreviewUrl() {
+  const direct = renderData?.weather?.icon_url;
+  if (direct && typeof direct === 'string') {
+    return direct;
+  }
+
+  const iconCode = renderData?.weather?.icon;
+  if (iconCode) {
+    return `https://openweathermap.org/img/wn/${iconCode}@4x.png`;
+  }
+
+  return FALLBACK_WEATHER_ICON;
+}
+
+function refreshWeatherIconPreviews() {
+  const previewUrl = getWeatherIconPreviewUrl();
+  const markup = buildWeatherIconPreviewMarkup(previewUrl);
+  canvas.querySelectorAll('.el[data-src="weather-icon"]').forEach(el => {
+    el.innerHTML = markup;
+    el.dataset.previewSrc = previewUrl;
+  });
 }
 
 // --- Data Fetching ---
@@ -1314,13 +1710,9 @@ async function fetchRenderData() {
     const response = await fetch(`/v1/render_data?device=${device}`);
     if (!response.ok) throw new Error(`Server error: ${response.status}`);
     renderData = await response.json();
+    applyLocationMeta(renderData?.layout?.meta || {});
     if (renderData.svg_base) {
       svgLibraryBase = renderData.svg_base;
-    }
-
-    const themeFromLayout = renderData?.layout?.meta?.iconTheme;
-    if (themeFromLayout) {
-      currentWeatherTheme = themeFromLayout;
     }
 
     const metaCategory = renderData?.layout?.meta?.pexelsCategory;
@@ -1344,6 +1736,7 @@ async function fetchRenderData() {
 
     updateInfoTypeDropdown();
     applyDynamicTextToCanvas();
+    refreshWeatherIconPreviews();
     return renderData;
   } catch (error) {
     console.warn('Failed to fetch render data:', error.message);
@@ -1365,7 +1758,7 @@ function updateInfoTypeDropdown() {
     'HUMIDITY': 'Humidity',
     'RAIN': 'Rain',
     'WIND': 'Wind Speed',
-    'WEATHER_DESC': 'Weather Description',
+    'WEATHER_DESC': 'Weather Summary',
     'WEATHER_MINMAX': 'Low / High',
     'CITY': 'City Name',
     'DATE': 'Date',
@@ -1543,6 +1936,32 @@ function clearResizeHandles(el) {
   el.querySelectorAll('.resize-handle').forEach(handle => handle.remove());
 }
 
+function computeElementLayer(el) {
+  if (!el) return 10;
+  if (el.classList.contains('text') || el.classList.contains('icon')) {
+    return 30;
+  }
+
+  if (el.classList.contains('svg-overlay')) {
+    const src = (el.dataset.src || el.dataset.svgName || '').toString();
+    if (src === 'weather-icon' || src.startsWith('weather-')) {
+      return 35;
+    }
+    return 20;
+  }
+
+  if (el.classList.contains('box')) {
+    return 15;
+  }
+
+  return 10;
+}
+
+function applyElementLayer(el) {
+  if (!el) return;
+  el.style.zIndex = String(computeElementLayer(el));
+}
+
 function startResize(e, handleType) {
   e.stopPropagation();
   isResizing = true;
@@ -1627,9 +2046,8 @@ function addElement(kind, x, y, w, h, options = {}) {
   el.style.width = w + 'px';
   el.style.height = h + 'px';
   el.style.opacity = options.opacity !== undefined ? options.opacity : 1;
-  el.style.zIndex = '10'; // All elements on same z-index, selection outline handles visibility
   el.dataset.rotation = options.rotation || 0;
-  
+
   if (actualKind === 'text' || actualKind === 'icon') {
     const content = document.createElement('div');
     content.className = 'el-content';
@@ -1666,7 +2084,21 @@ function addElement(kind, x, y, w, h, options = {}) {
     el.dataset.gradEnd = options.gradEnd || '#1a6ec0';
     el.dataset.gradAngle = options.gradAngle || 135;
     el.dataset.svgName = options.svgName || 'svg';
-    
+
+    let srcValue = options.src;
+    if (!srcValue && options.svgName && options.svgName.startsWith('weather-')) {
+      srcValue = 'weather-icon';
+    }
+    if (srcValue && srcValue.startsWith('weather-')) {
+      srcValue = 'weather-icon';
+    }
+    if (srcValue) {
+      el.dataset.src = srcValue;
+    }
+    if (options.previewSrc) {
+      el.dataset.previewSrc = options.previewSrc;
+    }
+
     const svg = el.querySelector('svg');
     if (svg) {
       svg.style.width = '100%';
@@ -1678,7 +2110,8 @@ function addElement(kind, x, y, w, h, options = {}) {
     updateSVGContent(el);
     console.log('Created SVG element:', options.svgName);
   }
-  
+
+  applyElementLayer(el);
   canvas.appendChild(el);
   console.log('Element appended to canvas. Total elements:', canvas.querySelectorAll('.el').length);
   selectEl(el);
@@ -1920,73 +2353,6 @@ async function applyTemplate(key) {
   setStatus('Failed to load preset', 2000, true);
 }
 
-async function loadWeatherThemes() {
-  try {
-    const response = await fetch('/api/list-weather-themes');
-    if (!response.ok) throw new Error('Failed to list weather themes');
-
-    const data = await response.json();
-    weatherIconBase = data.icon_base || weatherIconBase;
-    let themes = data.themes || [];
-    if (!themes.length) {
-      themes = ['happy-skies', 'soft-skies', 'sunny-day', 'blue-sky-pro'];
-    }
-    availableWeatherThemes = themes;
-
-    const themeEmojis = {
-      'happy-skies': '😊',
-      'soft-skies': '🌈',
-      'sunny-day': '☀️',
-      'blue-sky-pro': '🌤'
-    };
-    
-    const themeLabels = {
-      'happy-skies': 'Happy Skies',
-      'soft-skies': 'Soft Skies',
-      'sunny-day': 'Sunny Day',
-      'blue-sky-pro': 'Blue Sky Pro'
-    };
-    
-    const selector = document.getElementById('weatherThemeSelector');
-    selector.innerHTML = ''; // Clear previous
-    
-    themes.forEach(theme => {
-      const item = document.createElement('div');
-      item.className = 'selector-item';
-      item.dataset.theme = theme;
-      item.innerHTML = `
-        <div class="selector-item-icon">${themeEmojis[theme] || '🌤'}</div>
-        <div class="selector-item-label">${themeLabels[theme] || theme}</div>
-      `;
-      // Click listener is now added in the 'quickAddIcon' listener
-      selector.appendChild(item);
-    });
-
-    updateWeatherThemeSelection();
-    console.log('Loaded weather themes:', themes, 'base:', weatherIconBase);
-    document.getElementById('quickAddIcon').disabled = false;
-  } catch (error) {
-    console.error('Failed to load weather themes:', error);
-    weatherIconBase = '/designer/weather-icons';
-    const fallbackThemes = ['happy-skies', 'soft-skies', 'sunny-day', 'blue-sky-pro'];
-    availableWeatherThemes = fallbackThemes;
-    const selector = document.getElementById('weatherThemeSelector');
-    selector.innerHTML = '';
-    fallbackThemes.forEach(theme => {
-      const item = document.createElement('div');
-      item.className = 'selector-item';
-      item.dataset.theme = theme;
-      item.innerHTML = `
-        <div class="selector-item-icon">🌤</div>
-        <div class="selector-item-label">${theme}</div>
-      `;
-      selector.appendChild(item);
-    });
-    updateWeatherThemeSelection();
-    document.getElementById('quickAddIcon').disabled = false;
-  }
-}
-
 async function loadSVGLibrary() {
   try {
     const response = await fetch('/api/list-svgs');
@@ -2073,7 +2439,16 @@ function exportToJSON() {
       const svgName = el.dataset.svgName || 'svg';
       base.kind = 'svg';
       base.svgName = svgName;
-      base.src = svgName;
+      const storedSrc = el.dataset.src || svgName;
+      base.src = storedSrc;
+      if (storedSrc === 'weather-icon' || svgName.startsWith('weather-')) {
+        base.svgName = 'weather-icon';
+        base.src = 'weather-icon';
+        base.fillType = 'none';
+        if (el.dataset.previewSrc) {
+          base.previewSrc = el.dataset.previewSrc;
+        }
+      }
       base.fillType = el.dataset.fillType || 'none';
       if (base.fillType === 'solid') {
         base.fillColor = el.dataset.fillColor;
@@ -2094,8 +2469,11 @@ function exportToJSON() {
     meta: {
       width: 800,
       height: 480,
-      iconTheme: currentWeatherTheme || renderData?.layout?.meta?.iconTheme || 'happy-skies', // This should be editable
-      pexelsCategory: selectedCategory || null
+      pexelsCategory: selectedCategory || null,
+      city: locationState.city || null,
+      countryCode: locationState.countryCode || null,
+      countryName: locationState.countryName || null,
+      timezone: locationState.timezone || null
     },
     elements: elements
   };
@@ -2104,21 +2482,10 @@ function exportToJSON() {
 async function loadFromJSON(data) {
   canvas.querySelectorAll('.el').forEach(el => el.remove());
   selectEl(null);
-  
+  applyLocationMeta(data?.meta || {});
+
   if (data.meta && data.meta.name) {
     currentPresetName = data.meta.name;
-  }
-
-  if (data.meta && data.meta.iconTheme) {
-    currentWeatherTheme = data.meta.iconTheme;
-  } else {
-    const weatherElement = (data.elements || []).find(el => {
-      const name = el.svgName || el.src || '';
-      return typeof name === 'string' && name.startsWith('weather-');
-    });
-    if (weatherElement) {
-      currentWeatherTheme = (weatherElement.svgName || weatherElement.src).replace('weather-', '') || currentWeatherTheme;
-    }
   }
 
   const metaCategory = data.meta?.pexelsCategory || '';
@@ -2137,47 +2504,53 @@ async function loadFromJSON(data) {
     const options = { ...elem };
 
     if (elementKind === 'svg') {
-      const svgName = elem.svgName || elem.src || '';
-      options.svgName = svgName;
-
-      try {
-        let svgUrl = '';
-        if (svgName && svgName.startsWith('weather-')) {
-          const theme = svgName.replace('weather-', '') || 'happy-skies';
-          svgUrl = buildWeatherIconUrl(theme);
-        } else {
-          svgUrl = buildSvgUrl(svgName);
-        }
-
-        if (svgUrl) {
-          const response = await fetch(svgUrl);
-          if (response.ok) {
-            options.svgContent = await response.text();
+      const storedSrc = elem.src || elem.svgName || '';
+      const svgName = elem.svgName || '';
+      options.svgName = svgName || storedSrc;
+      const isWeatherIcon = storedSrc === 'weather-icon' || (typeof svgName === 'string' && svgName.startsWith('weather-'));
+      if (isWeatherIcon) {
+        const preview = elem.previewSrc || getWeatherIconPreviewUrl();
+        options.svgContent = buildWeatherIconPreviewMarkup(preview);
+        options.svgName = 'weather-icon';
+        options.src = 'weather-icon';
+        options.fillType = 'none';
+        options.previewSrc = preview;
+      } else {
+        const svgTarget = svgName || storedSrc;
+        if (svgTarget) {
+          try {
+            const svgUrl = buildSvgUrl(svgTarget);
+            if (svgUrl) {
+              const response = await fetch(svgUrl);
+              if (response.ok) {
+                options.svgContent = await response.text();
+              }
+            }
+          } catch (error) {
+            console.warn('Failed to hydrate SVG element', svgTarget, error);
           }
         }
-      } catch (error) {
-        console.warn('Failed to hydrate SVG element', svgName, error);
-      }
 
-      if (!options.svgContent && FALLBACK_WEATHER_ICON) {
-        try {
-          const fallbackResponse = await fetch(FALLBACK_WEATHER_ICON);
-          if (fallbackResponse.ok) {
-            options.svgContent = await fallbackResponse.text();
+        if (!options.svgContent && FALLBACK_WEATHER_ICON) {
+          try {
+            const fallbackResponse = await fetch(FALLBACK_WEATHER_ICON);
+            if (fallbackResponse.ok) {
+              options.svgContent = await fallbackResponse.text();
+            }
+          } catch (fallbackError) {
+            console.warn('Fallback SVG load failed', fallbackError);
           }
-        } catch (fallbackError) {
-          console.warn('Fallback SVG load failed', fallbackError);
         }
       }
     }
 
     addElement(elementKind, elem.x, elem.y, elem.w, elem.h, options);
   });
-  
+
   await Promise.all(elementPromises);
   selectEl(null);
   applyDynamicTextToCanvas();
-  updateWeatherThemeSelection();
+  refreshWeatherIconPreviews();
 }
 
 async function saveToCloud() {
@@ -2372,65 +2745,17 @@ document.getElementById('cancelAddInfo').addEventListener('click', () => {
 });
 
 // Weather Icon (was quickAddIcon)
-document.getElementById('quickAddIcon').addEventListener('click', async () => {
-  const modal = document.getElementById('addWeatherModal');
-  const selector = document.getElementById('weatherThemeSelector');
-  
-  // Selector is populated by loadWeatherThemes() on init
-  
-  // Add click handlers to theme items
-  selector.querySelectorAll('.selector-item').forEach(item => {
-    const theme = item.dataset.theme;
-    if (!theme) return;
-    
-    // Clone to remove old listeners and prevent duplicates
-    const newItem = item.cloneNode(true);
-    item.replaceWith(newItem);
-    
-    newItem.addEventListener('click', async () => {
-      const svgUrl = buildWeatherIconUrl(theme);
-
-      try {
-        let svgContent = '';
-        try {
-          const response = await fetch(svgUrl);
-          if (response.ok) {
-            svgContent = await response.text();
-          } else {
-            throw new Error(`HTTP ${response.status}`);
-          }
-        } catch (networkError) {
-          console.warn('Weather icon fetch failed, using fallback', networkError);
-          const fallbackResponse = await fetch(FALLBACK_WEATHER_ICON);
-          if (fallbackResponse.ok) {
-            svgContent = await fallbackResponse.text();
-          } else {
-            throw new Error('Fallback icon not available');
-          }
-        }
-
-        currentWeatherTheme = theme;
-        updateWeatherThemeSelection();
-        addElement('svg', 100, 100, 120, 120, {
-          svgContent,
-          svgName: `weather-${theme}`,
-          fillType: 'none'
-        });
-
-        modal.classList.add('hidden');
-        setStatus(`Added weather icon: ${theme}`, 1500);
-      } catch (error) {
-        console.error('Failed to load weather icon:', error);
-        setStatus(`Failed to load icon: ${error.message}`, 2000, true);
-      }
-    });
+document.getElementById('quickAddIcon').addEventListener('click', () => {
+  const previewUrl = getWeatherIconPreviewUrl();
+  addElement('svg', 100, 100, 120, 120, {
+    svgContent: buildWeatherIconPreviewMarkup(previewUrl),
+    svgName: 'weather-icon',
+    fillType: 'none',
+    src: 'weather-icon',
+    previewSrc: previewUrl
   });
-  
-  modal.classList.remove('hidden');
-});
-
-document.getElementById('cancelAddWeather').addEventListener('click', () => {
-  document.getElementById('addWeatherModal').classList.add('hidden');
+  refreshWeatherIconPreviews();
+  setStatus('Added weather icon', 1500);
 });
 
 // --- Inspector Event Listeners ---
@@ -2481,7 +2806,8 @@ document.getElementById('duplicateBtn').addEventListener('click', () => {
   // Remove selection state from clone
   clone.classList.remove('selected');
   clone.querySelectorAll('.resize-handle').forEach(h => h.remove());
-  
+
+  applyElementLayer(clone);
   canvas.appendChild(clone);
   selectEl(clone); // Select the new clone
   saveAction('Duplicate');
@@ -2934,7 +3260,6 @@ async function init() {
   // Disable API-dependent buttons by default
   document.getElementById('applyTemplateBtn').disabled = true;
   document.getElementById('quickAddFancyBox').disabled = true;
-  document.getElementById('quickAddIcon').disabled = true;
   
   console.log('Initializing Kin:D Designer...');
   
@@ -2942,7 +3267,6 @@ async function init() {
     await Promise.all([
       loadPresets(),
       loadSVGLibrary(),
-      loadWeatherThemes(),
       loadPexelsCategories(),
       fetchRenderData()
     ]);
@@ -2952,7 +3276,7 @@ async function init() {
     }
 
     applyDynamicTextToCanvas();
-    updateWeatherThemeSelection();
+    refreshWeatherIconPreviews();
     console.log('Initialization complete.');
     setStatus('Ready', 0);
 

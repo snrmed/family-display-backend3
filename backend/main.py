@@ -2,10 +2,11 @@ import os
 import json
 import random
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, Any
 from urllib.parse import quote
+from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, HTTPException, Header
 from fastapi.responses import HTMLResponse, Response
@@ -39,7 +40,9 @@ ENABLE_JOKES_API = os.getenv("ENABLE_JOKES_API", "true").lower() == "true"
 ENABLE_EMAIL_USERS = os.getenv("ENABLE_EMAIL_USERS", "false").lower() == "true"
 CITY_MODE = os.getenv("CITY_MODE", "default")
 DEFAULT_CITY = os.getenv("DEFAULT_CITY", "Darwin")
-DEFAULT_ICON_THEME = os.getenv("WEATHER_ICON_PACK", "happy-skies")
+OPENWEATHER_ICON_BASE = "https://openweathermap.org/img/wn"
+OPENWEATHER_ICON_SCALE = os.getenv("OPENWEATHER_ICON_SCALE", "@4x")
+FALLBACK_WEATHER_ICON = "designer/svgs/weather_card_blue.svg"
 RENDER_WIDTH = int(os.getenv("RENDER_WIDTH", "800"))
 RENDER_HEIGHT = int(os.getenv("RENDER_HEIGHT", "480"))
 RENDER_PATH = os.getenv("RENDER_PATH", "backend/web/layouts/base.html")
@@ -205,10 +208,55 @@ def choose_pexels_background(category: str | None) -> dict | None:
     }
 
 
-def resolve_weather_icon_url(icon_theme: str, icon_code: str | None) -> str:
-    """Return a weather icon URL, falling back to day variants when needed."""
+def _openweather_icon_filename(icon_code: str) -> str:
+    scale = OPENWEATHER_ICON_SCALE or "@4x"
+    if not scale.startswith("@"):
+        scale = f"@{scale}"
+    return f"{icon_code}{scale}.png"
 
-    safe_theme = icon_theme or DEFAULT_ICON_THEME
+
+async def _fetch_and_cache_openweather_icon(
+    client: httpx.AsyncClient, icon_code: str
+) -> str | None:
+    """Ensure an OpenWeather icon is cached and return its public URL."""
+
+    filename = _openweather_icon_filename(icon_code)
+    blob_path = f"icons/openweather/{filename}"
+    public_path = f"gcs/{blob_path}"
+
+    if storage_enabled:
+        try:
+            blob = gcs_bucket.blob(blob_path)
+            if blob.exists():
+                return make_public_url(public_path)
+        except Exception as exc:
+            logger.warning(f"Failed to inspect cached icon {blob_path}: {exc}")
+
+    if not storage_enabled:
+        return f"{OPENWEATHER_ICON_BASE}/{filename}"
+
+    icon_url = f"{OPENWEATHER_ICON_BASE}/{filename}"
+
+    try:
+        response = await client.get(icon_url, timeout=10)
+        response.raise_for_status()
+    except Exception as exc:
+        logger.warning(f"OpenWeather icon fetch failed for {icon_code}: {exc}")
+        return None
+
+    try:
+        gcs_write_bytes(blob_path, response.content, "image/png")
+        return make_public_url(public_path)
+    except Exception as exc:
+        logger.warning(f"Failed to cache OpenWeather icon {icon_code}: {exc}")
+        return icon_url
+
+
+async def resolve_openweather_icon(
+    client: httpx.AsyncClient, icon_code: str | None
+) -> str:
+    """Resolve an icon URL, preferring cached copies then day variants."""
+
     candidates: list[str] = []
 
     if icon_code:
@@ -220,28 +268,11 @@ def resolve_weather_icon_url(icon_theme: str, icon_code: str | None) -> str:
         candidates.append("01d")
 
     for code in candidates:
-        if storage_enabled:
-            blob_path = f"assets/weather-icons/{safe_theme}/{code}.svg"
-            try:
-                blob = gcs_bucket.blob(blob_path)
-                if blob.exists():
-                    return make_public_url(f"gcs/{blob_path}")
-            except Exception as exc:
-                logger.warning(f"Failed to check weather icon {blob_path}: {exc}")
-        else:
-            local_roots = [
-                Path("backend/web/designer/weather-icons"),
-                Path("web/designer/weather-icons"),
-            ]
-            for root in local_roots:
-                local_path = root / safe_theme / f"{code}.svg"
-                if local_path.exists():
-                    return make_public_url(f"designer/weather-icons/{safe_theme}/{code}.svg")
+        cached = await _fetch_and_cache_openweather_icon(client, code)
+        if cached:
+            return cached
 
-    fallback_code = candidates[0]
-    if storage_enabled:
-        return make_public_url(f"gcs/assets/weather-icons/{safe_theme}/{fallback_code}.svg")
-    return make_public_url(f"designer/weather-icons/{safe_theme}/{fallback_code}.svg")
+    return make_public_url(FALLBACK_WEATHER_ICON)
 
 
 def rollover_pexels_current(categories: list[str], date_stamp: str) -> dict[str, int]:
@@ -381,18 +412,133 @@ async def get_weather(city: str) -> dict:
                     r = await client.get(url, timeout=5)
                     if r.status_code == 200:
                         data = r.json()
-                        return {
-                            "temp": round(data["main"]["temp"]),
-                            "feels_like": round(data["main"]["feels_like"]),
-                            "humidity": data["main"]["humidity"],
-                            "rain": data.get("rain", {}).get("1h", 0),
-                            "wind": round(data["wind"]["speed"]),
-                            "icon": data["weather"][0]["icon"],
-                            "desc": data["weather"][0]["description"].title()
+                        main_block = data.get("main", {})
+                        wind_block = data.get("wind", {})
+                        rain_block = data.get("rain", {})
+
+                        wind_speed = wind_block.get("speed")
+                        wind_kmh = None
+                        if isinstance(wind_speed, (int, float)):
+                            wind_kmh = round(float(wind_speed) * 3.6)
+
+                        weather: dict[str, Any] = {
+                            "temp": round(main_block.get("temp", 0)),
+                            "feels_like": round(main_block.get("feels_like", 0)),
+                            "humidity": main_block.get("humidity"),
+                            "rain": rain_block.get("1h", 0),
+                            "wind": wind_kmh,
+                            "icon": data.get("weather", [{}])[0].get("icon", "01d"),
+                            "desc": data.get("weather", [{}])[0].get("description", "").title() or "Sunny",
                         }
+
+                        name = data.get("name")
+                        if isinstance(name, str) and name.strip():
+                            weather["city"] = name.strip()
+
+                        country_code = data.get("sys", {}).get("country")
+                        if isinstance(country_code, str) and country_code.strip():
+                            weather["country_code"] = country_code.strip()
+
+                        weather["icon_url"] = await resolve_openweather_icon(
+                            client, weather.get("icon")
+                        )
+
+                        tz_offset = data.get("timezone", 0)
+                        weather["timezone_offset"] = tz_offset
+
+                        coord = data.get("coord", {})
+                        lat = coord.get("lat")
+                        lon = coord.get("lon")
+
+                        if lat is not None and lon is not None:
+                            try:
+                                forecast_url = (
+                                    "https://api.openweathermap.org/data/2.5/forecast"
+                                    f"?lat={lat}&lon={lon}&appid={api_key}&units=metric"
+                                )
+                                forecast_resp = await client.get(forecast_url, timeout=5)
+                                forecast_resp.raise_for_status()
+                                forecast_data = forecast_resp.json()
+
+                                target_date = (
+                                    datetime.now(timezone.utc)
+                                    .astimezone(timezone(timedelta(seconds=tz_offset)))
+                                    .date()
+                                )
+
+                                min_samples: list[float] = []
+                                max_samples: list[float] = []
+
+                                local_timezone = timezone(timedelta(seconds=tz_offset))
+
+                                for entry in forecast_data.get("list", []):
+                                    dt_val = entry.get("dt")
+                                    if dt_val is None:
+                                        continue
+
+                                    local_dt = datetime.fromtimestamp(dt_val, tz=timezone.utc).astimezone(local_timezone)
+                                    if local_dt.date() != target_date:
+                                        continue
+
+                                    main_block = entry.get("main", {})
+                                    min_val = main_block.get("temp_min")
+                                    max_val = main_block.get("temp_max")
+
+                                    if isinstance(min_val, (int, float)):
+                                        min_samples.append(float(min_val))
+                                    if isinstance(max_val, (int, float)):
+                                        max_samples.append(float(max_val))
+
+                                if min_samples:
+                                    weather["temp_min"] = round(sum(min_samples) / len(min_samples))
+                                else:
+                                    api_min = data.get("main", {}).get("temp_min")
+                                    if isinstance(api_min, (int, float)):
+                                        weather["temp_min"] = round(api_min)
+
+                                if max_samples:
+                                    weather["temp_max"] = round(sum(max_samples) / len(max_samples))
+                                else:
+                                    api_max = data.get("main", {}).get("temp_max")
+                                    if isinstance(api_max, (int, float)):
+                                        weather["temp_max"] = round(api_max)
+                            except Exception as exc:
+                                logger.warning(f"OpenWeather forecast failed: {exc}")
+                                api_min = data.get("main", {}).get("temp_min")
+                                api_max = data.get("main", {}).get("temp_max")
+                                if isinstance(api_min, (int, float)):
+                                    weather["temp_min"] = round(api_min)
+                                if isinstance(api_max, (int, float)):
+                                    weather["temp_max"] = round(api_max)
+
+                        if "temp_min" not in weather:
+                            weather["temp_min"] = weather["temp"]
+                        if "temp_max" not in weather:
+                            weather["temp_max"] = weather["temp"]
+
+                        comment_bits: list[str] = []
+                        if weather.get("desc"):
+                            comment_bits.append(weather["desc"])
+                        feels_like = weather.get("feels_like")
+                        if isinstance(feels_like, (int, float)):
+                            comment_bits.append(f"Feels like {feels_like}°C")
+                        humidity = weather.get("humidity")
+                        if isinstance(humidity, (int, float)):
+                            comment_bits.append(f"Humidity {int(humidity)}%")
+                        if isinstance(wind_kmh, (int, float)):
+                            comment_bits.append(f"Winds {int(wind_kmh)} km/h")
+                        rain_amt = weather.get("rain")
+                        if isinstance(rain_amt, (int, float)) and rain_amt > 0:
+                            comment_bits.append(f"Rain {rain_amt} mm")
+                        if comment_bits:
+                            weather["comment"] = " · ".join(comment_bits)
+                        else:
+                            weather["comment"] = weather.get("desc", "") or "Sunny"
+
+                        return weather
             except Exception as e:
                 logger.warning(f"OpenWeather failed: {e}")
-    
+
     return {
         "temp": 33,
         "feels_like": 33,
@@ -400,7 +546,12 @@ async def get_weather(city: str) -> dict:
         "rain": 0,
         "wind": 5,
         "icon": "01d",
-        "desc": "Sunny"
+        "desc": "Sunny",
+        "temp_min": 30,
+        "temp_max": 36,
+        "timezone_offset": 0,
+        "icon_url": make_public_url(FALLBACK_WEATHER_ICON),
+        "comment": "Sunny · Feels like 33°C · Humidity 45% · Winds 5 km/h",
     }
 
 async def get_joke() -> str:
@@ -438,21 +589,65 @@ async def build_render_data(device: str = "familydisplay") -> dict:
             "elements": []
         }
     
-    icon_theme = layout.get("meta", {}).get("iconTheme", DEFAULT_ICON_THEME)
-    
-    city = DEFAULT_CITY
-    if CITY_MODE == "fetch":
-        city = layout.get("meta", {}).get("city", DEFAULT_CITY)
-    
-    weather = await get_weather(city)
-    icon_code = weather.get("icon", "01d")
-    weather["icon_theme"] = icon_theme
-    weather["icon_url"] = resolve_weather_icon_url(icon_theme, icon_code)
-    weather["city"] = city
-    
+    layout_meta = layout.get("meta", {}) if isinstance(layout, dict) else {}
+
+    layout_city = layout_meta.get("city")
+    layout_country = (
+        layout_meta.get("countryCode")
+        or layout_meta.get("country_code")
+        or layout_meta.get("country")
+    )
+    layout_country_name = layout_meta.get("countryName") or layout_meta.get("country_name")
+    layout_timezone = layout_meta.get("timezone") or layout_meta.get("timeZone")
+
+    city_lookup = DEFAULT_CITY
+    if CITY_MODE == "fetch" and layout_city:
+        city_lookup = layout_city
+    if CITY_MODE == "fetch" and layout_city and layout_country:
+        city_lookup = f"{layout_city},{layout_country}"
+
+    weather = await get_weather(city_lookup)
+    if not weather.get("icon_url"):
+        weather["icon_url"] = make_public_url(FALLBACK_WEATHER_ICON)
+
+    if layout_city:
+        weather["city"] = layout_city
+    elif not weather.get("city"):
+        weather["city"] = (city_lookup.split(",")[0]).strip()
+
+    if layout_country:
+        weather["country_code"] = layout_country
+    if layout_country_name:
+        weather["country_name"] = layout_country_name
+
+    tz_offset = weather.get("timezone_offset")
+    now_utc = datetime.now(timezone.utc)
+    now = now_utc
+    tz_identifier = None
+
+    if isinstance(layout_timezone, str) and layout_timezone:
+        try:
+            tz = ZoneInfo(layout_timezone)
+            now = now_utc.astimezone(tz)
+            tz_identifier = layout_timezone
+            offset_seconds = now.utcoffset().total_seconds() if now.utcoffset() else None
+            if offset_seconds is not None:
+                weather["timezone_offset"] = int(offset_seconds)
+        except Exception as exc:
+            logger.warning(f"Failed to apply layout timezone {layout_timezone}: {exc}")
+
+    if tz_identifier is None and isinstance(tz_offset, (int, float)):
+        city_tz = timezone(timedelta(seconds=int(tz_offset)), name=weather.get("city") or "city")
+        now = now_utc.astimezone(city_tz)
+        tz_identifier = city_tz.tzname(now)
+
+    if tz_identifier:
+        weather["timezone_name"] = tz_identifier
+
+    weather["local_datetime"] = now.isoformat()
+
     dad_joke = await get_joke()
 
-    layout_meta = layout.get("meta", {}) if isinstance(layout, dict) else {}
     selected_category = layout_meta.get("pexelsCategory")
     pexels_info = None
 
@@ -473,7 +668,6 @@ async def build_render_data(device: str = "familydisplay") -> dict:
                 "categories": categories,
             }
     
-    now = datetime.now()
     date_str = now.strftime("%a, %d %b")
     
     if storage_enabled:
@@ -719,50 +913,6 @@ def list_presets():
             logger.info(f"Using {len(presets)} local presets")
 
     return {"presets": presets, "base_url": base_url}
-
-
-def _discover_local_weather_themes() -> list[str]:
-    base_dir = Path("backend/web/designer/weather-icons")
-    if not base_dir.exists():
-        return []
-    return sorted([p.name for p in base_dir.iterdir() if p.is_dir()])
-
-
-@app.get("/api/list-weather-themes")
-def list_weather_themes():
-    """List available weather icon themes"""
-    themes: list[str] = []
-    icon_base = None
-
-    if storage_enabled:
-        try:
-            blobs = gcs_bucket.list_blobs(prefix="assets/weather-icons/", delimiter="/")
-            prefixes: list[str] = []
-            for page in blobs.pages:
-                prefixes.extend(page.prefixes)
-            themes = [
-                prefix.rstrip("/").split("/")[-1]
-                for prefix in prefixes
-            ]
-            if themes:
-                icon_base = "/gcs/assets/weather-icons"
-        except Exception as e:
-            logger.error(f"Failed to list weather themes from GCS: {e}")
-
-    if not themes:
-        themes = _discover_local_weather_themes()
-        if themes:
-            icon_base = "/designer/weather-icons"
-
-    if not themes:
-        themes = ["happy-skies", "soft-skies", "sunny-day", "blue-sky-pro"]
-
-    if icon_base is None:
-        icon_base = "/gcs/assets/weather-icons" if storage_enabled else "/designer/weather-icons"
-
-    return {"themes": themes, "icon_base": icon_base}
-
-
 @app.get("/api/pexels/categories")
 def list_pexels_categories():
     """Expose available Pexels categories to the designer"""
