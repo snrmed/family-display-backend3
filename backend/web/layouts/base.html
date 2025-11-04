@@ -191,7 +191,28 @@
           return data.dad_joke || "No joke today.";
         default:
           return el.text || "";
+    }
+    }
+
+    function getLayerZIndex(el, providedKind) {
+      const kind = (providedKind || el.kind || "").toLowerCase();
+      if (kind === "text" || kind === "icon") {
+        return 30;
       }
+
+      if (kind === "svg" || kind === "svg-overlay" || kind === "image") {
+        const source = String(el.src || el.svgName || "");
+        if (source === "weather-icon" || source.startsWith("weather-")) {
+          return 35;
+        }
+        return 20;
+      }
+
+      if (kind === "box") {
+        return 15;
+      }
+
+      return 10;
     }
 
     function getLayerZIndex(el, providedKind) {
