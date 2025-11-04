@@ -213,7 +213,13 @@
     /**
      * Load SVG from URL and inline it
      */
+    function getWeatherIcon(data) {
+      if (data.weather?.tomorrow?.icon) return data.weather.tomorrow.icon;
+      return data.weather?.icon || "01d";
+    }
+    
     async function inlineSvgInto(elDiv, url) {
+        
       console.log("📥 Fetching SVG:", url);
       
       try {
@@ -246,6 +252,31 @@
     /**
      * Render the complete layout
      */
+    
+    // ============================================================
+    // TEXT EFFECTS (Shadow/Glow)
+    // ============================================================
+    function applyTextShadow(element, shadowType, shadowColor, shadowIntensity) {
+      if (!shadowType || shadowType === 'none') {
+        element.style.textShadow = 'none';
+        element.style.filter = 'none';
+        return;
+      }
+      const intensity = parseFloat(shadowIntensity || 1);
+      const color = shadowColor || '#000000';
+      const blur = Math.round(intensity * 4);
+      if (shadowType === 'shadow') {
+        element.style.textShadow = `2px 2px ${blur}px ${color}`;
+      } else if (shadowType === 'glow') {
+        element.style.textShadow = `
+          0 0 ${blur}px ${color},
+          0 0 ${blur * 2}px ${color},
+          0 0 ${blur * 3}px ${color}
+        `;
+      }
+    }
+    
+
     async function renderLayout(data) {
       const canvas = document.getElementById('canvas');
       const layout = data.layout || {};
@@ -295,20 +326,12 @@
           const text = textFromType(el, data);
           elDiv.textContent = text;
           
-          if (el.fontSize) {
-            elDiv.style.fontSize = el.fontSize + 'px';
+          
+          // NEW: text shadow/glow support
+          if (el.textShadowType && el.textShadowType !== 'none') {
+            applyTextShadow(elDiv, el.textShadowType, el.textShadowColor, el.textShadowIntensity);
           }
-          if (el.color) {
-            elDiv.style.color = el.color;
-          }
-          if (el.fontWeight) {
-            elDiv.style.fontWeight = el.fontWeight;
-          }
-          if (el.textAlign) {
-            elDiv.style.textAlign = el.textAlign;
-            if (el.textAlign === 'left') {
-              elDiv.style.justifyContent = 'flex-start';
-            } else if (el.textAlign === 'right') {
+} else if (el.textAlign === 'right') {
               elDiv.style.justifyContent = 'flex-end';
             }
           }
@@ -317,8 +340,15 @@
           let src = el.src || el.svgName || '';
           
           // Handle weather icon special case
-          if (src === 'weather-icon' && data.weather?.icon_url) {
-            src = data.weather.icon_url;
+          if (src === 'weather-icon') {
+            const iconTheme = (data.weather && data.weather.icon_theme) ? data.weather.icon_theme : 'happy-skies';
+            const iconCode = getWeatherIcon(data);
+            // If an explicit URL was provided use it, otherwise build from theme/code under /gcs/assets/weather-icons/
+            if (!data.weather?.icon_url) {
+              src = `/gcs/assets/weather-icons/${iconTheme}/${iconCode}.svg`;
+            } else {
+              src = data.weather.icon_url;
+            }
             elDiv.classList.add('weather-icon');
           }
           
