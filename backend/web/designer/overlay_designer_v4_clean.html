@@ -946,6 +946,9 @@ input[type="range"]::-moz-range-thumb{
             <option value="WEATHER_MINMAX">Min / Max Temp</option>
             <option value="CITY">City Name</option>
             <option value="WEATHER_DESC">Weather Description</option>
+            <option value="WEATHER_DESC_EXTENDED">Weather Extended</option>
+            <option value="TOMORROW_DESC">Tomorrow Forecast</option>
+            <option value="TOMORROW_TEMP">Tomorrow Min/Max</option>
             <option value="DATE">Date</option>
             <option value="JOKE">Dad Joke</option>
           </select>
@@ -1270,25 +1273,25 @@ async function fetchRenderData() {
 function updateInfoTypeDropdown() {
   const select = document.getElementById('textType');
   if (!select) return;
+
   const typeLabels = (typeof window.TYPE_LABELS !== 'undefined' && window.TYPE_LABELS) ? window.TYPE_LABELS : {};
+  const previousValue = select.value;
+  const types = (Array.isArray(availableInfoTypes) && availableInfoTypes.length)
+    ? availableInfoTypes
+    : Object.keys(typeLabels);
+
   select.innerHTML = '';
-  Object.entries(typeLabels).forEach(([key, label]) => {
-    const opt = document.createElement('option');
-    opt.value = key;
-    opt.textContent = label;
-    select.appendChild(opt);
-  });
-};
-  
-  availableInfoTypes.forEach(type => {
+
+  types.forEach(type => {
+    const label = typeLabels[type] || type;
     const option = document.createElement('option');
     option.value = type;
-    option.textContent = typeLabels[type] || type;
+    option.textContent = label;
     select.appendChild(option);
   });
-  
-  if (availableInfoTypes.includes(currentValue)) {
-    select.value = currentValue;
+
+  if (types.includes(previousValue)) {
+    select.value = previousValue;
   }
 }
 
