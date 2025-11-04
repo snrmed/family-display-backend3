@@ -46,6 +46,10 @@ RENDER_WIDTH = int(os.getenv("RENDER_WIDTH", "800"))
 RENDER_HEIGHT = int(os.getenv("RENDER_HEIGHT", "480"))
 RENDER_PATH = os.getenv("RENDER_PATH", "backend/web/layouts/base.html")
 
+BASE_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = BASE_DIR.parent
+STATIC_SEARCH_BASES = [Path.cwd(), BASE_DIR, PROJECT_ROOT]
+
 LOCAL_JOKES = [
     "Why don't scientists trust atoms? Because they make up everything!",
     "What do you call a fake noodle? An impasta!",
@@ -77,6 +81,21 @@ def make_public_url(path: str) -> str:
     if PUBLIC_BASE_URL:
         return f"{PUBLIC_BASE_URL}/{path}"
     return f"/{path}"
+
+
+def resolve_static_dir(*relative_paths: str) -> Path | None:
+    """Find the first existing directory from a list of relative paths."""
+    for relative_path in relative_paths:
+        candidate = Path(relative_path)
+        if candidate.is_absolute() and candidate.exists():
+            return candidate
+
+        for base in STATIC_SEARCH_BASES:
+            base_candidate = (base / relative_path).resolve()
+            if base_candidate.exists():
+                return base_candidate
+
+    return None
 
 
 def gcs_read_json(key: str) -> dict:
@@ -606,9 +625,9 @@ async def list_svgs():
 @app.get("/api/list-presets")
 async def list_presets():
     """List available preset layouts"""
-    presets_dir = Path("web/presets")
-    
-    if presets_dir.exists():
+    presets_dir = resolve_static_dir("web/presets", "backend/web/presets")
+
+    if presets_dir and presets_dir.exists():
         presets = []
         for file in presets_dir.glob("*.json"):
             presets.append(file.stem)
@@ -630,18 +649,22 @@ async def list_pexels_categories():
 
 # Static Files - FIXED for container working directory
 try:
-    presets_dir = Path("web/presets")
-    if presets_dir.exists() and presets_dir.is_dir():
-        app.mount("/presets", StaticFiles(directory="web/presets"), name="presets")
+    presets_dir = resolve_static_dir("web/presets", "backend/web/presets")
+    if presets_dir and presets_dir.is_dir():
+        app.mount("/presets", StaticFiles(directory=str(presets_dir)), name="presets")
         logger.info(f"✓ Mounted /presets from {presets_dir}")
+    else:
+        logger.info("/presets directory not found; skipping mount")
 except Exception as e:
     logger.warning(f"Could not mount /presets: {e}")
 
 try:
-    fonts_dir = Path("web/fonts")
-    if fonts_dir.exists() and fonts_dir.is_dir():
-        app.mount("/fonts", StaticFiles(directory="web/fonts"), name="fonts")
+    fonts_dir = resolve_static_dir("web/fonts", "backend/web/fonts")
+    if fonts_dir and fonts_dir.is_dir():
+        app.mount("/fonts", StaticFiles(directory=str(fonts_dir)), name="fonts")
         logger.info(f"✓ Mounted /fonts from {fonts_dir}")
+    else:
+        logger.info("/fonts directory not found; skipping mount")
 except Exception as e:
     logger.warning(f"Could not mount /fonts: {e}")
 
