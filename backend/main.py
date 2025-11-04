@@ -5,7 +5,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, List
 from urllib.parse import quote
 
 from fastapi import FastAPI, HTTPException, Header, Request
@@ -29,7 +29,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Configuration
+# ============================================================================
+# CONFIGURATION
+# ============================================================================
+
 PORT = int(os.getenv("PORT", "8080"))
 GCS_BUCKET = os.getenv("GCS_BUCKET", "family-display-packs")
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "adm_860510")
@@ -43,12 +46,13 @@ RENDER_WIDTH = int(os.getenv("RENDER_WIDTH", "800"))
 RENDER_HEIGHT = int(os.getenv("RENDER_HEIGHT", "480"))
 RENDER_PATH = os.getenv("RENDER_PATH", "backend/web/layouts/base.html")
 
-# Default Pexels categories
+# UPDATED: Expanded Pexels categories
 PEXELS_CATEGORIES = [
-    c.strip() for c in os.getenv(
-        "PEXELS_CATEGORIES",
-        "abstract,geometric,minimal,paper-collage"
-    ).split(",") if c.strip()
+    "abstract",
+    "geometric",
+    "paper-collage",
+    "kids-shapes",
+    "minimal"
 ]
 
 LOCAL_JOKES = [
@@ -59,12 +63,12 @@ LOCAL_JOKES = [
 
 # Storage
 storage_enabled = False
-gcs_bucket = None
+bucket = None
 playwright_browser = None
 
 try:
     storage_client = storage.Client()
-    gcs_bucket = storage_client.bucket(GCS_BUCKET)
+    bucket = storage_client.bucket(GCS_BUCKET)
     storage_enabled = True
     logger.info(f"✓ GCS enabled: {GCS_BUCKET}")
 except Exception as e:
@@ -103,7 +107,7 @@ def gcs_read_json(key: str) -> dict:
     """Read JSON from GCS"""
     if not storage_enabled:
         raise RuntimeError("GCS not enabled")
-    blob = gcs_bucket.blob(key)
+    blob = bucket.blob(key)
     if not blob.exists():
         raise FileNotFoundError(f"Blob not found: {key}")
     return json.loads(blob.download_as_text(encoding='utf-8'))
@@ -112,7 +116,7 @@ def gcs_write_json(key: str, data: dict):
     """Write JSON to GCS"""
     if not storage_enabled:
         raise RuntimeError("GCS not enabled")
-    blob = gcs_bucket.blob(key)
+    blob = bucket.blob(key)
     blob.upload_from_string(json.dumps(data, indent=2), content_type="application/json")
     logger.info(f"✓ Wrote JSON to {key}")
 
@@ -120,12 +124,12 @@ def gcs_write_bytes(key: str, data: bytes, content_type: str = "application/octe
     """Write bytes to GCS"""
     if not storage_enabled:
         raise RuntimeError("GCS not enabled")
-    blob = gcs_bucket.blob(key)
+    blob = bucket.blob(key)
     blob.upload_from_string(data, content_type=content_type)
     logger.info(f"✓ Wrote {len(data)} bytes to {key}")
 
 # ============================================================================
-# DEVICE CONFIG (NEW)
+# DEVICE CONFIG
 # ============================================================================
 
 def get_device_config(device_id: str) -> dict:
@@ -169,8 +173,124 @@ def save_device_config(device_id: str, config: dict):
 # DATA PROVIDERS
 # ============================================================================
 
+async def generate_extended_description(city: str, lat: float, lon: float, api_key: str, current_data: dict) -> str:
+    """Generate extended weather description from forecast - NEW"""
+    try:
+        async with httpx.AsyncClient() as client:
+            # Get forecast
+            forecast_url = f"https://api.openweathermap.org/data/2.5/forecast?lat={lat}&lon={lon}&appid={api_key}&units=metric"
+            forecast_resp = await client.get(forecast_url, timeout=5)
+            forecast_resp.raise_for_status()
+            forecast_data = forecast_resp.json()
+            
+            # Current description
+            current_desc = current_data["weather"][0]["description"].title()
+            current_temp = round(current_data["main"]["temp"])
+            
+            # Analyze next 6-9 hours (next 3 forecast entries)
+            rain_chance = 0
+            max_rain = 0
+            temp_trend = []
+            
+            for i, entry in enumerate(forecast_data["list"][:3]):
+                # Rain probability
+                if "pop" in entry:
+                    rain_chance = max(rain_chance, entry["pop"] * 100)
+                
+                # Rain amount
+                if "rain" in entry:
+                    max_rain = max(max_rain, entry["rain"].get("3h", 0))
+                
+                # Temperature trend
+                temp_trend.append(round(entry["main"]["temp"]))
+            
+            # Build description
+            parts = [f"{current_desc}, {current_temp}°C"]
+            
+            # Add rain forecast
+            if rain_chance > 30:
+                if max_rain > 5:
+                    parts.append(f"{round(rain_chance)}% chance of heavy rain later")
+                elif max_rain > 0:
+                    parts.append(f"{round(rain_chance)}% chance of rain later")
+                else:
+                    parts.append(f"{round(rain_chance)}% chance of showers later")
+            
+            # Add temperature trend
+            if len(temp_trend) >= 3:
+                future_temp = temp_trend[-1]
+                temp_change = future_temp - current_temp
+                
+                if temp_change >= 4:
+                    parts.append(f"warming to {future_temp}°C")
+                elif temp_change <= -4:
+                    parts.append(f"cooling to {future_temp}°C")
+            
+            return " with ".join(parts) if len(parts) > 1 else parts[0]
+    
+    except Exception as e:
+        logger.warning(f"Extended description failed: {e}")
+        return f"{current_desc}, {current_temp}°C"
+
+
+async def get_tomorrow_forecast(city: str, lat: float, lon: float, api_key: str, tz_offset: int) -> dict:
+    """Get tomorrow's weather forecast - NEW"""
+    try:
+        async with httpx.AsyncClient() as client:
+            forecast_url = f"https://api.openweathermap.org/data/2.5/forecast?lat={lat}&lon={lon}&appid={api_key}&units=metric"
+            forecast_resp = await client.get(forecast_url, timeout=5)
+            forecast_resp.raise_for_status()
+            forecast_data = forecast_resp.json()
+            
+            # Get tomorrow's date in local timezone
+            local_timezone = timezone(timedelta(seconds=tz_offset))
+            tomorrow_date = (
+                datetime.now(timezone.utc)
+                .astimezone(local_timezone)
+                + timedelta(days=1)
+            ).date()
+            
+            # Find all entries for tomorrow
+            tomorrow_entries = []
+            for entry in forecast_data.get("list", []):
+                dt_val = entry.get("dt")
+                if dt_val:
+                    local_dt = datetime.fromtimestamp(dt_val, tz=timezone.utc).astimezone(local_timezone)
+                    if local_dt.date() == tomorrow_date:
+                        tomorrow_entries.append(entry)
+            
+            if not tomorrow_entries:
+                return None
+            
+            # Calculate tomorrow's min/max temps
+            temps = [round(e["main"]["temp"]) for e in tomorrow_entries]
+            
+            # Get most common weather condition for tomorrow
+            conditions = [e["weather"][0]["description"] for e in tomorrow_entries]
+            most_common = max(set(conditions), key=conditions.count)
+            
+            # Check for rain tomorrow
+            rain_chance = max([e.get("pop", 0) * 100 for e in tomorrow_entries])
+            
+            # Build tomorrow's description
+            desc_parts = [f"{most_common.title()}, {min(temps)}°-{max(temps)}°C"]
+            if rain_chance > 30:
+                desc_parts.append(f"{round(rain_chance)}% chance of rain")
+            
+            return {
+                "temp_min": min(temps),
+                "temp_max": max(temps),
+                "desc": " with ".join(desc_parts),
+                "icon": tomorrow_entries[len(tomorrow_entries)//2]["weather"][0]["icon"]
+            }
+    
+    except Exception as e:
+        logger.warning(f"Tomorrow forecast failed: {e}")
+        return None
+
+
 async def get_weather(city: str) -> dict:
-    """Get weather data from OpenWeather"""
+    """Get weather data with extended description and tomorrow's forecast - UPDATED"""
     if ENABLE_OPENWEATHER:
         api_key = os.getenv("OPENWEATHER_KEY")
         if api_key:
@@ -194,17 +314,15 @@ async def get_weather(city: str) -> dict:
                         tz_offset = data.get("timezone", 0)
                         weather["timezone_offset"] = tz_offset
 
-                        # Get forecast for min/max
+                        # Get coordinates
                         coord = data.get("coord", {})
                         lat = coord.get("lat")
                         lon = coord.get("lon")
 
                         if lat is not None and lon is not None:
+                            # Get today's min/max from forecast
                             try:
-                                forecast_url = (
-                                    "https://api.openweathermap.org/data/2.5/forecast"
-                                    f"?lat={lat}&lon={lon}&appid={api_key}&units=metric"
-                                )
+                                forecast_url = f"https://api.openweathermap.org/data/2.5/forecast?lat={lat}&lon={lon}&appid={api_key}&units=metric"
                                 forecast_resp = await client.get(forecast_url, timeout=5)
                                 forecast_resp.raise_for_status()
                                 forecast_data = forecast_resp.json()
@@ -217,7 +335,6 @@ async def get_weather(city: str) -> dict:
 
                                 min_samples: list[float] = []
                                 max_samples: list[float] = []
-
                                 local_timezone = timezone(timedelta(seconds=tz_offset))
 
                                 for entry in forecast_data.get("list", []):
@@ -245,13 +362,30 @@ async def get_weather(city: str) -> dict:
                                     
                             except Exception as exc:
                                 logger.warning(f"OpenWeather forecast failed: {exc}")
-                                # Fallback to current temp
                                 api_min = data.get("main", {}).get("temp_min")
                                 api_max = data.get("main", {}).get("temp_max")
                                 if isinstance(api_min, (int, float)):
                                     weather["temp_min"] = round(api_min)
                                 if isinstance(api_max, (int, float)):
                                     weather["temp_max"] = round(api_max)
+
+                            # NEW: Generate extended description
+                            try:
+                                extended_desc = await generate_extended_description(
+                                    city, lat, lon, api_key, data
+                                )
+                                weather["desc_extended"] = extended_desc
+                            except Exception as e:
+                                logger.warning(f"Extended description failed: {e}")
+                                weather["desc_extended"] = weather["desc"]
+                            
+                            # NEW: Get tomorrow's forecast
+                            try:
+                                tomorrow = await get_tomorrow_forecast(city, lat, lon, api_key, tz_offset)
+                                if tomorrow:
+                                    weather["tomorrow"] = tomorrow
+                            except Exception as e:
+                                logger.warning(f"Tomorrow forecast failed: {e}")
 
                         # Ensure temp_min and temp_max exist
                         if "temp_min" not in weather:
@@ -272,10 +406,12 @@ async def get_weather(city: str) -> dict:
         "wind": 5,
         "icon": "01d",
         "desc": "Sunny",
+        "desc_extended": "Sunny with clear skies",
         "temp_min": 30,
         "temp_max": 36,
         "timezone_offset": 0,
     }
+
 
 async def get_joke() -> str:
     """Get dad joke"""
@@ -294,16 +430,46 @@ async def get_joke() -> str:
     
     return random.choice(LOCAL_JOKES)
 
+
 def choose_pexels_background(category: str = None) -> dict:
-    """Choose a Pexels image (placeholder)"""
-    return None
+    """Choose a random Pexels image from specified category - FIXED"""
+    if not storage_enabled:
+        return None
+    
+    try:
+        # Default to first category if none specified
+        if not category or category not in PEXELS_CATEGORIES:
+            category = PEXELS_CATEGORIES[0]
+        
+        # List all files in the category folder
+        prefix = f"pexels/current/{category}_"
+        blobs = list(bucket.list_blobs(prefix=prefix))
+        
+        if not blobs:
+            logger.warning(f"No Pexels images found for category: {category}")
+            return None
+        
+        # Pick random image from category
+        selected_blob = random.choice(blobs)
+        url = make_public_url(f"gcs/{selected_blob.name}")
+        
+        return {
+            "category": category,
+            "image": selected_blob.name.split("/")[-1],
+            "path": selected_blob.name,
+            "url": url
+        }
+    except Exception as e:
+        logger.warning(f"Pexels background selection failed: {e}")
+        return None
+
 
 def get_pexels_categories() -> list:
     """Get available Pexels categories"""
     return PEXELS_CATEGORIES
 
 # ============================================================================
-# RENDER DATA (UPDATED)
+# RENDER DATA
 # ============================================================================
 
 async def build_render_data(device_id: str = "familydisplay") -> dict:
@@ -362,15 +528,16 @@ async def build_render_data(device_id: str = "familydisplay") -> dict:
         bg_url = pexels_info["url"]
     else:
         bg_url = make_public_url("gcs/pexels/current/abstract_0.jpg")
-        if ENABLE_PEXELS:
-            categories = get_pexels_categories()
-            pexels_info = {
-                "category": selected_category or (categories[0] if categories else None),
-                "image": None,
-                "path": None,
-                "url": bg_url,
-                "categories": categories,
-            }
+    
+    if ENABLE_PEXELS:
+        categories = get_pexels_categories()
+        pexels_info = {
+            "category": selected_category or (categories[0] if categories else None),
+            "image": pexels_info.get("image") if pexels_info else None,
+            "path": pexels_info.get("path") if pexels_info else None,
+            "url": bg_url,
+            "categories": categories,
+        }
     
     date_str = now.strftime("%a, %d %b")
     
@@ -387,9 +554,10 @@ async def build_render_data(device_id: str = "familydisplay") -> dict:
         "bg_url": bg_url,
         "pexels": pexels_info,
         "svg_base": svg_base,
-        "device": device_config,  # Include device config in response
+        "device": device_config,
         "timestamp": now.isoformat()
     }
+
 
 async def render_html_to_png(html_path: str, context: Dict[str, Any]) -> bytes:
     """Render base.html to PNG using Playwright"""
@@ -428,9 +596,14 @@ async def root():
         "features": {
             "device_config": True,
             "australian_cities": True,
-            "timezone_support": True
+            "timezone_support": True,
+            "extended_weather": True,
+            "tomorrow_forecast": True,
+            "pexels_randomization": True,
+            "text_shadows": True
         }
     }
+
 
 # Device Config Routes
 @app.get("/v1/devices/{device_id}/config")
@@ -443,6 +616,7 @@ def api_get_device_config(device_id: str):
         logger.error(f"Failed to get device config: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.post("/v1/devices/{device_id}/config")
 async def api_save_device_config(device_id: str, request: Request):
     """Save device configuration"""
@@ -453,6 +627,7 @@ async def api_save_device_config(device_id: str, request: Request):
     except Exception as e:
         logger.error(f"Failed to save device config: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 # Layout Routes
 @app.get("/v1/devices/{device_id}/layouts/current")
@@ -468,6 +643,7 @@ def api_get_layout(device_id: str):
         logger.error(f"Failed to get layout: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.post("/v1/devices/{device_id}/layouts/current")
 async def api_save_layout(device_id: str, request: Request):
     """Save layout for device"""
@@ -480,6 +656,7 @@ async def api_save_layout(device_id: str, request: Request):
         logger.error(f"Failed to save layout: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 # Render Data Route
 @app.get("/v1/render_data")
 async def get_render_data(device: str = "familydisplay"):
@@ -491,6 +668,7 @@ async def get_render_data(device: str = "familydisplay"):
         logger.error(f"Failed to build render data: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 # Frame Route
 @app.get("/v1/frame")
 async def get_frame(device: str = "familydisplay"):
@@ -499,76 +677,85 @@ async def get_frame(device: str = "familydisplay"):
         raise HTTPException(status_code=503, detail="Rendering disabled")
     
     try:
-        data = await build_render_data(device)
-        png_bytes = await render_html_to_png(RENDER_PATH, data)
+        context = await build_render_data(device)
+        png_bytes = await render_html_to_png(RENDER_PATH, context)
+        
+        # Save to GCS
+        if storage_enabled:
+            render_key = f"devices/{device}/renders/latest.png"
+            gcs_write_bytes(render_key, png_bytes, "image/png")
         
         return Response(content=png_bytes, media_type="image/png")
     except Exception as e:
-        logger.error(f"Failed to render frame: {e}")
+        logger.error(f"Render failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 # Designer Route
 @app.get("/designer/", response_class=HTMLResponse)
-def get_designer():
+async def designer():
     """Serve designer HTML"""
-    paths = [
-        "backend/web/designer/overlay_designer_v4_clean.html",
-        "web/designer/overlay_designer_v4_clean.html",
-        "overlay_designer_v4_clean.html"
-    ]
+    designer_path = Path("backend/web/designer/overlay_designer_v4_clean.html")
+    if not designer_path.exists():
+        designer_path = Path("web/designer/overlay_designer_v4_clean.html")
     
-    for path in paths:
-        if os.path.exists(path):
-            logger.info(f"Serving designer from: {path}")
-            with open(path, "r", encoding="utf-8") as f:
-                return f.read()
-    
-    logger.error("Designer HTML not found in any path")
-    return "<h1>Designer not found</h1><p>Checked paths: " + ", ".join(paths) + "</p>"
+    if designer_path.exists():
+        return HTMLResponse(content=designer_path.read_text())
+    raise HTTPException(status_code=404, detail="Designer not found")
 
-# List SVGs
+
+# SVG List Route
 @app.get("/api/list-svgs")
-def list_svgs():
+async def list_svgs():
     """List available SVG files"""
-    if storage_enabled:
-        try:
-            blobs = gcs_bucket.list_blobs(prefix="assets/svgs/")
-            svgs = [blob.name.split('/')[-1] for blob in blobs if blob.name.endswith('.svg')]
-            return {"svgs": svgs, "base": make_public_url("gcs/assets/svgs")}
-        except Exception as e:
-            logger.error(f"Failed to list SVGs from GCS: {e}")
-    
-    # Fallback to local
-    local_path = Path("backend/web/designer/svgs")
-    if local_path.exists():
-        svgs = [f.name for f in local_path.glob("*.svg")]
-        return {"svgs": svgs, "base": "/designer/svgs"}
-    
-    return {"svgs": [], "base": ""}
-
-# List Presets
-@app.get("/api/list-presets")
-def list_presets():
-    """List available preset layouts"""
-    presets = []
-    
-    for path in ["backend/web/presets", "web/presets", "presets"]:
-        preset_path = Path(path)
-        if preset_path.exists():
-            presets = [f.stem for f in preset_path.glob("*.json")]
-            break
-    
-    return {"presets": presets}
-
-# GCS Proxy
-@app.get("/gcs/{path:path}")
-async def gcs_proxy(path: str):
-    """Proxy GCS assets"""
     if not storage_enabled:
-        raise HTTPException(status_code=503, detail="Storage not enabled")
+        return {"svgs": []}
     
     try:
-        blob = gcs_bucket.blob(path)
+        blobs = bucket.list_blobs(prefix="assets/svgs/")
+        svgs = []
+        for blob in blobs:
+            if blob.name.endswith('.svg'):
+                filename = blob.name.split('/')[-1]
+                svgs.append({
+                    "name": filename,
+                    "path": f"/gcs/{blob.name}",
+                    "url": make_public_url(f"gcs/{blob.name}")
+                })
+        return {"svgs": svgs}
+    except Exception as e:
+        logger.error(f"Failed to list SVGs: {e}")
+        return {"svgs": []}
+
+
+# Presets List Route
+@app.get("/api/list-presets")
+async def list_presets():
+    """List available preset layouts"""
+    presets_dir = Path("backend/web/presets")
+    if not presets_dir.exists():
+        presets_dir = Path("web/presets")
+    
+    if presets_dir.exists():
+        presets = []
+        for file in presets_dir.glob("*.json"):
+            presets.append({
+                "name": file.stem,
+                "path": f"/presets/{file.name}"
+            })
+        return {"presets": presets}
+    return {"presets": []}
+
+
+# GCS Asset Proxy
+@app.get("/gcs/{path:path}")
+async def gcs_proxy(path: str):
+    """Proxy GCS assets through HTTP"""
+    if not storage_enabled:
+        raise HTTPException(status_code=503, detail="GCS not enabled")
+    
+    try:
+        blob = bucket.blob(path)
         if not blob.exists():
             raise HTTPException(status_code=404, detail="Asset not found")
         
@@ -592,6 +779,37 @@ async def gcs_proxy(path: str):
         logger.error(f"GCS proxy error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+# Admin Routes
+@app.get("/admin/render_now")
+async def admin_render_now(token: str, device: str = "familydisplay"):
+    """Force immediate render"""
+    if token != ADMIN_TOKEN:
+        raise HTTPException(status_code=403, detail="Invalid token")
+    
+    if not ENABLE_RENDERING:
+        raise HTTPException(status_code=503, detail="Rendering disabled")
+    
+    try:
+        context = await build_render_data(device)
+        png_bytes = await render_html_to_png(RENDER_PATH, context)
+        
+        # Save to GCS
+        if storage_enabled:
+            render_key = f"devices/{device}/renders/latest.png"
+            gcs_write_bytes(render_key, png_bytes, "image/png")
+            
+            # Also save dated version
+            now = datetime.now(timezone.utc)
+            dated_key = f"devices/{device}/renders/{now.strftime('%Y-%m-%d_%H-%M-%S')}.png"
+            gcs_write_bytes(dated_key, png_bytes, "image/png")
+        
+        return {"status": "success", "message": f"Rendered {device}", "size": len(png_bytes)}
+    except Exception as e:
+        logger.error(f"Admin render failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # Static file mounts
 if os.path.exists("web"):
     app.mount("/web", StaticFiles(directory="web"), name="web")
@@ -613,6 +831,7 @@ if os.path.exists("backend/web/designer/weather-icons"):
         name="designer-weather-icons",
     )
 
+
 # Playwright lifecycle
 @app.on_event("startup")
 async def startup():
@@ -629,6 +848,7 @@ async def startup():
             logger.error(f"Failed to launch Playwright: {e}")
             playwright_browser = None
 
+
 @app.on_event("shutdown")
 async def shutdown():
     """Cleanup Playwright on shutdown"""
@@ -637,6 +857,7 @@ async def shutdown():
     if playwright_browser:
         await playwright_browser.close()
         logger.info("✓ Playwright browser closed")
+
 
 if __name__ == "__main__":
     import uvicorn
