@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Kin:D Designer v4</title>
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<link rel="stylesheet" href="/fonts/fonts.css">
 <style>
 :root{
   --bg:#0f0f0f;
@@ -26,7 +27,7 @@
 *{box-sizing:border-box;margin:0;padding:0}
 
 body{
-  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  font-family:var(--font-ui, -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif);
   background:var(--bg);
   color:var(--text);
   overflow:hidden;
@@ -476,6 +477,9 @@ body{
   cursor:pointer;
   text-align:center;
   transition:all 0.2s;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
 }
 
 .grid-item:hover{
@@ -483,9 +487,27 @@ body{
   background:var(--panel-hover);
 }
 
-.grid-item-icon{
-  font-size:28px;
+.grid-item-preview{
+  width:100%;
+  height:90px;
+  background:var(--panel-hover);
+  border-radius:6px;
   margin-bottom:8px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  overflow:hidden;
+}
+
+.grid-item-preview img{
+  max-width:100%;
+  max-height:100%;
+  object-fit:contain;
+}
+
+.grid-item-preview.grid-item-fallback{
+  font-size:28px;
+  color:var(--text-muted);
 }
 
 .grid-item-label{
@@ -573,6 +595,7 @@ body{
     <button class="btn" id="undoBtn">↶ Undo</button>
     <button class="btn" id="redoBtn">↷ Redo</button>
     <button class="btn" id="exportBtn">📥 Export JSON</button>
+    <button class="btn" id="pngBtn">🖼️ Export PNG</button>
     <button class="btn btn-primary" id="saveBtn">💾 Save Layout</button>
   </div>
 </div>
@@ -787,6 +810,10 @@ body{
           <input type="color" id="textColor" value="#ffffff" onchange="updateTextStyle()">
         </div>
         <div class="form-group">
+          <label class="form-label">Font Family</label>
+          <select class="form-select" id="fontFamily" onchange="updateTextStyle()"></select>
+        </div>
+        <div class="form-group">
           <label class="form-label">Font Weight</label>
           <select class="form-select" id="fontWeight" onchange="updateTextStyle()">
             <option value="400">Normal</option>
@@ -906,6 +933,22 @@ const GRID_SIZE = 20;
 const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 480;
 
+const FONT_OPTIONS = [
+  { value: 'Space Grotesk', label: 'Space Grotesk' },
+  { value: 'Inter', label: 'Inter' },
+  { value: 'Plus Jakarta Sans', label: 'Plus Jakarta Sans' },
+  { value: 'Public Sans', label: 'Public Sans' },
+  { value: 'Outfit', label: 'Outfit' },
+  { value: 'Manrope', label: 'Manrope' },
+  { value: 'Roboto', label: 'Roboto' },
+  { value: 'Source Sans 3', label: 'Source Sans 3' },
+  { value: 'Atkinson Hyperlegible', label: 'Atkinson Hyperlegible' },
+  { value: 'Merriweather', label: 'Merriweather' },
+  { value: 'Noto Sans', label: 'Noto Sans' }
+];
+
+const DEFAULT_FONT_FAMILY = FONT_OPTIONS[0].value;
+
 // Australian cities with timezones
 const AUSTRALIAN_CITIES = {
   'Darwin': { timezone: 'Australia/Darwin', display: 'Darwin, NT' },
@@ -926,6 +969,13 @@ let selectedEl = null;
 let svgLibrary = [];
 let presets = [];
 let availableInfoTypes = [];
+
+function addInfoType(type) {
+  if (!type) return;
+  if (!availableInfoTypes.includes(type)) {
+    availableInfoTypes.push(type);
+  }
+}
 
 let isDragging = false;
 let isResizing = false;
@@ -958,12 +1008,30 @@ const iconThemeSelect = document.getElementById('iconThemeSelect');
 
 async function init() {
   console.log('🎨 Initializing Kin:D Designer v4...');
-  
+
   drawGrid();
+  populateFontOptions();
   setupEventListeners();
   
   // Always show setup modal on load
   showSetupModal();
+}
+
+function populateFontOptions() {
+  const select = document.getElementById('fontFamily');
+  if (!select) return;
+
+  select.innerHTML = '';
+
+  FONT_OPTIONS.forEach(font => {
+    const option = document.createElement('option');
+    option.value = font.value;
+    option.textContent = font.label;
+    option.style.fontFamily = `'` + font.value + `', sans-serif`;
+    select.appendChild(option);
+  });
+
+  select.value = DEFAULT_FONT_FAMILY;
 }
 
 function showSetupModal() {
@@ -1148,18 +1216,37 @@ async function fetchRenderData() {
     
     // Build available info types
     availableInfoTypes = ['CUSTOM'];
-    
+
     if (renderData.weather) {
-      availableInfoTypes.push('TEMP', 'CITY', 'WEATHER_DESC');
-      
+      addInfoType('TEMP');
+      addInfoType('CITY');
+      addInfoType('WEATHER_DESC');
+
       if (renderData.weather.temp_min != null && renderData.weather.temp_max != null) {
-        availableInfoTypes.push('WEATHER_MINMAX');
+        addInfoType('WEATHER_MINMAX');
       }
+
+      if (renderData.weather.desc_extended) {
+        addInfoType('WEATHER_DESC_EXTENDED');
+      }
+
+      if (renderData.weather.tomorrow) {
+        if (renderData.weather.tomorrow.desc) {
+          addInfoType('TOMORROW_DESC');
+        }
+        if (renderData.weather.tomorrow.temp_min != null && renderData.weather.tomorrow.temp_max != null) {
+          addInfoType('TOMORROW_TEMP');
+        }
+      }
+
+      if (renderData.weather.humidity != null) addInfoType('HUMIDITY');
+      if (renderData.weather.rain != null) addInfoType('RAIN');
+      if (renderData.weather.wind != null) addInfoType('WIND');
     }
-    
-    if (renderData.date) availableInfoTypes.push('DATE');
-    if (renderData.dad_joke) availableInfoTypes.push('JOKE');
-    
+
+    if (renderData.date) addInfoType('DATE');
+    if (renderData.dad_joke) addInfoType('JOKE');
+
     updateInfoTypeDropdown();
     
     return renderData;
@@ -1317,27 +1404,50 @@ function showSVGModal() {
   
   grid.innerHTML = '';
   
+  if (svgLibrary.length === 0) {
+    const emptyState = document.createElement('div');
+    emptyState.style.gridColumn = '1 / -1';
+    emptyState.style.padding = '20px';
+    emptyState.style.textAlign = 'center';
+    emptyState.style.color = 'var(--text-muted)';
+    emptyState.textContent = 'No SVGs available yet';
+    grid.appendChild(emptyState);
+  }
+
   svgLibrary.forEach(svg => {
+    const name = svg.name || svg;
+    const labelText = name.replace('.svg', '');
+    const previewUrl = svg.url || (renderData?.svg_base ? `${renderData.svg_base}/${name}` : `/designer/svgs/${name}`);
+
     const item = document.createElement('div');
     item.className = 'grid-item';
     item.onclick = () => {
-      addSVGElement(svg.name || svg);
+      addSVGElement(name);
       closeModal('svgModal');
     };
-    
-    const icon = document.createElement('div');
-    icon.className = 'grid-item-icon';
-    icon.textContent = '★';
-    
+
+    const preview = document.createElement('div');
+    preview.className = 'grid-item-preview';
+
+    const img = document.createElement('img');
+    img.src = previewUrl;
+    img.alt = labelText;
+    img.onerror = () => {
+      preview.classList.add('grid-item-fallback');
+      preview.textContent = '★';
+      img.remove();
+    };
+    preview.appendChild(img);
+
     const label = document.createElement('div');
     label.className = 'grid-item-label';
-    label.textContent = (svg.name || svg).replace('.svg', '');
-    
-    item.appendChild(icon);
+    label.textContent = labelText;
+
+    item.appendChild(preview);
     item.appendChild(label);
     grid.appendChild(item);
   });
-  
+
   modal.classList.remove('hidden');
 }
 
@@ -1359,7 +1469,8 @@ function quickAddText() {
     type: 'CUSTOM',
     fontSize: 24,
     color: '#ffffff',
-    fontWeight: '600'
+    fontWeight: '600',
+    fontFamily: DEFAULT_FONT_FAMILY
   });
 }
 
@@ -1411,8 +1522,11 @@ function addElement(kind, x, y, w, h, options = {}) {
     content.style.fontSize = (options.fontSize || 24) + 'px';
     content.style.color = options.color || '#ffffff';
     content.style.fontWeight = options.fontWeight || '400';
+    const fontFamily = options.fontFamily || DEFAULT_FONT_FAMILY;
+    content.style.fontFamily = `'` + fontFamily + `', sans-serif`;
+    el.dataset.fontFamily = fontFamily;
     el.appendChild(content);
-    
+
     el.dataset.type = options.type || 'CUSTOM';
     
     if (options.type && options.type !== 'CUSTOM') {
@@ -1554,7 +1668,14 @@ function updateInspector() {
     document.getElementById('fontSizeValue').textContent = parseInt(style.fontSize) + 'px';
     document.getElementById('textColor').value = rgbToHex(style.color);
     document.getElementById('fontWeight').value = style.fontWeight;
-    
+
+    const fontSelect = document.getElementById('fontFamily');
+    if (fontSelect) {
+      const currentFont = selectedEl.dataset.fontFamily || extractPrimaryFont(style.fontFamily);
+      const isValid = FONT_OPTIONS.some(option => option.value === currentFont);
+      fontSelect.value = isValid ? currentFont : DEFAULT_FONT_FAMILY;
+    }
+
     // Show/hide custom text group
     const customGroup = document.getElementById('customTextGroup');
     customGroup.style.display = selectedEl.dataset.type === 'CUSTOM' ? 'block' : 'none';
@@ -1640,13 +1761,16 @@ function updateTextStyle() {
   const fontSize = document.getElementById('fontSize').value;
   const color = document.getElementById('textColor').value;
   const weight = document.getElementById('fontWeight').value;
-  
+  const fontFamily = document.getElementById('fontFamily').value || DEFAULT_FONT_FAMILY;
+
   content.style.fontSize = fontSize + 'px';
   content.style.color = color;
   content.style.fontWeight = weight;
-  
+  content.style.fontFamily = `'` + fontFamily + `', sans-serif`;
+  selectedEl.dataset.fontFamily = fontFamily;
+
   document.getElementById('fontSizeValue').textContent = fontSize + 'px';
-  
+
   saveState();
 }
 
@@ -1813,7 +1937,8 @@ function toJSON() {
       base.fontSize = parseInt(style.fontSize);
       base.color = rgbToHex(style.color);
       base.fontWeight = style.fontWeight;
-    
+      base.fontFamily = el.dataset.fontFamily || extractPrimaryFont(style.fontFamily);
+
       // Text shadow/glow
       if (el.dataset.textShadowType && el.dataset.textShadowType !== 'none') {
         base.textShadowType = el.dataset.textShadowType;
@@ -1865,6 +1990,62 @@ async function saveLayout() {
     console.error('Save layout error:', error);
     updateStatus('⚠️ Save failed', 'error');
     return false;
+  }
+}
+
+async function exportPNG() {
+  const previousSelection = selectedEl;
+
+  if (previousSelection) {
+    previousSelection.classList.remove('selected');
+    clearResizeHandles(previousSelection);
+  }
+
+  try {
+    updateStatus('⏳ Rendering PNG...');
+
+    if (document.fonts && document.fonts.ready) {
+      try {
+        await document.fonts.ready;
+      } catch (fontError) {
+        console.warn('Font loading wait skipped:', fontError);
+      }
+    }
+
+    const renderedCanvas = await html2canvas(canvas, {
+      backgroundColor: null,
+      useCORS: true,
+      logging: false,
+      scale: 2
+    });
+
+    await new Promise((resolve, reject) => {
+      renderedCanvas.toBlob((blob) => {
+        if (!blob) {
+          reject(new Error('Failed to create PNG blob'));
+          return;
+        }
+
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${deviceId || 'layout'}_${Date.now()}.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        resolve();
+      }, 'image/png');
+    });
+
+    updateStatus('✓ PNG exported', 'success');
+  } catch (error) {
+    console.error('PNG export error:', error);
+    updateStatus('⚠️ Failed to export PNG', 'error');
+  } finally {
+    if (previousSelection) {
+      selectElement(previousSelection);
+    }
   }
 }
 
@@ -1973,7 +2154,7 @@ function snap(value) {
 
 function rgbToHex(rgb) {
   if (rgb.startsWith('#')) return rgb;
-  
+
   const match = rgb.match(/\d+/g);
   if (!match) return '#ffffff';
   
@@ -1985,6 +2166,12 @@ function rgbToHex(rgb) {
     const hex = x.toString(16);
     return hex.length === 1 ? '0' + hex : hex;
   }).join('');
+}
+
+function extractPrimaryFont(fontFamily) {
+  if (!fontFamily) return DEFAULT_FONT_FAMILY;
+  const primary = fontFamily.split(',')[0];
+  return primary.replace(/["']/g, '').trim() || DEFAULT_FONT_FAMILY;
 }
 
 function drawGrid() {
@@ -2102,6 +2289,7 @@ function setupEventListeners() {
   
   document.getElementById('saveBtn').addEventListener('click', saveLayout);
   document.getElementById('exportBtn').addEventListener('click', exportJSON);
+  document.getElementById('pngBtn').addEventListener('click', exportPNG);
   document.getElementById('undoBtn').addEventListener('click', undo);
   document.getElementById('redoBtn').addEventListener('click', redo);
   
