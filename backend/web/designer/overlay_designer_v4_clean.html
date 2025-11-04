@@ -854,10 +854,12 @@ input[type="range"]::-moz-range-thumb{
         <div class="form-group">
           <label class="form-label">Pexels Category</label>
           <select class="form-select" id="pexelsCategorySelect">
-            <option value="abstract">Abstract</option>
-            <option value="geometric">Geometric</option>
-            <option value="minimal">Minimal</option>
-          </select>
+    <option value="abstract">Abstract</option>
+    <option value="geometric">Geometric</option>
+    <option value="paper-collage">Paper Collage</option>
+    <option value="kids-shapes">Kids Shapes</option>
+    <option value="minimal">Minimal</option>
+</select>
         </div>
       </div>
     </div>
@@ -925,9 +927,15 @@ input[type="range"]::-moz-range-thumb{
           <select class="form-select" id="textType" onchange="updateTextType()">
             <option value="CUSTOM">Custom Text</option>
             <option value="TEMP">Temperature</option>
-            <option value="WEATHER_MINMAX">Min / Max Temp</option>
+            <option value="WEATHER_MINMAX">Min/Max Temp</option>
             <option value="CITY">City Name</option>
-            <option value="WEATHER_DESC">Weather Description</option>
+            <option value="WEATHER_DESC">Weather Short</option>
+            <option value="WEATHER_DESC_EXTENDED">Weather Extended</option>
+            <option value="TOMORROW_DESC">Tomorrow Forecast</option>
+            <option value="TOMORROW_TEMP">Tomorrow Min/Max</option>
+            <option value="HUMIDITY">Humidity</option>
+            <option value="RAIN">Rain</option>
+            <option value="WIND">Wind</option>
             <option value="DATE">Date</option>
             <option value="JOKE">Dad Joke</option>
           </select>
@@ -953,7 +961,28 @@ input[type="range"]::-moz-range-thumb{
             <option value="900">Black</option>
           </select>
         </div>
-      </div>
+      
+        <div class="form-group">
+          <label class="form-label">Text Effect</label>
+          <select class="form-select" id="textShadowType" onchange="updateTextShadow()">
+            <option value="none">None</option>
+            <option value="shadow">Shadow</option>
+            <option value="glow">Glow</option>
+          </select>
+        </div>
+
+        <div id="textShadowControls" style="display: none;">
+          <div class="form-group">
+            <label class="form-label">Effect Color</label>
+            <input type="color" id="textShadowColor" class="form-input" value="#000000" onchange="updateTextShadow()">
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">Intensity <span class="value-display" id="textShadowIntensityValue">1</span></label>
+            <input type="range" id="textShadowIntensity" min="0" max="3" step="0.1" value="1" class="form-range" oninput="updateTextShadow()">
+          </div>
+        </div>
+</div>
       
       <!-- Box Panel -->
       <div class="panel" id="boxPanel" style="display:none">
@@ -1257,13 +1286,21 @@ function updateInfoTypeDropdown() {
   select.innerHTML = '';
   
   const typeLabels = {
+    
     'CUSTOM': 'Custom Text',
     'TEMP': 'Temperature',
     'WEATHER_MINMAX': 'Min / Max Temp',
     'CITY': 'City Name',
     'WEATHER_DESC': 'Weather Description',
+    'WEATHER_DESC_EXTENDED': 'Weather Extended',
+    'TOMORROW_DESC': 'Tomorrow Forecast',
+    'TOMORROW_TEMP': 'Tomorrow Min/Max',
     'DATE': 'Date',
-    'JOKE': 'Dad Joke'
+    'JOKE': 'Dad Joke',
+    'HUMIDITY': 'Humidity',
+    'RAIN': 'Rain',
+    'WIND': 'Wind'
+
   };
   
   availableInfoTypes.forEach(type => {
@@ -1302,6 +1339,27 @@ function getDynamicText(type) {
     
     case 'JOKE':
       return renderData?.dad_joke || 'No joke today.';
+    
+    case 'WEATHER_DESC_EXTENDED':
+      return weather?.desc_extended || weather?.desc || 'Sunny, 28°C with clear skies';
+    
+    case 'TOMORROW_DESC':
+      return weather?.tomorrow?.desc || 'Partly cloudy, 24°-31°C with 40% chance of rain';
+    
+    case 'TOMORROW_TEMP':
+      if (weather?.tomorrow?.temp_min != null && weather?.tomorrow?.temp_max != null) {
+        return `${weather.tomorrow.temp_min}° / ${weather.tomorrow.temp_max}°`;
+      }
+      return '--° / --°';
+    
+    case 'HUMIDITY':
+      return weather?.humidity != null ? `Humidity: ${weather.humidity}%` : 'Humidity: --%';
+    
+    case 'RAIN':
+      return weather?.rain != null ? `Rain: ${weather.rain}mm` : 'Rain: --mm';
+    
+    case 'WIND':
+      return weather?.wind != null ? `Wind: ${weather.wind}km/h` : 'Wind: --km/h';
     
     default:
       return '';
@@ -1596,7 +1654,25 @@ function updateInspector() {
     document.getElementById('textColor').value = rgbToHex(style.color);
     document.getElementById('fontWeight').value = style.fontWeight;
     
-  } else if (selectedEl.classList.contains('box')) {
+  
+    // Load text shadow settings
+    const shadowType = selectedEl.dataset.textShadowType || 'none';
+    const shadowColor = selectedEl.dataset.textShadowColor || '#000000';
+    const shadowIntensity = selectedEl.dataset.textShadowIntensity || '1';
+    const tsTypeEl = document.getElementById('textShadowType');
+    const tsColorEl = document.getElementById('textShadowColor');
+    const tsIntEl = document.getElementById('textShadowIntensity');
+    const tsCtl = document.getElementById('textShadowControls');
+    if (tsTypeEl && tsColorEl && tsIntEl && tsCtl) {
+      tsTypeEl.value = shadowType;
+      tsColorEl.value = shadowColor;
+      tsIntEl.value = shadowIntensity;
+      document.getElementById('textShadowIntensityValue').textContent = parseFloat(shadowIntensity).toFixed(1);
+      tsCtl.style.display = shadowType === 'none' ? 'none' : 'block';
+      const contentEl = selectedEl.querySelector('.el-content');
+      if (contentEl) applyTextShadowStyle(contentEl, shadowType, shadowColor, parseFloat(shadowIntensity));
+    }
+} else if (selectedEl.classList.contains('box')) {
     textPanel.style.display = 'none';
     boxPanel.style.display = 'block';
     
@@ -1844,7 +1920,14 @@ function toJSON() {
       base.fontSize = parseInt(style.fontSize);
       base.color = rgbToHex(style.color);
       base.fontWeight = style.fontWeight;
-    }
+    
+      // Text shadow/glow
+      if (el.dataset.textShadowType && el.dataset.textShadowType !== 'none') {
+        base.textShadowType = el.dataset.textShadowType;
+        base.textShadowColor = el.dataset.textShadowColor || '#000000';
+        base.textShadowIntensity = parseFloat(el.dataset.textShadowIntensity || 1);
+      }
+}
     
     if (base.kind === 'box') {
       const style = window.getComputedStyle(el);
@@ -2039,6 +2122,59 @@ function updateStatus(message, type) {
     }, 3000);
   }
 }
+
+
+// ========================================================================
+// TEXT EFFECTS (Shadow/Glow)
+// ========================================================================
+function updateTextShadow() {
+  if (!selectedEl || (!selectedEl.classList.contains('text') && !selectedEl.classList.contains('icon'))) return;
+  
+  const type = document.getElementById('textShadowType').value;
+  const color = document.getElementById('textShadowColor').value;
+  const intensity = parseFloat(document.getElementById('textShadowIntensity').value);
+  const controls = document.getElementById('textShadowControls');
+  
+  // Show/hide controls
+  controls.style.display = type === 'none' ? 'none' : 'block';
+  
+  // Update intensity display
+  document.getElementById('textShadowIntensityValue').textContent = intensity.toFixed(1);
+  
+  // Store on element
+  selectedEl.dataset.textShadowType = type;
+  selectedEl.dataset.textShadowColor = color;
+  selectedEl.dataset.textShadowIntensity = intensity;
+  
+  // Apply visual effect
+  const content = selectedEl.querySelector('.el-content');
+  if (content) {
+    applyTextShadowStyle(content, type, color, intensity);
+  }
+  
+  saveState();
+}
+
+function applyTextShadowStyle(element, type, color, intensity) {
+  if (type === 'none') {
+    element.style.textShadow = 'none';
+    element.style.filter = 'none';
+    return;
+  }
+  const blur = Math.round(intensity * 4);
+  if (type === 'shadow') {
+    element.style.textShadow = `2px 2px ${blur}px ${color}`;
+    element.style.filter = 'none';
+  } else if (type === 'glow') {
+    element.style.textShadow = `
+      0 0 ${blur}px ${color},
+      0 0 ${blur * 2}px ${color},
+      0 0 ${blur * 3}px ${color}
+    `;
+    element.style.filter = 'none';
+  }
+}
+
 
 // ========================================================================
 // EVENT LISTENERS
