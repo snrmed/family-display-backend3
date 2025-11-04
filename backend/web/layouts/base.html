@@ -101,126 +101,45 @@
     
     /**
      * Resolve relative/absolute paths to full URLs
-     * CRITICAL: This function enables SVG rendering in Playwright's file:// context
      */
     function resolveUrl(path, svg_base) {
       if (!path) return "";
       
-      // Already absolute URL - use as-is
       if (path.startsWith("http://") || path.startsWith("https://")) {
         return path;
       }
       
-      // Absolute path starting with / - needs base URL
       if (path.startsWith("/")) {
-        // Extract base from svg_base (which should be full URL)
         if (svg_base && svg_base.startsWith("http")) {
-          // svg_base is like: https://domain.com/gcs/assets/svgs
-          // Extract: https://domain.com
           const base = svg_base.split("/gcs/")[0];
           return base + path;
         }
-        // Fallback: return as-is (will fail in file:// but at least we tried)
         return path;
       }
       
-      // Relative path - prepend svg_base
       if (svg_base) {
-        return svg_base.replace(/\/$/, "") + "/" + path;
+        return svg_base + "/" + path;
       }
       
       return path;
     }
-
+    
     /**
-     * Apply text shadow or glow effect
-     * NEW: Supports text shadows and glows from designer
+     * Resolve dynamic text content
      */
-    function applyTextShadow(element, shadowType, shadowColor, shadowIntensity) {
-      if (!shadowType || shadowType === 'none') {
-        element.style.textShadow = 'none';
-        element.style.filter = 'none';
-        return;
-      }
-      
-      const intensity = parseFloat(shadowIntensity || 1);
-      const color = shadowColor || '#000000';
-      const blur = Math.round(intensity * 4);
-      
-      if (shadowType === 'shadow') {
-        // Drop shadow
-        element.style.textShadow = `2px 2px ${blur}px ${color}`;
-      } else if (shadowType === 'glow') {
-        // Glow effect using multiple text-shadows
-        element.style.textShadow = `
-          0 0 ${blur}px ${color},
-          0 0 ${blur * 2}px ${color},
-          0 0 ${blur * 3}px ${color}
-        `;
-      }
-    }
-
-    /**
-     * Get text content based on element type
-     * UPDATED: Includes new weather types (WEATHER_DESC_EXTENDED, TOMORROW_DESC, TOMORROW_TEMP)
-     */
-    function getDynamicText(type, data) {
+    function resolveDynamicText(type, data) {
       switch (type) {
-        case "WEATHER_CITY":
-        case "CITY":
-          return data.weather?.city || data.device?.location?.city || "City";
-        
-        case "TEMP":
-          return data.weather?.temp != null
-            ? data.weather.temp + "°C"
-            : "--°C";
-        
-        case "WEATHER_MINMAX":
-          if (data.weather?.temp_min != null && data.weather?.temp_max != null) {
-            return data.weather.temp_min + "° / " + data.weather.temp_max + "°";
-          }
-          return "--° / --°";
-        
-        case "FEELS_LIKE":
-          return data.weather?.feels_like != null
-            ? data.weather.feels_like + "°C"
-            : "--°C";
-        
-        case "HUMIDITY":
-          return data.weather?.humidity != null
-            ? "Humidity: " + data.weather.humidity + "%"
-            : "Humidity: --%";
-        
-        case "RAIN":
-          return data.weather?.rain != null
-            ? "Rain: " + data.weather.rain + "mm"
-            : "Rain: --mm";
-        
-        case "WIND":
-          return data.weather?.wind != null
-            ? "Wind: " + data.weather.wind + "km/h"
-            : "Wind: --km/h";
+        case "WEATHER_TEMP":
+          return data.weather?.temp ? `${data.weather.temp}°` : "";
         
         case "WEATHER_DESC":
-          return data.weather?.desc || "Sunny";
+          return data.weather?.description || "";
         
-        // NEW: Extended weather description with forecast
-        case "WEATHER_DESC_EXTENDED":
-          return data.weather?.desc_extended || data.weather?.desc || "Sunny with clear skies";
+        case "WEATHER_CITY":
+          return data.weather?.city || "";
         
-        // NEW: Tomorrow's forecast description
-        case "TOMORROW_DESC":
-          return data.weather?.tomorrow?.desc || "Partly cloudy, 24°-31°C";
-        
-        // NEW: Tomorrow's temperature range
-        case "TOMORROW_TEMP":
-          if (data.weather?.tomorrow?.temp_min && data.weather?.tomorrow?.temp_max) {
-            return data.weather.tomorrow.temp_min + "° / " + data.weather.tomorrow.temp_max + "°";
-          }
-          return "--° / --°";
-        
-        case "JOKE":
-          return data.dad_joke || "No joke today.";
+        case "DAD_JOKE":
+          return data.dad_joke || "";
         
         case "DATE":
           return data.date || "";
@@ -269,11 +188,8 @@
         }
         
         const svgText = await response.text();
-        
-        // Insert SVG markup
         elDiv.innerHTML = svgText;
         
-        // Make SVG fill container
         const svg = elDiv.querySelector("svg");
         if (svg) {
           svg.setAttribute("width", "100%");
@@ -290,7 +206,6 @@
 
     /**
      * Render the complete layout
-     * UPDATED: Includes text shadow support and new weather types
      */
     async function renderLayout(data) {
       const canvas = document.getElementById('canvas');
@@ -301,7 +216,6 @@
       console.log('SVG Base:', svg_base);
       console.log('Rendering', elements.length, 'elements');
       
-      // Add background image if provided
       if (data.bg_url) {
         const bgImg = document.createElement('img');
         bgImg.src = data.bg_url;
@@ -312,7 +226,6 @@
         canvas.appendChild(bgImg);
       }
       
-      // Process each element
       for (const el of elements) {
         const elDiv = document.createElement('div');
         elDiv.className = 'el';
@@ -320,61 +233,45 @@
         const kind = (el.kind || 'box').toLowerCase();
         elDiv.classList.add(kind);
         
-        // Position and size
         elDiv.style.left = (el.x || 0) + 'px';
         elDiv.style.top = (el.y || 0) + 'px';
         elDiv.style.width = (el.w || el.width || 100) + 'px';
         elDiv.style.height = (el.h || el.height || 100) + 'px';
         
-        // Z-index
         const zIndex = el.zIndex || getLayerZIndex(el, kind);
         elDiv.style.zIndex = zIndex;
         
-        // Opacity
         if (el.opacity != null) {
           elDiv.style.opacity = el.opacity;
         }
         
-        // Handle different element types
         if (kind === 'text' || kind === 'icon') {
-          // Get text content (dynamic or static)
-          let textContent;
+          const contentDiv = document.createElement('div');
+          contentDiv.className = 'el-content';
+          
+          let textContent = el.text || '';
           if (el.type && el.type !== 'CUSTOM') {
-            textContent = getDynamicText(el.type, data);
-          } else {
-            textContent = el.text || 'Text';
+            textContent = resolveDynamicText(el.type, data);
           }
           
-          elDiv.textContent = textContent;
-          elDiv.style.fontSize = (el.fontSize || 16) + 'px';
-          elDiv.style.color = el.color || '#000000';
-          elDiv.style.fontWeight = el.weight || el.fontWeight || '400';
-          elDiv.style.fontFamily = el.fontFamily || 'Inter, sans-serif';
-          elDiv.style.display = 'flex';
-          elDiv.style.alignItems = 'center';
-          elDiv.style.justifyContent = 'center';
-          elDiv.style.textAlign = 'center';
-          elDiv.style.padding = '4px';
-          elDiv.style.lineHeight = '1.2';
-          elDiv.style.wordBreak = 'break-word';
+          contentDiv.textContent = textContent;
+          contentDiv.style.fontSize = (el.fontSize || 16) + 'px';
+          contentDiv.style.color = el.color || '#000';
+          contentDiv.style.fontWeight = el.fontWeight || 'normal';
+          contentDiv.style.width = '100%';
+          contentDiv.style.height = '100%';
+          contentDiv.style.display = 'flex';
+          contentDiv.style.alignItems = 'center';
+          contentDiv.style.justifyContent = 'center';
+          contentDiv.style.textAlign = 'center';
           
-          // Handle text alignment
-          if (el.textAlign) {
-            elDiv.style.textAlign = el.textAlign;
-            if (el.textAlign === 'left') {
-              elDiv.style.justifyContent = 'flex-start';
-            } else if (el.textAlign === 'right') {
-              elDiv.style.justifyContent = 'flex-end';
-            }
+          if (el.textShadow) {
+            contentDiv.style.textShadow = el.textShadow;
           }
           
-          // NEW: Apply text shadow/glow if specified
-          if (el.textShadowType && el.textShadowType !== 'none') {
-            applyTextShadow(elDiv, el.textShadowType, el.textShadowColor, el.textShadowIntensity);
-          }
+          elDiv.appendChild(contentDiv);
           
         } else if (kind === 'box') {
-          // Box element
           if (el.background || el.fill) {
             elDiv.style.background = el.background || el.fill;
           }
@@ -386,10 +283,8 @@
           }
           
         } else if (kind === 'svg' || kind === 'svg-overlay' || kind === 'image') {
-          // SVG or image element
           let src = el.src || el.svgName || '';
           
-          // Handle weather icon special case
           if (src === 'weather-icon') {
             if (data.weather?.icon_url) {
               src = data.weather.icon_url;
@@ -400,14 +295,11 @@
             }
           }
           
-          // Resolve URL to absolute path
           const fullUrl = resolveUrl(src, svg_base);
           
           if (fullUrl.endsWith('.svg')) {
-            // Load and inline SVG
             await inlineSvgInto(elDiv, fullUrl);
           } else {
-            // Load as image
             const img = document.createElement('img');
             img.src = fullUrl;
             img.style.width = '100%';
