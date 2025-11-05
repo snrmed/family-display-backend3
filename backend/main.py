@@ -77,10 +77,25 @@ except Exception as e:
 # ============================================================================
 
 def make_public_url(path: str) -> str:
-    """Generate public URL for assets"""
+    """Generate public URL for assets.
+
+    When a ``PUBLIC_BASE_URL`` is configured we want to point directly at that
+    host (usually a Google Cloud Storage bucket or CDN). In that case the
+    ``gcs/`` prefix that we use for the internal proxy should be stripped so the
+    resulting URL matches the actual object path in the bucket. For in-app
+    serving we keep the prefix so requests continue to flow through the FastAPI
+    proxy mounted at ``/gcs``.
+    """
+
+    normalized_path = path.lstrip("/")
+
     if PUBLIC_BASE_URL:
-        return f"{PUBLIC_BASE_URL}/{path}"
-    return f"/{path}"
+        base = PUBLIC_BASE_URL.rstrip("/")
+        if normalized_path.startswith("gcs/"):
+            normalized_path = normalized_path[4:]
+        return f"{base}/{normalized_path}"
+
+    return f"/{normalized_path}"
 
 
 def resolve_static_dir(*relative_paths: str) -> Path | None:
