@@ -108,6 +108,16 @@ def gcs_read_json(key: str) -> dict:
     return json.loads(blob.download_as_text())
 
 
+def gcs_read_text(key: str) -> str:
+    """Read text file from GCS"""
+    if not storage_enabled:
+        raise RuntimeError("GCS not enabled")
+    blob = bucket.blob(key)
+    if not blob.exists():
+        raise FileNotFoundError(f"Blob not found: {key}")
+    return blob.download_as_text()
+
+
 def gcs_write_json(key: str, data: dict):
     """Write JSON to GCS"""
     if not storage_enabled:
@@ -235,49 +245,39 @@ async def get_weather(city: str) -> dict:
                     }
                     forecast_r = await client.get(forecast_url, params=forecast_params, timeout=10)
                     
-                    tomorrow_forecast = None
+                    tomorrow_data = None
                     if forecast_r.status_code == 200:
-                        forecast_data = forecast_r.json()
-                        # Get tomorrow's forecast (roughly 24 hours from now)
-                        for item in forecast_data.get("list", []):
-                            dt = datetime.fromtimestamp(item["dt"], tz=timezone.utc)
-                            if dt.date() == (datetime.now(timezone.utc) + timedelta(days=1)).date():
-                                if not tomorrow_forecast:
-                                    tomorrow_forecast = {
-                                        "temp_min": round(item["main"]["temp_min"]),
-                                        "temp_max": round(item["main"]["temp_max"]),
-                                        "desc": item["weather"][0]["description"].title()
-                                    }
-                                else:
-                                    # Update min/max if we find better values
-                                    tomorrow_forecast["temp_min"] = min(tomorrow_forecast["temp_min"], round(item["main"]["temp_min"]))
-                                    tomorrow_forecast["temp_max"] = max(tomorrow_forecast["temp_max"], round(item["main"]["temp_max"]))
+                        forecast = forecast_r.json()
+                        if forecast.get("list"):
+                            # Get tomorrow's forecast (24 hours ahead)
+                            tomorrow_entry = forecast["list"][8] if len(forecast["list"]) > 8 else forecast["list"][-1]
+                            tomorrow_data = {
+                                "temp_min": round(tomorrow_entry["main"]["temp_min"]),
+                                "temp_max": round(tomorrow_entry["main"]["temp_max"]),
+                                "desc": tomorrow_entry["weather"][0]["description"].title()
+                            }
                     
-                    weather = {
+                    return {
                         "temp": round(data["main"]["temp"]),
-                        "feels_like": round(data["main"]["feels_like"]),
                         "humidity": data["main"]["humidity"],
                         "rain": data.get("rain", {}).get("1h", 0),
-                        "wind": round(data["wind"]["speed"]),
+                        "wind": round(data["wind"]["speed"] * 3.6),
                         "icon": data["weather"][0]["icon"],
                         "desc": data["weather"][0]["description"].title(),
-                        "desc_extended": data["weather"][0]["description"].title(),
+                        "desc_extended": data["weather"][0]["description"],
                         "temp_min": round(data["main"]["temp_min"]),
                         "temp_max": round(data["main"]["temp_max"]),
                         "timezone_offset": data.get("timezone", 0),
-                        "tomorrow": tomorrow_forecast
+                        "tomorrow": tomorrow_data
                     }
-                    return weather
         except Exception as e:
-            logger.warning(f"OpenWeather failed: {e}")
-
-    # Fallback data
+            logger.warning(f"OpenWeather API failed: {e}")
+    
     return {
-        "temp": 33,
-        "feels_like": 33,
-        "humidity": 45,
+        "temp": 32,
+        "humidity": 65,
         "rain": 0,
-        "wind": 5,
+        "wind": 15,
         "icon": "01d",
         "desc": "Sunny",
         "desc_extended": "Sunny with clear skies",
@@ -587,14 +587,19 @@ async def api_frame(device: str = "familydisplay"):
 # Designer Route
 @app.get("/designer/", response_class=HTMLResponse)
 async def designer():
-    """Serve designer HTML"""
-    designer_path = Path("web/designer/overlay_designer_v4_clean.html")
-    if not designer_path.exists():
-        designer_path = Path("../web/designer/overlay_designer_v4_clean.html")
+    """Serve designer HTML from GCS"""
+    if not storage_enabled:
+        raise HTTPException(status_code=503, detail="Storage not configured")
     
-    if designer_path.exists():
-        return HTMLResponse(content=designer_path.read_text())
-    raise HTTPException(status_code=404, detail="Designer not found")
+    try:
+        designer_key = "web/designer/overlay_designer_v4_clean.html"
+        html_content = gcs_read_text(designer_key)
+        return HTMLResponse(content=html_content)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Designer not found in bucket")
+    except Exception as e:
+        logger.error(f"Failed to load designer: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # SVG List Route
