@@ -1,0 +1,186 @@
+# GCS Bucket Structure - Quick Reference
+
+## family-display-packs/
+
+```
+family-display-packs/
+│
+├── web/
+│   └── designer/
+│       └── overlay_designer_v4_clean.html          [Designer UI - served via /designer/]
+│
+├── assets/
+│   ├── svgs/                                        [55+ SVG files]
+│   │   ├── candy.svg
+│   │   ├── lemon.svg
+│   │   ├── mint.svg
+│   │   ├── glass_card_aqua.svg
+│   │   ├── dad_joke_card_lime.svg
+│   │   └── ...
+│   │
+│   └── weather-icons/                               [4 themes × 13 icons each]
+│       ├── happy-skies/
+│       │   ├── 01d.svg    [Clear day]
+│       │   ├── 01n.svg    [Clear night]
+│       │   ├── 02d.svg    [Few clouds day]
+│       │   ├── 02n.svg    [Few clouds night]
+│       │   ├── 03d.svg    [Scattered clouds]
+│       │   ├── 04d.svg    [Broken clouds]
+│       │   ├── 09d.svg    [Shower rain]
+│       │   ├── 10d.svg    [Rain day]
+│       │   ├── 10n.svg    [Rain night]
+│       │   ├── 11d.svg    [Thunderstorm]
+│       │   ├── 13d.svg    [Snow]
+│       │   ├── 50d.svg    [Mist]
+│       │   └── unknown.svg [Fallback]
+│       ├── soft-skies/
+│       │   └── [same 13 icons]
+│       ├── sunny-day/
+│       │   └── [same 13 icons]
+│       └── blue-sky-pro/
+│           └── [same 13 icons]
+│
+├── pexels/
+│   └── current/                                     [Background images]
+│       ├── abstract_0.jpg
+│       ├── abstract_1.jpg
+│       ├── geometric_0.jpg
+│       ├── kids_0.jpg
+│       ├── minimal_0.jpg
+│       └── ... [category_number.jpg format]
+│
+└── devices/
+    └── familydisplay/                               [Device-specific data]
+        ├── config.json                              [Device settings]
+        ├── layouts/
+        │   └── current.json                         [Active layout]
+        └── renders/
+            └── latest.png                           [Last rendered frame]
+```
+
+## File Formats
+
+### Designer HTML
+- **Path:** `web/designer/overlay_designer_v4_clean.html`
+- **Type:** HTML file
+- **Served at:** `/designer/`
+- **Purpose:** Layout editor interface
+
+### SVG Assets
+- **Path:** `assets/svgs/*.svg`
+- **Format:** SVG XML
+- **Accessed via:** `/gcs/assets/svgs/filename.svg`
+- **Used in:** Layout elements
+
+### Weather Icons
+- **Path:** `assets/weather-icons/{theme}/{code}.svg`
+- **Themes:** happy-skies, soft-skies, sunny-day, blue-sky-pro
+- **Codes:** 01d, 01n, 02d, 02n, 03d, 04d, 09d, 10d, 10n, 11d, 13d, 50d, unknown
+- **Auto-selected:** Based on device config `iconTheme`
+
+### Pexels Images
+- **Path:** `pexels/current/{category}_{number}.jpg`
+- **Naming:** `abstract_0.jpg`, `geometric_1.jpg`, etc.
+- **Categories:** Detected automatically from filenames
+- **Selection:** Random from selected category
+
+### Device Config
+- **Path:** `devices/{device_id}/config.json`
+- **Format:**
+```json
+{
+  "location": {
+    "city": "Darwin",
+    "timezone": "Australia/Darwin"
+  },
+  "preferences": {
+    "iconTheme": "happy-skies"
+  }
+}
+```
+
+### Layout File
+- **Path:** `devices/{device_id}/layouts/current.json`
+- **Format:**
+```json
+{
+  "name": "Layout Name",
+  "meta": {
+    "iconTheme": "happy-skies",
+    "pexelsCategory": "abstract"
+  },
+  "elements": [
+    {
+      "kind": "text|icon|box|svg-overlay",
+      "x": 0,
+      "y": 0,
+      "width": 100,
+      "height": 100,
+      ...
+    }
+  ]
+}
+```
+
+### Rendered Frame
+- **Path:** `devices/{device_id}/renders/latest.png`
+- **Format:** PNG image (800×480)
+- **Generated:** By Playwright from base.html + layout
+
+## Upload Priority
+
+### Essential (Required for basic operation)
+1. ✅ Designer HTML
+2. ✅ Device config
+3. ✅ Device layout (can be empty)
+
+### Recommended (For full features)
+4. ⭐ Weather icons (at least one theme)
+5. ⭐ SVG assets (for visual elements)
+6. ⭐ Pexels images (for backgrounds)
+
+### Auto-Generated
+- ✨ Rendered frames (created by backend)
+
+## Access Patterns
+
+| Resource | Backend Reads | Backend Writes | Designer Reads | Designer Writes |
+|----------|---------------|----------------|----------------|-----------------|
+| Designer HTML | ✅ | ❌ | ❌ | ❌ |
+| SVGs | ✅ | ❌ | ✅ | ❌ |
+| Weather Icons | ✅ | ❌ | ❌ | ❌ |
+| Pexels Images | ✅ | ❌ | ✅ | ❌ |
+| Device Config | ✅ | ✅ | ✅ | ✅ |
+| Layout | ✅ | ✅ | ✅ | ✅ |
+| Renders | ❌ | ✅ | ❌ | ❌ |
+
+## Size Guidelines
+
+| Asset Type | Recommended Size | Notes |
+|-----------|------------------|-------|
+| Designer HTML | < 500 KB | Single file with embedded CSS/JS |
+| SVGs | < 50 KB each | Optimized vector graphics |
+| Weather Icons | < 20 KB each | Simple icon designs |
+| Pexels Images | 800×480 px, < 200 KB | Optimized for display |
+| Config JSON | < 1 KB | Small text file |
+| Layout JSON | < 50 KB | Element definitions |
+| Rendered PNG | ~100-200 KB | Full frame image |
+
+## Minimal Setup
+
+To get started quickly, you only need:
+
+```bash
+# 1. Upload designer
+gsutil cp backend/web/designer/overlay_designer_v4_clean.html \
+  gs://family-display-packs/web/designer/overlay_designer_v4_clean.html
+
+# 2. Create device structure
+echo '{"name":"Default","elements":[]}' | \
+  gsutil cp - gs://family-display-packs/devices/familydisplay/layouts/current.json
+
+echo '{"location":{"city":"Darwin","timezone":"Australia/Darwin"},"preferences":{"iconTheme":"happy-skies"}}' | \
+  gsutil cp - gs://family-display-packs/devices/familydisplay/config.json
+```
+
+Then set environment variables and deploy!
