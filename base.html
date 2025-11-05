@@ -5,6 +5,95 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Kin:D Family Display Render</title>
   <style>
+    /* Embed fonts inline for Playwright rendering */
+    @font-face {
+      font-family: 'Inter';
+      font-style: normal;
+      font-weight: 100 900;
+      font-display: swap;
+      src: local('Inter');
+    }
+    
+    @font-face {
+      font-family: 'Roboto';
+      font-style: normal;
+      font-weight: 400;
+      font-display: swap;
+      src: local('Roboto');
+    }
+    
+    @font-face {
+      font-family: 'Atkinson Hyperlegible';
+      font-style: normal;
+      font-weight: 400;
+      font-display: swap;
+      src: local('Atkinson Hyperlegible');
+    }
+    
+    @font-face {
+      font-family: 'Source Sans 3';
+      font-style: normal;
+      font-weight: 200 900;
+      font-display: swap;
+      src: local('Source Sans 3');
+    }
+    
+    @font-face {
+      font-family: 'Public Sans';
+      font-style: normal;
+      font-weight: 100 900;
+      font-display: swap;
+      src: local('Public Sans');
+    }
+    
+    @font-face {
+      font-family: 'Manrope';
+      font-style: normal;
+      font-weight: 200 800;
+      font-display: swap;
+      src: local('Manrope');
+    }
+    
+    @font-face {
+      font-family: 'Space Grotesk';
+      font-style: normal;
+      font-weight: 300 700;
+      font-display: swap;
+      src: local('Space Grotesk');
+    }
+    
+    @font-face {
+      font-family: 'Outfit';
+      font-style: normal;
+      font-weight: 100 900;
+      font-display: swap;
+      src: local('Outfit');
+    }
+    
+    @font-face {
+      font-family: 'Plus Jakarta Sans';
+      font-style: normal;
+      font-weight: 200 800;
+      font-display: swap;
+      src: local('Plus Jakarta Sans');
+    }
+    
+    @font-face {
+      font-family: 'Merriweather';
+      font-style: normal;
+      font-weight: 400;
+      font-display: swap;
+      src: local('Merriweather');
+    }
+    
+    @font-face {
+      font-family: 'Noto Sans';
+      font-style: normal;
+      font-weight: 400;
+      font-display: swap;
+      src: local('Noto Sans');
+    }
+    
     * {
       margin: 0;
       padding: 0;
@@ -15,7 +104,7 @@
       width: 800px;
       height: 480px;
       overflow: hidden;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background: #fff;
     }
     
@@ -91,11 +180,47 @@
         const data = JSON.parse(dataJson);
         console.log('Render data:', data);
         
+        // Load fonts if provided in data
+        if (data.font_base) {
+          loadFonts(data.font_base);
+        }
+        
         // Render the layout
         renderLayout(data);
       } catch (error) {
         console.error('Failed to parse render data:', error);
         document.body.innerHTML = '<div style="padding: 20px;">Error: Invalid render data</div>';
+      }
+    }
+    
+    /**
+     * Load fonts from backend (if available)
+     */
+    async function loadFonts(fontBase) {
+      const fonts = [
+        { family: 'Inter', file: 'Inter/Inter-VariableFont_slnt,wght.ttf' },
+        { family: 'Roboto', file: 'Roboto/Roboto-Regular.ttf' },
+        { family: 'Atkinson Hyperlegible', file: 'AtkinsonHyperlegible/AtkinsonHyperlegible-Regular.ttf' },
+        { family: 'Source Sans 3', file: 'SourceSans3/SourceSans3-VariableFont_wght.ttf' },
+        { family: 'Public Sans', file: 'PublicSans/PublicSans-VariableFont_wght.ttf' },
+        { family: 'Manrope', file: 'Manrope/Manrope-VariableFont_wght.ttf' },
+        { family: 'Space Grotesk', file: 'SpaceGrotesk/SpaceGrotesk-VariableFont_wght.ttf' },
+        { family: 'Outfit', file: 'Outfit/Outfit-VariableFont_wght.ttf' },
+        { family: 'Plus Jakarta Sans', file: 'PlusJakartaSans/PlusJakartaSans-VariableFont_wght.ttf' },
+        { family: 'Merriweather', file: 'Merriweather/Merriweather-Regular.ttf' },
+        { family: 'Noto Sans', file: 'NotoSans/NotoSans-Regular.ttf' }
+      ];
+      
+      for (const font of fonts) {
+        try {
+          const fontUrl = `${fontBase}/${font.file}`;
+          const fontFace = new FontFace(font.family, `url(${fontUrl})`);
+          await fontFace.load();
+          document.fonts.add(fontFace);
+          console.log(`✓ Loaded font: ${font.family}`);
+        } catch (error) {
+          console.warn(`Could not load font ${font.family}:`, error);
+        }
       }
     }
     
@@ -130,82 +255,76 @@
     function resolveDynamicText(type, data) {
       switch (type) {
         case "WEATHER_TEMP":
-          return data.weather?.temp ? `${data.weather.temp}°` : "";
-        
-        case "WEATHER_DESC":
-          return data.weather?.description || "";
+          return data.weather?.temp ? `${data.weather.temp}°` : "--°";
         
         case "WEATHER_CITY":
-          return data.weather?.city || "";
+          return data.weather?.city || "Unknown";
         
-        case "DAD_JOKE":
-          return data.dad_joke || "";
+        case "WEATHER_DESC":
+          return data.weather?.desc || "No data";
+        
+        case "WEATHER_HUMIDITY":
+          return data.weather?.humidity ? `${data.weather.humidity}%` : "--%";
+        
+        case "WEATHER_MINMAX":
+          if (data.weather?.temp_min && data.weather?.temp_max) {
+            return `${data.weather.temp_min}° / ${data.weather.temp_max}°`;
+          }
+          return "--° / --°";
         
         case "DATE":
-          return data.date || "";
-
+          return data.date || new Date().toLocaleDateString();
+        
+        case "JOKE":
+          return data.dad_joke || "No joke today!";
+        
         default:
           return "";
       }
     }
-
+    
     /**
-     * Calculate z-index based on element type
+     * Get layer z-index based on element kind
      */
-    function getLayerZIndex(el, providedKind) {
-      const kind = (providedKind || el.kind || "").toLowerCase();
-      
-      if (kind === "text" || kind === "icon") {
-        return 30;
-      }
-
-      if (kind === "svg" || kind === "svg-overlay" || kind === "image") {
-        const source = String(el.src || el.svgName || "");
-        if (source === "weather-icon" || source.startsWith("weather-")) {
-          return 35;
-        }
-        return 20;
-      }
-
-      if (kind === "box") {
+    function getLayerZIndex(el, kind) {
+      if (kind === 'text' || kind === 'icon') {
+        return el.type && el.type !== 'CUSTOM' ? 35 : 20;
+      } else if (kind === 'box') {
         return 15;
+      } else if (kind === 'svg' || kind === 'svg-overlay') {
+        return el.src === 'weather-icon' ? 35 : 20;
       }
-
       return 10;
     }
-
+    
     /**
-     * Load SVG from URL and inline it
+     * Inline SVG content into element
      */
     async function inlineSvgInto(elDiv, url) {
-      console.log("📥 Fetching SVG:", url);
-      
       try {
-        const response = await fetch(url, { mode: "cors" });
-        
+        const response = await fetch(url);
         if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          throw new Error(`HTTP ${response.status}`);
         }
         
         const svgText = await response.text();
         elDiv.innerHTML = svgText;
         
-        const svg = elDiv.querySelector("svg");
-        if (svg) {
-          svg.setAttribute("width", "100%");
-          svg.setAttribute("height", "100%");
-          svg.style.display = "block";
+        const svgEl = elDiv.querySelector('svg');
+        if (svgEl) {
+          svgEl.style.width = '100%';
+          svgEl.style.height = '100%';
+          svgEl.removeAttribute('width');
+          svgEl.removeAttribute('height');
         }
-        
-        console.log("✓ SVG loaded successfully");
       } catch (error) {
-        console.error("Failed to load SVG:", error);
+        console.error('Failed to load SVG:', url, error);
         elDiv.innerHTML = `<div style="color: red; font-size: 12px;">SVG Load Error</div>`;
       }
     }
-
+    
     /**
-     * Render the complete layout
+     * Main render function
      */
     async function renderLayout(data) {
       const canvas = document.getElementById('canvas');
@@ -265,8 +384,34 @@
           contentDiv.style.justifyContent = 'center';
           contentDiv.style.textAlign = 'center';
           
+          // Apply font family
+          if (el.fontFamily) {
+            contentDiv.style.fontFamily = `'${el.fontFamily}', sans-serif`;
+          }
+          
+          // Apply text shadow/glow if specified
           if (el.textShadow) {
             contentDiv.style.textShadow = el.textShadow;
+          } else if (el.textShadowType && el.textShadowType !== 'none') {
+            const shadowColor = el.textShadowColor || '#000000';
+            const intensity = el.textShadowIntensity || 1;
+            
+            if (el.textShadowType === 'glow') {
+              const blur = Math.round(4 * intensity);
+              contentDiv.style.textShadow = `0 0 ${blur}px ${shadowColor}`;
+            } else if (el.textShadowType === 'drop') {
+              const offset = Math.round(2 * intensity);
+              const blur = Math.round(4 * intensity);
+              contentDiv.style.textShadow = `${offset}px ${offset}px ${blur}px ${shadowColor}`;
+            } else if (el.textShadowType === 'outline') {
+              const size = Math.round(1 * intensity);
+              contentDiv.style.textShadow = `
+                -${size}px -${size}px 0 ${shadowColor},
+                ${size}px -${size}px 0 ${shadowColor},
+                -${size}px ${size}px 0 ${shadowColor},
+                ${size}px ${size}px 0 ${shadowColor}
+              `;
+            }
           }
           
           elDiv.appendChild(contentDiv);
