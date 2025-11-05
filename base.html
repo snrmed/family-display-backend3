@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kin:D Family Display Render</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      width: 800px;
+      height: 480px;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif;
+      background: #fff;
+    }
+    
+    #canvas {
+      position: relative;
+      width: 800px;
+      height: 480px;
+      overflow: hidden;
+    }
+    
+    .el {
+      position: absolute;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .el.text {
+      z-index: 30;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+    
+    .el.icon {
+      z-index: 30;
+    }
+    
+    .el.box {
+      z-index: 15;
+    }
+    
+    .el.svg,
+    .el.svg-overlay,
+    .el.image {
+      z-index: 20;
+    }
+    
+    .el.weather-icon {
+      z-index: 35;
+    }
+    
+    .el svg {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+    
+    .background-image {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+      object-fit: cover;
+    }
+  </style>
+</head>
+<body>
+  <div id="canvas"></div>
+  
+  <script>
+    // Parse data from URL query parameter
+    const urlParams = new URLSearchParams(window.location.search);
+    const encodedData = urlParams.get('data');
+    
+    if (!encodedData) {
+      console.error('No data parameter provided');
+      document.body.innerHTML = '<div style="padding: 20px;">Error: No render data provided</div>';
+    } else {
+      try {
+        const dataJson = decodeURIComponent(encodedData);
+        const data = JSON.parse(dataJson);
+        console.log('Render data:', data);
+        
+        // Render the layout
+        renderLayout(data);
+      } catch (error) {
+        console.error('Failed to parse render data:', error);
+        document.body.innerHTML = '<div style="padding: 20px;">Error: Invalid render data</div>';
+      }
+    }
+    
+    /**
+     * Resolve relative/absolute paths to full URLs
+     */
+    function resolveUrl(path, svg_base) {
+      if (!path) return "";
+      
+      if (path.startsWith("http://") || path.startsWith("https://")) {
+        return path;
+      }
+      
+      if (path.startsWith("/")) {
+        if (svg_base && svg_base.startsWith("http")) {
+          const base = svg_base.split("/gcs/")[0];
+          return base + path;
+        }
+        return path;
+      }
+      
+      if (svg_base) {
+        return svg_base + "/" + path;
+      }
+      
+      return path;
+    }
+    
+    /**
+     * Resolve dynamic text content
+     */
+    function resolveDynamicText(type, data) {
+      switch (type) {
+        case "WEATHER_TEMP":
+          return data.weather?.temp ? `${data.weather.temp}°` : "";
+        
+        case "WEATHER_DESC":
+          return data.weather?.description || "";
+        
+        case "WEATHER_CITY":
+          return data.weather?.city || "";
+        
+        case "DAD_JOKE":
+          return data.dad_joke || "";
+        
+        case "DATE":
+          return data.date || "";
+
+        default:
+          return "";
+      }
+    }
+
+    /**
+     * Calculate z-index based on element type
+     */
+    function getLayerZIndex(el, providedKind) {
+      const kind = (providedKind || el.kind || "").toLowerCase();
+      
+      if (kind === "text" || kind === "icon") {
+        return 30;
+      }
+
+      if (kind === "svg" || kind === "svg-overlay" || kind === "image") {
+        const source = String(el.src || el.svgName || "");
+        if (source === "weather-icon" || source.startsWith("weather-")) {
+          return 35;
+        }
+        return 20;
+      }
+
+      if (kind === "box") {
+        return 15;
+      }
+
+      return 10;
+    }
+
+    /**
+     * Load SVG from URL and inline it
+     */
+    async function inlineSvgInto(elDiv, url) {
+      console.log("📥 Fetching SVG:", url);
+      
+      try {
+        const response = await fetch(url, { mode: "cors" });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const svgText = await response.text();
+        elDiv.innerHTML = svgText;
+        
+        const svg = elDiv.querySelector("svg");
+        if (svg) {
+          svg.setAttribute("width", "100%");
+          svg.setAttribute("height", "100%");
+          svg.style.display = "block";
+        }
+        
+        console.log("✓ SVG loaded successfully");
+      } catch (error) {
+        console.error("Failed to load SVG:", error);
+        elDiv.innerHTML = `<div style="color: red; font-size: 12px;">SVG Load Error</div>`;
+      }
+    }
+
+    /**
+     * Render the complete layout
+     */
+    async function renderLayout(data) {
+      const canvas = document.getElementById('canvas');
+      const layout = data.layout || {};
+      const elements = layout.elements || [];
+      const svg_base = data.svg_base || "";
+      
+      console.log('SVG Base:', svg_base);
+      console.log('Rendering', elements.length, 'elements');
+      
+      if (data.bg_url) {
+        const bgImg = document.createElement('img');
+        bgImg.src = data.bg_url;
+        bgImg.className = 'background-image';
+        bgImg.onerror = () => {
+          console.warn('Background image failed to load:', data.bg_url);
+        };
+        canvas.appendChild(bgImg);
+      }
+      
+      for (const el of elements) {
+        const elDiv = document.createElement('div');
+        elDiv.className = 'el';
+        
+        const kind = (el.kind || 'box').toLowerCase();
+        elDiv.classList.add(kind);
+        
+        elDiv.style.left = (el.x || 0) + 'px';
+        elDiv.style.top = (el.y || 0) + 'px';
+        elDiv.style.width = (el.w || el.width || 100) + 'px';
+        elDiv.style.height = (el.h || el.height || 100) + 'px';
+        
+        const zIndex = el.zIndex || getLayerZIndex(el, kind);
+        elDiv.style.zIndex = zIndex;
+        
+        if (el.opacity != null) {
+          elDiv.style.opacity = el.opacity;
+        }
+        
+        if (kind === 'text' || kind === 'icon') {
+          const contentDiv = document.createElement('div');
+          contentDiv.className = 'el-content';
+          
+          let textContent = el.text || '';
+          if (el.type && el.type !== 'CUSTOM') {
+            textContent = resolveDynamicText(el.type, data);
+          }
+          
+          contentDiv.textContent = textContent;
+          contentDiv.style.fontSize = (el.fontSize || 16) + 'px';
+          contentDiv.style.color = el.color || '#000';
+          contentDiv.style.fontWeight = el.fontWeight || 'normal';
+          contentDiv.style.width = '100%';
+          contentDiv.style.height = '100%';
+          contentDiv.style.display = 'flex';
+          contentDiv.style.alignItems = 'center';
+          contentDiv.style.justifyContent = 'center';
+          contentDiv.style.textAlign = 'center';
+          
+          if (el.textShadow) {
+            contentDiv.style.textShadow = el.textShadow;
+          }
+          
+          elDiv.appendChild(contentDiv);
+          
+        } else if (kind === 'box') {
+          if (el.background || el.fill) {
+            elDiv.style.background = el.background || el.fill;
+          }
+          if (el.borderColor) {
+            elDiv.style.border = '1px solid ' + el.borderColor;
+          }
+          if (el.borderRadius || el.radius) {
+            elDiv.style.borderRadius = (el.borderRadius || el.radius) + 'px';
+          }
+          
+        } else if (kind === 'svg' || kind === 'svg-overlay' || kind === 'image') {
+          let src = el.src || el.svgName || '';
+          
+          if (src === 'weather-icon') {
+            if (data.weather?.icon_url) {
+              src = data.weather.icon_url;
+              elDiv.classList.add('weather-icon');
+            } else {
+              console.warn('No weather icon URL available');
+              continue;
+            }
+          }
+          
+          const fullUrl = resolveUrl(src, svg_base);
+          
+          if (fullUrl.endsWith('.svg')) {
+            await inlineSvgInto(elDiv, fullUrl);
+          } else {
+            const img = document.createElement('img');
+            img.src = fullUrl;
+            img.style.width = '100%';
+            img.style.height = '100%';
+            img.style.objectFit = 'contain';
+            img.onerror = () => {
+              console.error('Image failed to load:', fullUrl);
+            };
+            elDiv.appendChild(img);
+          }
+        }
+        
+        canvas.appendChild(elDiv);
+      }
+      
+      console.log('✓ Layout rendered successfully');
+    }
+  </script>
+</body>
+</html>
