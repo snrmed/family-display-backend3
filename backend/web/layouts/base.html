@@ -72,58 +72,121 @@
       z-index: 1;
       object-fit: cover;
     }
+
+    .status-message {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 18px;
+      color: #444;
+      text-align: center;
+      padding: 20px;
+      max-width: 90%;
+      line-height: 1.4;
+    }
   </style>
 </head>
 <body>
   <div id="canvas"></div>
-  
+
   <script>
-    // Parse data from URL query parameter
     const urlParams = new URLSearchParams(window.location.search);
     const encodedData = urlParams.get('data');
-    
-    if (!encodedData) {
-      console.error('No data parameter provided');
-      document.body.innerHTML = '<div style="padding: 20px;">Error: No render data provided</div>';
-    } else {
+    const deviceId = urlParams.get('device') || 'familydisplay';
+
+    function setStatusMessage(message) {
+      const canvas = document.getElementById('canvas');
+      if (!canvas) return;
+      canvas.innerHTML = `<div class="status-message">${message}</div>`;
+    }
+
+    async function initialize() {
+      let data = null;
+
+      if (encodedData) {
+        try {
+          const dataJson = decodeURIComponent(encodedData);
+          data = JSON.parse(dataJson);
+        } catch (error) {
+          console.warn('Failed to parse render data from query string. Falling back to API.', error);
+          setStatusMessage('Loading latest render data…');
+        }
+      } else {
+        console.warn('No data parameter provided. Loading data from API.');
+        setStatusMessage('Loading latest render data…');
+      }
+
+      if (!data) {
+        try {
+          const response = await fetch(`/v1/render_data?device=${encodeURIComponent(deviceId)}`);
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+          data = await response.json();
+        } catch (error) {
+          console.error('Unable to load render data from API:', error);
+          setStatusMessage('Error: Unable to load render data');
+          return;
+        }
+      }
+
+      if (!data || typeof data !== 'object') {
+        console.error('Render data is not an object:', data);
+        setStatusMessage('Error: Invalid render data');
+        return;
+      }
+
+      console.log('Render data:', data);
+
       try {
-        const dataJson = decodeURIComponent(encodedData);
-        const data = JSON.parse(dataJson);
-        console.log('Render data:', data);
-
         injectFontFaces(data.font_base);
-
-        // Render the layout
-        renderLayout(data);
+        await renderLayout(data);
       } catch (error) {
-        console.error('Failed to parse render data:', error);
-        document.body.innerHTML = '<div style="padding: 20px;">Error: Invalid render data</div>';
+        console.error('Failed to render layout:', error);
+        setStatusMessage('Error: Unable to render layout');
       }
     }
-    
+
     /**
      * Resolve relative/absolute paths to full URLs
      */
-    function resolveUrl(path, svg_base) {
+    function joinUrl(base, path) {
+      const safeBase = String(base || '').replace(/\/+$/, '');
+      const safePath = String(path || '').replace(/^\/+/, '');
+
+      if (!safeBase) return safePath;
+      if (!safePath) return safeBase;
+
+      return `${safeBase}/${safePath}`;
+    }
+
+    function resolveUrl(path, base) {
       if (!path) return "";
-      
-      if (path.startsWith("http://") || path.startsWith("https://")) {
-        return path;
+
+      const safePath = String(path);
+
+      if (/^https?:\/\//i.test(safePath)) {
+        return safePath;
       }
-      
-      if (path.startsWith("/")) {
-        if (svg_base && svg_base.startsWith("http")) {
-          const base = svg_base.split("/gcs/")[0];
-          return base + path;
+
+      if (safePath.startsWith("/")) {
+        if (base && /^https?:\/\//i.test(base)) {
+          try {
+            const origin = new URL(base).origin;
+            return `${origin}${safePath}`;
+          } catch (error) {
+            console.warn('Failed to resolve absolute path using base:', base, error);
+          }
         }
-        return path;
+        return safePath;
       }
-      
-      if (svg_base) {
-        return svg_base + "/" + path;
+
+      if (base) {
+        return joinUrl(base, safePath);
       }
-      
-      return path;
+
+      return safePath;
     }
     
     /**
@@ -327,6 +390,7 @@
      */
     async function renderLayout(data) {
       const canvas = document.getElementById('canvas');
+      canvas.innerHTML = '';
       const layout = data.layout || {};
       const elements = layout.elements || [];
       const svg_base = data.svg_base || "";
@@ -440,6 +504,8 @@
       
       console.log('✓ Layout rendered successfully');
     }
+
+    initialize();
   </script>
 </body>
 </html>
