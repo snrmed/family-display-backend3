@@ -933,21 +933,20 @@ const GRID_SIZE = 20;
 const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 480;
 
-const FONT_MANIFEST = [
-  { value: 'Space Grotesk', label: 'Space Grotesk', file: 'SpaceGrotesk/SpaceGrotesk-VariableFont_wght.ttf' },
-  { value: 'Inter', label: 'Inter', file: 'Inter/Inter-VariableFont_slnt,wght.ttf' },
-  { value: 'Plus Jakarta Sans', label: 'Plus Jakarta Sans', file: 'PlusJakartaSans/PlusJakartaSans-VariableFont_wght.ttf' },
-  { value: 'Public Sans', label: 'Public Sans', file: 'PublicSans/PublicSans-VariableFont_wght.ttf' },
-  { value: 'Outfit', label: 'Outfit', file: 'Outfit/Outfit-VariableFont_wght.ttf' },
-  { value: 'Manrope', label: 'Manrope', file: 'Manrope/Manrope-VariableFont_wght.ttf' },
-  { value: 'Roboto', label: 'Roboto', file: 'Roboto/Roboto-Regular.ttf' },
-  { value: 'Source Sans 3', label: 'Source Sans 3', file: 'SourceSans3/SourceSans3-VariableFont_wght.ttf' },
-  { value: 'Atkinson Hyperlegible', label: 'Atkinson Hyperlegible', file: 'AtkinsonHyperlegible/AtkinsonHyperlegible-Regular.ttf' },
-  { value: 'Merriweather', label: 'Merriweather', file: 'Merriweather/Merriweather-Regular.ttf' },
-  { value: 'Noto Sans', label: 'Noto Sans', file: 'NotoSans/NotoSans-Regular.ttf' }
+const FONT_OPTIONS = [
+  { value: 'Space Grotesk', label: 'Space Grotesk' },
+  { value: 'Inter', label: 'Inter' },
+  { value: 'Plus Jakarta Sans', label: 'Plus Jakarta Sans' },
+  { value: 'Public Sans', label: 'Public Sans' },
+  { value: 'Outfit', label: 'Outfit' },
+  { value: 'Manrope', label: 'Manrope' },
+  { value: 'Roboto', label: 'Roboto' },
+  { value: 'Source Sans 3', label: 'Source Sans 3' },
+  { value: 'Atkinson Hyperlegible', label: 'Atkinson Hyperlegible' },
+  { value: 'Merriweather', label: 'Merriweather' },
+  { value: 'Noto Sans', label: 'Noto Sans' }
 ];
 
-const FONT_OPTIONS = FONT_MANIFEST.map(({ value, label }) => ({ value, label }));
 const DEFAULT_FONT_FAMILY = FONT_OPTIONS[0].value;
 
 // Australian cities with timezones
@@ -970,36 +969,6 @@ let selectedEl = null;
 let svgLibrary = [];
 let presets = [];
 let availableInfoTypes = [];
-let fontsInjected = false;
-
-function resolveFontUrl(base, path) {
-  if (!path) return '';
-  const trimmedBase = (base || '../fonts').replace(/\/+$/, '');
-  const trimmedPath = String(path).replace(/^\/+/, '');
-  return `${trimmedBase}/${trimmedPath}`;
-}
-
-function injectFontFaces(fontBase) {
-  if (fontsInjected) return;
-
-  const style = document.createElement('style');
-  style.id = 'designer-fonts';
-  const base = fontBase || '../fonts';
-  style.textContent = FONT_MANIFEST.map(font => {
-    const url = resolveFontUrl(base, font.file);
-    return `@font-face { font-family: '${font.value}'; src: url('${url}') format('truetype'); font-display: swap; }`;
-  }).join('\n');
-
-  document.head.appendChild(style);
-  fontsInjected = true;
-}
-
-function addInfoType(type) {
-  if (!type) return;
-  if (!availableInfoTypes.includes(type)) {
-    availableInfoTypes.push(type);
-  }
-}
 
 function addInfoType(type) {
   if (!type) return;
@@ -1244,9 +1213,7 @@ async function fetchRenderData() {
     
     renderData = await response.json();
     console.log('Render data loaded:', renderData);
-
-    injectFontFaces(renderData.font_base);
-
+    
     // Build available info types
     availableInfoTypes = ['CUSTOM'];
 
