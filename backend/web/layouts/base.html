@@ -72,261 +72,80 @@
       z-index: 1;
       object-fit: cover;
     }
-
-    .status-message {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      font-size: 18px;
-      color: #444;
-      text-align: center;
-      padding: 20px;
-      max-width: 90%;
-      line-height: 1.4;
-    }
   </style>
 </head>
 <body>
   <div id="canvas"></div>
-
+  
   <script>
+    // Parse data from URL query parameter
     const urlParams = new URLSearchParams(window.location.search);
     const encodedData = urlParams.get('data');
-    const deviceId = urlParams.get('device') || 'familydisplay';
-
-    function setStatusMessage(message) {
-      const canvas = document.getElementById('canvas');
-      if (!canvas) return;
-      canvas.innerHTML = `<div class="status-message">${message}</div>`;
-    }
-
-    async function initialize() {
-      let data = null;
-
-      if (encodedData) {
-        try {
-          const dataJson = decodeURIComponent(encodedData);
-          data = JSON.parse(dataJson);
-        } catch (error) {
-          console.warn('Failed to parse render data from query string. Falling back to API.', error);
-          setStatusMessage('Loading latest render data…');
-        }
-      } else {
-        console.warn('No data parameter provided. Loading data from API.');
-        setStatusMessage('Loading latest render data…');
-      }
-
-      if (!data) {
-        try {
-          const response = await fetch(`/v1/render_data?device=${encodeURIComponent(deviceId)}`);
-          if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-          }
-          data = await response.json();
-        } catch (error) {
-          console.error('Unable to load render data from API:', error);
-          setStatusMessage('Error: Unable to load render data');
-          return;
-        }
-      }
-
-      if (!data || typeof data !== 'object') {
-        console.error('Render data is not an object:', data);
-        setStatusMessage('Error: Invalid render data');
-        return;
-      }
-
-      console.log('Render data:', data);
-
+    
+    if (!encodedData) {
+      console.error('No data parameter provided');
+      document.body.innerHTML = '<div style="padding: 20px;">Error: No render data provided</div>';
+    } else {
       try {
-        injectFontFaces(data.font_base);
-        await renderLayout(data);
+        const dataJson = decodeURIComponent(encodedData);
+        const data = JSON.parse(dataJson);
+        console.log('Render data:', data);
+        
+        // Render the layout
+        renderLayout(data);
       } catch (error) {
-        console.error('Failed to render layout:', error);
-        setStatusMessage('Error: Unable to render layout');
+        console.error('Failed to parse render data:', error);
+        document.body.innerHTML = '<div style="padding: 20px;">Error: Invalid render data</div>';
       }
     }
-
+    
     /**
      * Resolve relative/absolute paths to full URLs
      */
-    function joinUrl(base, path) {
-      const safeBase = String(base || '').replace(/\/+$/, '');
-      const safePath = String(path || '').replace(/^\/+/, '');
-
-      if (!safeBase) return safePath;
-      if (!safePath) return safeBase;
-
-      return `${safeBase}/${safePath}`;
-    }
-
-    function resolveUrl(path, base) {
+    function resolveUrl(path, svg_base) {
       if (!path) return "";
-
-      const safePath = String(path);
-
-      if (/^https?:\/\//i.test(safePath)) {
-        return safePath;
+      
+      if (path.startsWith("http://") || path.startsWith("https://")) {
+        return path;
       }
-
-      if (safePath.startsWith("/")) {
-        if (base && /^https?:\/\//i.test(base)) {
-          try {
-            const origin = new URL(base).origin;
-            return `${origin}${safePath}`;
-          } catch (error) {
-            console.warn('Failed to resolve absolute path using base:', base, error);
-          }
+      
+      if (path.startsWith("/")) {
+        if (svg_base && svg_base.startsWith("http")) {
+          const base = svg_base.split("/gcs/")[0];
+          return base + path;
         }
-        return safePath;
+        return path;
       }
-
-      if (base) {
-        return joinUrl(base, safePath);
+      
+      if (svg_base) {
+        return svg_base + "/" + path;
       }
-
-      return safePath;
+      
+      return path;
     }
     
     /**
      * Resolve dynamic text content
      */
-    const FONT_MANIFEST = [
-      { family: 'Space Grotesk', file: 'SpaceGrotesk/SpaceGrotesk-VariableFont_wght.ttf' },
-      { family: 'Inter', file: 'Inter/Inter-VariableFont_slnt,wght.ttf' },
-      { family: 'Plus Jakarta Sans', file: 'PlusJakartaSans/PlusJakartaSans-VariableFont_wght.ttf' },
-      { family: 'Public Sans', file: 'PublicSans/PublicSans-VariableFont_wght.ttf' },
-      { family: 'Outfit', file: 'Outfit/Outfit-VariableFont_wght.ttf' },
-      { family: 'Manrope', file: 'Manrope/Manrope-VariableFont_wght.ttf' },
-      { family: 'Roboto', file: 'Roboto/Roboto-Regular.ttf' },
-      { family: 'Source Sans 3', file: 'SourceSans3/SourceSans3-VariableFont_wght.ttf' },
-      { family: 'Atkinson Hyperlegible', file: 'AtkinsonHyperlegible/AtkinsonHyperlegible-Regular.ttf' },
-      { family: 'Merriweather', file: 'Merriweather/Merriweather-Regular.ttf' },
-      { family: 'Noto Sans', file: 'NotoSans/NotoSans-Regular.ttf' }
-    ];
-
-    function injectFontFaces(fontBase) {
-      if (document.getElementById('dynamic-fonts')) {
-        return;
-      }
-
-      const base = fontBase || '../fonts';
-      const cssChunks = FONT_MANIFEST.map(font => {
-        const url = resolveUrl(font.file, base);
-        return `@font-face { font-family: '${font.family}'; src: url('${url}') format('truetype'); font-display: swap; }`;
-      });
-
-      const style = document.createElement('style');
-      style.id = 'dynamic-fonts';
-      style.textContent = cssChunks.join('\n');
-      document.head.appendChild(style);
-    }
-
     function resolveDynamicText(type, data) {
-      if (!type) return "";
-
-      const normalized = String(type).toUpperCase();
-      const weather = data.weather || {};
-      const tomorrow = weather.tomorrow || {};
-
-      switch (normalized) {
+      switch (type) {
         case "WEATHER_TEMP":
-        case "TEMP":
-          if (weather.temp != null) {
-            return `${weather.temp}°`;
-          }
-          return "";
-
-        case "WEATHER_FEELS_LIKE":
-        case "FEELS_LIKE":
-          if (weather.feels_like != null) {
-            return `Feels like ${weather.feels_like}°`;
-          }
-          return "";
-
-        case "WEATHER_MINMAX":
-        case "TEMP_RANGE":
-          if (weather.temp_min != null && weather.temp_max != null) {
-            return `${weather.temp_min}° / ${weather.temp_max}°`;
-          }
-          return "";
-
+          return data.weather?.temp ? `${data.weather.temp}°` : "";
+        
         case "WEATHER_DESC":
-        case "DESC":
-          return weather.desc || weather.description || "";
-
-        case "WEATHER_DESC_EXTENDED":
-        case "DESC_EXTENDED":
-          return weather.desc_extended || weather.desc || weather.description || "";
-
+          return data.weather?.description || "";
+        
         case "WEATHER_CITY":
-        case "CITY":
-          return weather.city || data.city || "";
-
-        case "TOMORROW_DESC":
-          return tomorrow.desc || "";
-
-        case "TOMORROW_TEMP":
-        case "TOMORROW_MINMAX":
-          if (tomorrow.temp_min != null && tomorrow.temp_max != null) {
-            return `${tomorrow.temp_min}° / ${tomorrow.temp_max}°`;
-          }
-          return "";
-
-        case "HUMIDITY":
-          if (weather.humidity != null) {
-            return `Humidity: ${weather.humidity}%`;
-          }
-          return "";
-
-        case "RAIN":
-          if (weather.rain != null) {
-            return `Rain: ${weather.rain}mm`;
-          }
-          return "";
-
-        case "WIND":
-          if (weather.wind != null) {
-            return `Wind: ${weather.wind}km/h`;
-          }
-          return "";
-
+          return data.weather?.city || "";
+        
         case "DAD_JOKE":
-        case "JOKE":
           return data.dad_joke || "";
-
+        
         case "DATE":
           return data.date || "";
 
         default:
           return "";
-      }
-    }
-
-    function applyTextShadowStyle(element, type, color, intensity) {
-      if (!element) return;
-
-      if (!type || type === 'none') {
-        element.style.textShadow = 'none';
-        element.style.filter = 'none';
-        return;
-      }
-
-      const safeColor = color || '#000000';
-      const parsedIntensity = parseFloat(intensity);
-      const safeIntensity = Number.isFinite(parsedIntensity) ? parsedIntensity : 1;
-      const blur = Math.round(safeIntensity * 4);
-
-      if (type === 'shadow') {
-        element.style.textShadow = `2px 2px ${blur}px ${safeColor}`;
-        element.style.filter = 'none';
-      } else if (type === 'glow') {
-        element.style.textShadow = `0 0 ${blur}px ${safeColor}, 0 0 ${blur * 2}px ${safeColor}, 0 0 ${blur * 3}px ${safeColor}`;
-        element.style.filter = 'none';
-      } else {
-        element.style.textShadow = 'none';
-        element.style.filter = 'none';
       }
     }
 
@@ -390,7 +209,6 @@
      */
     async function renderLayout(data) {
       const canvas = document.getElementById('canvas');
-      canvas.innerHTML = '';
       const layout = data.layout || {};
       const elements = layout.elements || [];
       const svg_base = data.svg_base || "";
@@ -440,22 +258,17 @@
           contentDiv.style.fontSize = (el.fontSize || 16) + 'px';
           contentDiv.style.color = el.color || '#000';
           contentDiv.style.fontWeight = el.fontWeight || 'normal';
-          if (el.fontFamily) {
-            contentDiv.style.fontFamily = `'${el.fontFamily}', sans-serif`;
-          }
           contentDiv.style.width = '100%';
           contentDiv.style.height = '100%';
           contentDiv.style.display = 'flex';
           contentDiv.style.alignItems = 'center';
           contentDiv.style.justifyContent = 'center';
           contentDiv.style.textAlign = 'center';
-
-          if (el.textShadowType && el.textShadowType !== 'none') {
-            applyTextShadowStyle(contentDiv, el.textShadowType, el.textShadowColor, el.textShadowIntensity);
-          } else if (el.textShadow) {
+          
+          if (el.textShadow) {
             contentDiv.style.textShadow = el.textShadow;
           }
-
+          
           elDiv.appendChild(contentDiv);
           
         } else if (kind === 'box') {
@@ -504,8 +317,6 @@
       
       console.log('✓ Layout rendered successfully');
     }
-
-    initialize();
   </script>
 </body>
 </html>
