@@ -434,6 +434,9 @@ async def build_render_data(device: str = "familydisplay") -> dict:
         else:
             svg_base = make_public_url("designer/svgs")
         
+        # Font base for loading fonts in base.html
+        font_base = make_public_url("fonts")
+        
         return {
             "layout": layout,
             "weather": weather,
@@ -442,6 +445,7 @@ async def build_render_data(device: str = "familydisplay") -> dict:
             "bg_url": bg_url,
             "pexels": pexels_info,
             "svg_base": svg_base,
+            "font_base": font_base,
             "device": device_config,
             "timestamp": now.isoformat()
         }
