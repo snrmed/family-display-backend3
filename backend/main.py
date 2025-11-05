@@ -77,25 +77,10 @@ except Exception as e:
 # ============================================================================
 
 def make_public_url(path: str) -> str:
-    """Generate public URL for assets.
-
-    When a ``PUBLIC_BASE_URL`` is configured we want to point directly at that
-    host (usually a Google Cloud Storage bucket or CDN). In that case the
-    ``gcs/`` prefix that we use for the internal proxy should be stripped so the
-    resulting URL matches the actual object path in the bucket. For in-app
-    serving we keep the prefix so requests continue to flow through the FastAPI
-    proxy mounted at ``/gcs``.
-    """
-
-    normalized_path = path.lstrip("/")
-
+    """Generate public URL for assets"""
     if PUBLIC_BASE_URL:
-        base = PUBLIC_BASE_URL.rstrip("/")
-        if normalized_path.startswith("gcs/"):
-            normalized_path = normalized_path[4:]
-        return f"{base}/{normalized_path}"
-
-    return f"/{normalized_path}"
+        return f"{PUBLIC_BASE_URL}/{path}"
+    return f"/{path}"
 
 
 def resolve_static_dir(*relative_paths: str) -> Path | None:
@@ -438,19 +423,12 @@ async def build_render_data(device: str = "familydisplay") -> dict:
         # Get all available categories for frontend
         categories = get_pexels_categories() if ENABLE_PEXELS else []
         
-        if storage_enabled:
-            font_base = make_public_url("gcs/assets/fonts")
-            if font_base.startswith("/"):
-                font_base = f"https://storage.googleapis.com/{GCS_BUCKET}/assets/fonts"
-        else:
-            font_base = "../fonts"
-
         if ENABLE_PEXELS:
             pexels_info = pexels_info or {}
             pexels_info["categories"] = categories
-
+        
         date_str = now.strftime("%a, %d %b")
-
+        
         if storage_enabled:
             svg_base = make_public_url("gcs/assets/svgs")
         else:
@@ -464,7 +442,6 @@ async def build_render_data(device: str = "familydisplay") -> dict:
             "bg_url": bg_url,
             "pexels": pexels_info,
             "svg_base": svg_base,
-            "font_base": font_base,
             "device": device_config,
             "timestamp": now.isoformat()
         }
