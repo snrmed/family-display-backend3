@@ -147,7 +147,7 @@ body{
 }
 
 .section.collapsed .section-toggle::before{
-  content:'â–¶';
+  content:'&#9654;';
 }
 
 .section-header{
@@ -184,7 +184,7 @@ body{
 }
 
 .section-toggle::before{
-  content:'â–¼';
+  content:'&#9660;';
 }
 
 .section-content{
@@ -550,7 +550,7 @@ body{
 <div class="modal" id="setupModal">
   <div class="modal-box">
     <div class="modal-header">
-      <div class="modal-icon">ðŸš€</div>
+      <div class="modal-icon">&#128640;</div>
       <div class="modal-title">
         <h2>Welcome to Kin:D Designer</h2>
         <p>Enter your device ID to begin</p>
@@ -574,7 +574,7 @@ body{
 <!-- HEADER -->
 <div class="header">
   <div class="brand">
-    <span class="brand-logo">ðŸŽ¨</span>
+    <span class="brand-logo">&#127912;</span>
     <span class="brand-name">Kin:D Designer</span>
     <span class="brand-tag">v4</span>
   </div>
@@ -592,11 +592,11 @@ body{
       <input type="checkbox" id="snapToggle" checked style="cursor:pointer;">
       Snap
     </label>
-    <button class="btn" id="undoBtn">â†¶ Undo</button>
-    <button class="btn" id="redoBtn">â†· Redo</button>
-    <button class="btn" id="exportBtn">ðŸ“¥ Export JSON</button>
-    <button class="btn" id="pngBtn">ðŸ–¼ï¸ Export PNG</button>
-    <button class="btn btn-primary" id="saveBtn">ðŸ’¾ Save Layout</button>
+    <button class="btn" id="undoBtn">&#8630; Undo</button>
+    <button class="btn" id="redoBtn">&#8631; Redo</button>
+    <button class="btn" id="exportBtn">&#128229; Export JSON</button>
+    <button class="btn" id="pngBtn">&#128444;&#65039; Export PNG</button>
+    <button class="btn btn-primary" id="saveBtn">&#128190; Save Layout</button>
   </div>
 </div>
 
@@ -608,7 +608,7 @@ body{
     <div class="section">
       <div class="section-header" onclick="toggleSection(this)">
         <div class="section-title">
-          <span class="section-icon">âš™ï¸</span>
+          <span class="section-icon">&#9881;&#65039;</span>
           Device Settings
         </div>
         <span class="section-toggle"></span>
@@ -649,7 +649,7 @@ body{
     <div class="section">
       <div class="section-header" onclick="toggleSection(this)">
         <div class="section-title">
-          <span class="section-icon">âž•</span>
+          <span class="section-icon">&#10133;</span>
           Quick Add
         </div>
         <span class="section-toggle"></span>
@@ -661,15 +661,15 @@ body{
             <div class="quick-label">Text</div>
           </div>
           <div class="quick-btn" onclick="quickAddBox()">
-            <div class="quick-icon">â–¢</div>
+            <div class="quick-icon">&#9634;</div>
             <div class="quick-label">Box</div>
           </div>
           <div class="quick-btn" onclick="showSVGModal()" id="quickAddSvg">
-            <div class="quick-icon">â˜…</div>
+            <div class="quick-icon">&#9733;</div>
             <div class="quick-label">SVG</div>
           </div>
           <div class="quick-btn" onclick="showIconModal()" id="quickAddIcon">
-            <div class="quick-icon">ðŸŒ¤</div>
+            <div class="quick-icon">&#127780;</div>
             <div class="quick-label">Weather</div>
           </div>
         </div>
@@ -680,7 +680,7 @@ body{
     <div class="section">
       <div class="section-header" onclick="toggleSection(this)">
         <div class="section-title">
-          <span class="section-icon">ðŸŽ¨</span>
+          <span class="section-icon">&#127912;</span>
           Layout Presets
         </div>
         <span class="section-toggle"></span>
@@ -701,7 +701,7 @@ body{
     <div class="section collapsed">
       <div class="section-header" onclick="toggleSection(this)">
         <div class="section-title">
-          <span class="section-icon">ðŸ–¼ï¸</span>
+          <span class="section-icon">&#128444;&#65039;</span>
           Background
         </div>
         <span class="section-toggle"></span>
@@ -717,7 +717,7 @@ body{
     <option value="minimal">Minimal</option>
 </select>
         </div>
-        <button class="btn" onclick="loadPexelsBackground()" style="width:100%">ðŸ”„ Refresh Background</button>
+        <button class="btn" onclick="loadPexelsBackground()" style="width:100%">&#128260; Refresh Background</button>
       </div>
     </div>
     
@@ -738,14 +738,14 @@ body{
   <!-- INSPECTOR -->
   <div class="inspector">
     <div id="inspectorEmpty" class="inspector-empty">
-      <div class="inspector-empty-icon">ðŸ‘†</div>
+      <div class="inspector-empty-icon">&#128070;</div>
       <p>Select an element to edit its properties</p>
     </div>
     
     <div id="inspectorContent" class="hidden">
       <!-- Transform Panel -->
       <div class="panel">
-        <div class="panel-title">ðŸ“ Transform</div>
+        <div class="panel-title">&#128208; Transform</div>
         <div class="row">
           <div>
             <label class="form-label">X</label>
@@ -771,14 +771,14 @@ body{
           <input type="range" id="elOpacity" min="0" max="1" step="0.1" value="1" oninput="updateElOpacity()">
         </div>
         <div class="row">
-          <button class="btn" onclick="deleteElement()">ðŸ—‘ï¸ Delete</button>
-          <button class="btn" onclick="duplicateElement()">ðŸ“‹ Duplicate</button>
+          <button class="btn" onclick="deleteElement()">&#128465;&#65039; Delete</button>
+          <button class="btn" onclick="duplicateElement()">&#128203; Duplicate</button>
         </div>
       </div>
       
       <!-- Text Panel -->
       <div class="panel" id="textPanel" style="display:none">
-        <div class="panel-title">âœï¸ Text</div>
+        <div class="panel-title">&#9999;&#65039; Text</div>
         <div class="form-group">
           <label class="form-label">Type</label>
           <select class="form-select" id="textType" onchange="updateTextType()">
@@ -847,7 +847,7 @@ body{
       
       <!-- Box Panel -->
       <div class="panel" id="boxPanel" style="display:none">
-        <div class="panel-title">â–¢ Box Style</div>
+        <div class="panel-title">&#9634; Box Style</div>
         <div class="form-group">
           <label class="form-label">Background</label>
           <input type="color" id="boxBg" value="#ffffff" onchange="updateBoxStyle()">
@@ -864,7 +864,7 @@ body{
       
       <!-- SVG Panel -->
       <div class="panel" id="svgPanel" style="display:none">
-        <div class="panel-title">â˜… SVG</div>
+        <div class="panel-title">&#9733; SVG</div>
         <p style="color:var(--text-muted);font-size:12px;">
           SVG elements are vector graphics that scale without pixelation.
         </p>
@@ -877,7 +877,7 @@ body{
 <div class="modal hidden" id="svgModal">
   <div class="modal-box">
     <div class="modal-header">
-      <div class="modal-icon">â˜…</div>
+      <div class="modal-icon">&#9733;</div>
       <div class="modal-title">
         <h2>Choose SVG</h2>
         <p>Select a graphic to add</p>
@@ -898,7 +898,7 @@ body{
 <div class="modal hidden" id="iconModal">
   <div class="modal-box">
     <div class="modal-header">
-      <div class="modal-icon">ðŸŒ¤</div>
+      <div class="modal-icon">&#127780;</div>
       <div class="modal-title">
         <h2>Add Weather Icon</h2>
         <p>Icon updates automatically based on conditions</p>
@@ -1012,7 +1012,7 @@ const iconThemeSelect = document.getElementById('iconThemeSelect');
 // ========================================================================
 
 async function init() {
-  console.log('ðŸŽ¨ Initializing Kin:D Designer v4...');
+  console.log('&#127912; Initializing Kin:D Designer v4...');
 
   drawGrid();
   populateFontOptions();
@@ -1085,12 +1085,12 @@ async function completeSetup() {
     // Load pexels background
     await loadPexelsBackground();
     
-    updateStatus('âœ“ Ready', 'success');
-    console.log('âœ“ Initialization complete');
+    updateStatus('&#10003; Ready', 'success');
+    console.log('&#10003; Initialization complete');
     
   } catch (error) {
     console.error('Initialization error:', error);
-    updateStatus('âš ï¸ Connection error', 'error');
+    updateStatus('&#9888;&#65039; Connection error', 'error');
   }
 }
 
@@ -1164,7 +1164,7 @@ async function saveDeviceConfig() {
     });
     
     if (response.ok) {
-      updateStatus('âœ“ Device settings saved', 'success');
+      updateStatus('&#10003; Device settings saved', 'success');
       
       // Reload render data with new location
       await fetchRenderData();
@@ -1174,7 +1174,7 @@ async function saveDeviceConfig() {
     }
   } catch (error) {
     console.error('Save device config error:', error);
-    updateStatus('âš ï¸ Failed to save settings', 'error');
+    updateStatus('&#9888;&#65039; Failed to save settings', 'error');
   }
 }
 
@@ -1199,7 +1199,7 @@ async function loadPexelsBackground() {
       // Use background from render data if available
       if (data.bg_url) {
         canvas.style.backgroundImage = `url(${data.bg_url})`;
-        console.log('âœ“ Loaded Pexels background:', data.bg_url);
+        console.log('&#10003; Loaded Pexels background:', data.bg_url);
       }
     }
   } catch (error) {
@@ -1303,13 +1303,13 @@ function getDynamicText(type) {
   
   switch (type) {
     case 'TEMP':
-      return weather?.temp != null ? `${weather.temp}Â°C` : '--Â°C';
+      return weather?.temp != null ? `${weather.temp}&deg;C` : '--&deg;C';
     
     case 'WEATHER_MINMAX':
       if (weather?.temp_min != null && weather?.temp_max != null) {
-        return `${weather.temp_min}Â° / ${weather.temp_max}Â°`;
+        return `${weather.temp_min}&deg; / ${weather.temp_max}&deg;`;
       }
-      return '--Â° / --Â°';
+      return '--&deg; / --&deg;';
     
     case 'CITY':
       return weather?.city || deviceConfig?.location?.city || 'City';
@@ -1324,16 +1324,16 @@ function getDynamicText(type) {
       return renderData?.dad_joke || 'No joke today.';
     
     case 'WEATHER_DESC_EXTENDED':
-      return weather?.desc_extended || weather?.desc || 'Sunny, 28Â°C with clear skies';
+      return weather?.desc_extended || weather?.desc || 'Sunny, 28&deg;C with clear skies';
     
     case 'TOMORROW_DESC':
-      return weather?.tomorrow?.desc || 'Partly cloudy, 24Â°-31Â°C with 40% chance of rain';
+      return weather?.tomorrow?.desc || 'Partly cloudy, 24&deg;-31&deg;C with 40% chance of rain';
     
     case 'TOMORROW_TEMP':
       if (weather?.tomorrow?.temp_min != null && weather?.tomorrow?.temp_max != null) {
-        return `${weather.tomorrow.temp_min}Â° / ${weather.tomorrow.temp_max}Â°`;
+        return `${weather.tomorrow.temp_min}&deg; / ${weather.tomorrow.temp_max}&deg;`;
       }
-      return '--Â° / --Â°';
+      return '--&deg; / --&deg;';
     
     case 'HUMIDITY':
       return weather?.humidity != null ? `Humidity: ${weather.humidity}%` : 'Humidity: --%';
@@ -1439,7 +1439,7 @@ function showSVGModal() {
     img.alt = labelText;
     img.onerror = () => {
       preview.classList.add('grid-item-fallback');
-      preview.textContent = 'â˜…';
+      preview.textContent = '&#9733;';
       img.remove();
     };
     preview.appendChild(img);
@@ -1557,7 +1557,7 @@ function addElement(kind, x, y, w, h, options = {}) {
   canvas.appendChild(el);
   selectElement(el);
   
-  updateStatus('âœ“ Element added', 'success');
+  updateStatus('&#10003; Element added', 'success');
 }
 
 async function loadSVGIntoElement(el, src) {
@@ -1797,7 +1797,7 @@ function deleteElement() {
   saveState();
   selectedEl.remove();
   selectElement(null);
-  updateStatus('âœ“ Element deleted', 'success');
+  updateStatus('&#10003; Element deleted', 'success');
 }
 
 function duplicateElement() {
@@ -1812,7 +1812,7 @@ function duplicateElement() {
   canvas.appendChild(clone);
   selectElement(clone);
   
-  updateStatus('âœ“ Element duplicated', 'success');
+  updateStatus('&#10003; Element duplicated', 'success');
 }
 
 // ========================================================================
@@ -1986,14 +1986,14 @@ async function saveLayout() {
     });
     
     if (response.ok) {
-      updateStatus('âœ“ Layout saved', 'success');
+      updateStatus('&#10003; Layout saved', 'success');
       return true;
     } else {
       throw new Error('Save failed');
     }
   } catch (error) {
     console.error('Save layout error:', error);
-    updateStatus('âš ï¸ Save failed', 'error');
+    updateStatus('&#9888;&#65039; Save failed', 'error');
     return false;
   }
 }
@@ -2007,7 +2007,7 @@ async function exportPNG() {
   }
 
   try {
-    updateStatus('â³ Rendering PNG...');
+    updateStatus('&#9203; Rendering PNG...');
 
     if (document.fonts && document.fonts.ready) {
       try {
@@ -2043,10 +2043,10 @@ async function exportPNG() {
       }, 'image/png');
     });
 
-    updateStatus('âœ“ PNG exported', 'success');
+    updateStatus('&#10003; PNG exported', 'success');
   } catch (error) {
     console.error('PNG export error:', error);
-    updateStatus('âš ï¸ Failed to export PNG', 'error');
+    updateStatus('&#9888;&#65039; Failed to export PNG', 'error');
   } finally {
     if (previousSelection) {
       selectElement(previousSelection);
@@ -2068,7 +2068,7 @@ function exportJSON() {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
   
-  updateStatus('âœ“ JSON exported', 'success');
+  updateStatus('&#10003; JSON exported', 'success');
 }
 
 async function loadLayout(layout) {
@@ -2090,7 +2090,7 @@ async function loadLayout(layout) {
   selectElement(null);
   currentLayout = layout;
   
-  updateStatus('âœ“ Layout loaded', 'success');
+  updateStatus('&#10003; Layout loaded', 'success');
 }
 
 async function loadPreset() {
@@ -2106,7 +2106,7 @@ async function loadPreset() {
     
   } catch (error) {
     console.error('Load preset error:', error);
-    updateStatus('âš ï¸ Failed to load preset', 'error');
+    updateStatus('&#9888;&#65039; Failed to load preset', 'error');
   }
 }
 
@@ -2134,7 +2134,7 @@ async function undo() {
   const prevState = undoStack.pop();
   await loadLayout(JSON.parse(prevState));
   
-  updateStatus('â†¶ Undo', 'success');
+  updateStatus('&#8630; Undo', 'success');
 }
 
 async function redo() {
@@ -2146,7 +2146,7 @@ async function redo() {
   const nextState = redoStack.pop();
   await loadLayout(JSON.parse(nextState));
   
-  updateStatus('â†· Redo', 'success');
+  updateStatus('&#8631; Redo', 'success');
 }
 
 // ========================================================================
