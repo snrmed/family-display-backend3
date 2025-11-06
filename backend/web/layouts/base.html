@@ -1,167 +1,166 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Kin:D Family Display Render</title>
-  <style>
-    /* Embed fonts inline for Playwright rendering */
-    @font-face {
-      font-family: 'Inter';
-      font-style: normal;
-      font-weight: 100 900;
-      font-display: swap;
-      src: local('Inter');
-    }
-    
-    @font-face {
-      font-family: 'Roboto';
-      font-style: normal;
-      font-weight: 400;
-      font-display: swap;
-      src: local('Roboto');
-    }
-    
-    @font-face {
-      font-family: 'Atkinson Hyperlegible';
-      font-style: normal;
-      font-weight: 400;
-      font-display: swap;
-      src: local('Atkinson Hyperlegible');
-    }
-    
-    @font-face {
-      font-family: 'Source Sans 3';
-      font-style: normal;
-      font-weight: 200 900;
-      font-display: swap;
-      src: local('Source Sans 3');
-    }
-    
-    @font-face {
-      font-family: 'Public Sans';
-      font-style: normal;
-      font-weight: 100 900;
-      font-display: swap;
-      src: local('Public Sans');
-    }
-    
-    @font-face {
-      font-family: 'Manrope';
-      font-style: normal;
-      font-weight: 200 800;
-      font-display: swap;
-      src: local('Manrope');
-    }
-    
-    @font-face {
-      font-family: 'Space Grotesk';
-      font-style: normal;
-      font-weight: 300 700;
-      font-display: swap;
-      src: local('Space Grotesk');
-    }
-    
-    @font-face {
-      font-family: 'Outfit';
-      font-style: normal;
-      font-weight: 100 900;
-      font-display: swap;
-      src: local('Outfit');
-    }
-    
-    @font-face {
-      font-family: 'Plus Jakarta Sans';
-      font-style: normal;
-      font-weight: 200 800;
-      font-display: swap;
-      src: local('Plus Jakarta Sans');
-    }
-    
-    @font-face {
-      font-family: 'Merriweather';
-      font-style: normal;
-      font-weight: 400;
-      font-display: swap;
-      src: local('Merriweather');
-    }
-    
-    @font-face {
-      font-family: 'Noto Sans';
-      font-style: normal;
-      font-weight: 400;
-      font-display: swap;
-      src: local('Noto Sans');
-    }
-    
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    
-    body {
-      width: 800px;
-      height: 480px;
-      overflow: hidden;
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: #fff;
-    }
-    
-    #canvas {
-      position: relative;
-      width: 800px;
-      height: 480px;
-      overflow: hidden;
-    }
-    
-    .el {
-      position: absolute;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    
-    .el.text {
-      z-index: 30;
-      white-space: pre-wrap;
-      word-wrap: break-word;
-    }
-    
-    .el.icon {
-      z-index: 30;
-    }
-    
-    .el.box {
-      z-index: 15;
-    }
-    
-    .el.svg,
-    .el.svg-overlay,
-    .el.image {
-      z-index: 20;
-    }
-    
-    .el.weather-icon {
-      z-index: 35;
-    }
-    
-    .el svg {
-      width: 100%;
-      height: 100%;
-      object-fit: contain;
-    }
-    
-    .background-image {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      z-index: 1;
-      object-fit: cover;
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kin:D Frame Render</title>
+<style>
+  @font-face {
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: local('Inter');
+  }
+  
+  @font-face {
+    font-family: 'Roboto';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: local('Roboto');
+  }
+  
+  @font-face {
+    font-family: 'Atkinson Hyperlegible';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: local('Atkinson Hyperlegible');
+  }
+  
+  @font-face {
+    font-family: 'Source Sans 3';
+    font-style: normal;
+    font-weight: 200 900;
+    font-display: swap;
+    src: local('Source Sans 3');
+  }
+  
+  @font-face {
+    font-family: 'Public Sans';
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: local('Public Sans');
+  }
+  
+  @font-face {
+    font-family: 'Manrope';
+    font-style: normal;
+    font-weight: 200 800;
+    font-display: swap;
+    src: local('Manrope');
+  }
+  
+  @font-face {
+    font-family: 'Space Grotesk';
+    font-style: normal;
+    font-weight: 300 700;
+    font-display: swap;
+    src: local('Space Grotesk');
+  }
+  
+  @font-face {
+    font-family: 'Outfit';
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: local('Outfit');
+  }
+  
+  @font-face {
+    font-family: 'Plus Jakarta Sans';
+    font-style: normal;
+    font-weight: 200 800;
+    font-display: swap;
+    src: local('Plus Jakarta Sans');
+  }
+  
+  @font-face {
+    font-family: 'Merriweather';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: local('Merriweather');
+  }
+  
+  @font-face {
+    font-family: 'Noto Sans';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: local('Noto Sans');
+  }
+  
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  
+  body {
+    width: 800px;
+    height: 480px;
+    overflow: hidden;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #fff;
+  }
+  
+  #canvas {
+    position: relative;
+    width: 800px;
+    height: 480px;
+    overflow: hidden;
+  }
+  
+  .el {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .el.text {
+    z-index: 30;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+  
+  .el.icon {
+    z-index: 30;
+  }
+  
+  .el.box {
+    z-index: 15;
+  }
+  
+  .el.svg,
+  .el.svg-overlay,
+  .el.image {
+    z-index: 20;
+  }
+  
+  .el.weather-icon {
+    z-index: 35;
+  }
+  
+  .el svg {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+  
+  .background-image {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+    object-fit: cover;
+  }
+</style>
 </head>
 <body>
   <div id="canvas"></div>
@@ -182,11 +181,12 @@
         
         // Load fonts if provided in data
         if (data.font_base) {
-          loadFonts(data.font_base);
+          loadFonts(data.font_base).then(() => {
+            renderLayout(data);
+          });
+        } else {
+          renderLayout(data);
         }
-        
-        // Render the layout
-        renderLayout(data);
       } catch (error) {
         console.error('Failed to parse render data:', error);
         document.body.innerHTML = '<div style="padding: 20px;">Error: Invalid render data</div>';
@@ -271,6 +271,9 @@
             return `${data.weather.temp_min}° / ${data.weather.temp_max}°`;
           }
           return "--° / --°";
+        
+        case "WEATHER_NOTE":
+          return data.weather?.desc || "No data";
         
         case "DATE":
           return data.date || new Date().toLocaleDateString();
@@ -376,7 +379,7 @@
           contentDiv.textContent = textContent;
           contentDiv.style.fontSize = (el.fontSize || 16) + 'px';
           contentDiv.style.color = el.color || '#000';
-          contentDiv.style.fontWeight = el.fontWeight || 'normal';
+          contentDiv.style.fontWeight = el.fontWeight || el.weight || 'normal';
           contentDiv.style.width = '100%';
           contentDiv.style.height = '100%';
           contentDiv.style.display = 'flex';
@@ -395,15 +398,21 @@
           } else if (el.textShadowType && el.textShadowType !== 'none') {
             const shadowColor = el.textShadowColor || '#000000';
             const intensity = el.textShadowIntensity || 1;
+            const blur = Math.round(4 * intensity);
             
             if (el.textShadowType === 'glow') {
-              const blur = Math.round(4 * intensity);
-              contentDiv.style.textShadow = `0 0 ${blur}px ${shadowColor}`;
-            } else if (el.textShadowType === 'drop') {
+              // Multiple layers for glow effect
+              contentDiv.style.textShadow = `
+                0 0 ${blur}px ${shadowColor},
+                0 0 ${blur * 2}px ${shadowColor},
+                0 0 ${blur * 3}px ${shadowColor}
+              `;
+            } else if (el.textShadowType === 'shadow' || el.textShadowType === 'drop') {
+              // Drop shadow
               const offset = Math.round(2 * intensity);
-              const blur = Math.round(4 * intensity);
               contentDiv.style.textShadow = `${offset}px ${offset}px ${blur}px ${shadowColor}`;
             } else if (el.textShadowType === 'outline') {
+              // Text outline
               const size = Math.round(1 * intensity);
               contentDiv.style.textShadow = `
                 -${size}px -${size}px 0 ${shadowColor},
