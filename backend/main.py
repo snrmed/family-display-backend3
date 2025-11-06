@@ -587,6 +587,61 @@ async def api_frame(device: str = "familydisplay"):
         logger.error(f"Failed to render frame: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# Debug roue
+@app.get("/v1/debug/render_data")
+async def debug_render_data(device: str = "familydisplay"):
+    """Debug endpoint - shows exactly what data will be passed to renderer"""
+    try:
+        data = await build_render_data(device)
+        
+        # Pretty print for readability
+        return {
+            "success": True,
+            "device": device,
+            "data_keys": list(data.keys()),
+            "layout_name": data.get("layout", {}).get("name"),
+            "element_count": len(data.get("layout", {}).get("elements", [])),
+            "elements": data.get("layout", {}).get("elements", []),
+            "weather": data.get("weather"),
+            "dad_joke": data.get("dad_joke"),
+            "date": data.get("date"),
+            "bg_url": data.get("bg_url"),
+            "svg_base": data.get("svg_base"),
+            "font_base": data.get("font_base"),
+            "full_data": data  # Complete data structure
+        }
+    except Exception as e:
+        logger.error(f"Debug render data error: {e}", exc_info=True)
+        return {
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+
+
+@app.get("/v1/debug/layout")
+def debug_layout(device: str = "familydisplay"):
+    """Debug endpoint - shows raw layout from GCS"""
+    try:
+        layout_key = f"devices/{device}/layouts/current.json"
+        layout = gcs_read_json(layout_key)
+        
+        return {
+            "success": True,
+            "device": device,
+            "layout_key": layout_key,
+            "layout": layout,
+            "element_count": len(layout.get("elements", []))
+        }
+    except Exception as e:
+        logger.error(f"Debug layout error: {e}", exc_info=True)
+        return {
+            "success": False,
+            "error": str(e),
+            "layout_key": f"devices/{device}/layouts/current.json",
+            "gcs_bucket": GCS_BUCKET,
+            "storage_enabled": storage_enabled
+        }
 
 # Designer Route
 @app.get("/designer/", response_class=HTMLResponse)
