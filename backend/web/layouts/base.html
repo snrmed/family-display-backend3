@@ -259,25 +259,37 @@
     function resolveDynamicText(type, data) {
       switch (type) {
         case "WEATHER_TEMP":
+        case "TEMP":
           return data.weather?.temp ? `${data.weather.temp}°` : "--°";
         
         case "WEATHER_CITY":
+        case "CITY":
           return data.weather?.city || "Unknown";
         
         case "WEATHER_DESC":
+        case "DESC":
           return data.weather?.desc || "No data";
         
+        case "WEATHER_DESC_EXTENDED":
+          return data.weather?.desc_extended || data.weather?.desc || "No data";
+        
         case "WEATHER_HUMIDITY":
+        case "HUMIDITY":
           return data.weather?.humidity ? `${data.weather.humidity}%` : "--%";
         
         case "WEATHER_MINMAX":
+        case "MINMAX":
           if (data.weather?.temp_min && data.weather?.temp_max) {
             return `${data.weather.temp_min}° / ${data.weather.temp_max}°`;
           }
           return "--° / --°";
         
         case "WEATHER_NOTE":
+        case "NOTE":
           return data.weather?.desc || "No data";
+        
+        case "WEATHER_ICON":
+          return "☀️"; // Fallback for icon elements using text
         
         case "DATE":
           return data.date || new Date().toLocaleDateString();
