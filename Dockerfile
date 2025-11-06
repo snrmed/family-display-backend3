@@ -21,19 +21,23 @@ RUN set -eux; \
       fonts-noto-core \
       fonts-roboto \
       fonts-open-sans \
-      fonts-ubuntu \
       fonts-cantarell \
       # X/GTK bits your Playwright/Chromium needs
       libasound2 libatk-bridge2.0-0 libatk1.0-0 libcups2 libdbus-1-3 libdrm2 \
       libxkbcommon0 libnss3 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
       libgtk-3-0 libgbm1 libx11-6 libx11-xcb1 libxcb1 libxext6 libxrender1 \
       libxtst6 libxi6 libpango-1.0-0 libcairo2 libglib2.0-0; \
+    # fonts-ubuntu was renamed on some Debian/Ubuntu releases; fall back when needed
+    if ! apt-get install -y --no-install-recommends fonts-ubuntu; then \
+      apt-get install -y --no-install-recommends fonts-ubuntu-classic || \
+      apt-get install -y --no-install-recommends ttf-ubuntu-font-family || true; \
+    fi; \
     # Pre-accept EULA and install the Microsoft core fonts
     echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" | debconf-set-selections; \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ttf-mscorefonts-installer || true; \
     # Small fontconfig alias: stable generic family mapping; avoid color emoji on e-ink
     mkdir -p /etc/fonts/conf.d; \
-    bash -c 'cat > /etc/fonts/conf.d/60-family-aliases-kd.conf <<EOF
+    cat <<'EOF' > /etc/fonts/conf.d/60-family-aliases-kd.conf
 <?xml version="1.0"?>
 <!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">
 <fontconfig>
@@ -71,7 +75,7 @@ RUN set -eux; \
     </rejectfont>
   </selectfont>
 </fontconfig>
-EOF'
+EOF
     fc-cache -f && rm -rf /var/lib/apt/lists/*
 
 # avoid playwright trying to download at pip time
