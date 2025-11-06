@@ -62,6 +62,19 @@
     height: 100%;
     object-fit: contain;
   }
+  /* === FORCE TEXT VISIBLE (Chromium safety) === */
+.el-content{
+  color:#000 !important;
+  -webkit-text-fill-color:#000 !important;  /* kills transparent glyph edge case */
+  -webkit-text-stroke:0 !important;
+  mix-blend-mode:normal !important;
+  filter:none !important;
+  opacity:1 !important;
+  transform:translateZ(0);                   /* force its own layer */
+  background: rgba(255,255,0,0.18);          /* keep while testing: shows the box */
+}
+.el.text{ opacity:1 !important; }            /* parent cannot hide child */
+.background-image{ z-index:0 !important; }   /* bg pinned to bottom */
 
   .background-image {
     position: absolute;
@@ -192,6 +205,13 @@ async function inlineSvgInto(elDiv, url) {
 ------------------------------------------------------ */
 async function renderLayout(data) {
   const canvas = document.getElementById('canvas');
+  // PROBE: must be visible if this file is in use
+  const __probe = document.createElement('div');
+    __probe.textContent = 'HELLO';
+    __probe.style.cssText = 'position:absolute;left:10px;top:10px;z-index:9999;'
+      + 'font:bold 24px Liberation Sans,Arial,sans-serif;color:#000;'
+      + '-webkit-text-fill-color:#000;';
+canvas.appendChild(__probe);
   const layout = data.layout || {};
   const elements = layout.elements || [];
 
@@ -212,7 +232,10 @@ async function renderLayout(data) {
       elDiv.style.top  = (el.y||0)+'px';
       elDiv.style.width  = (el.w||el.width||100)+'px';
       elDiv.style.height = (el.h||el.height||100)+'px';
-      elDiv.style.opacity = (el.opacity ?? 1);
+      const __op = (el.opacity ?? 1);
+      elDiv.style.opacity = __op; // parent
+// later, after you create the text node:
+      contentDiv.style.opacity = __op; // child too
       elDiv.style.zIndex  = el.zIndex || getLayerZIndex(el, kind);
 
       if (kind === 'text' || kind === 'icon') {
