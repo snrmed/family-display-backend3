@@ -3,7 +3,7 @@ FROM python:3.11-slim
 
 # Fonts + headless deps (lean for e-ink)
 # - Enable Debian contrib/non-free for MS core fonts
-# - Install small, crisp families: DejaVu, Liberation, Noto(core only), Roboto, Open Sans, Ubuntu, Cantarell
+# - Install small, crisp families: DejaVu, Liberation, Noto(core only), Roboto, Open Sans, Cantarell
 # - Install MS core fonts non-interactively
 # - No CJK / No color-emoji (keeps image small for your e-ink themes)
 RUN set -eux; \
@@ -21,7 +21,6 @@ RUN set -eux; \
       fonts-noto-core \
       fonts-roboto \
       fonts-open-sans \
-      fonts-ubuntu \
       fonts-cantarell \
       # X/GTK bits your Playwright/Chromium needs
       libasound2 libatk-bridge2.0-0 libatk1.0-0 libcups2 libdbus-1-3 libdrm2 \
@@ -45,7 +44,6 @@ RUN set -eux; \
       '      <family>Noto Sans</family>' \
       '      <family>Liberation Sans</family>' \
       '      <family>Open Sans</family>' \
-      '      <family>Ubuntu</family>' \
       '      <family>Cantarell</family>' \
       '    </prefer>' \
       '  </alias>' \
