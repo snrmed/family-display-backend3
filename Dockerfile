@@ -33,7 +33,7 @@ RUN set -eux; \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ttf-mscorefonts-installer || true; \
     # Small fontconfig alias: stable generic family mapping; avoid color emoji on e-ink
     mkdir -p /etc/fonts/conf.d; \
-    cat >/etc/fonts/conf.d/60-family-aliases-kd.conf <<'EOF'
+    bash -c 'cat > /etc/fonts/conf.d/60-family-aliases-kd.conf <<EOF
 <?xml version="1.0"?>
 <!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">
 <fontconfig>
@@ -65,16 +65,14 @@ RUN set -eux; \
       <family>Noto Sans Mono</family>
     </prefer>
   </alias>
-  <!-- Avoid colored emoji fallback on e-ink -->
   <selectfont>
     <rejectfont>
       <pattern><family>Noto Color Emoji</family></pattern>
     </rejectfont>
   </selectfont>
 </fontconfig>
-EOF
-    fc-cache -f; \
-    rm -rf /var/lib/apt/lists/*
+EOF'
+    fc-cache -f && rm -rf /var/lib/apt/lists/*
 
 # avoid playwright trying to download at pip time
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
