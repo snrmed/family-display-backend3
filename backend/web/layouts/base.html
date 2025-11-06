@@ -177,13 +177,17 @@
       try {
         const dataJson = decodeURIComponent(encodedData);
         const data = JSON.parse(dataJson);
-        console.log('Render data:', data);
         
-        // Load fonts if provided in data
+        console.log('=== DATA RECEIVED ===');
+        console.log('Raw data keys:', Object.keys(data));
+        console.log('Layout exists:', !!data.layout);
+        console.log('Layout elements count:', data.layout?.elements?.length || 0);
+        
+        // Load fonts if provided in data, then render
         if (data.font_base) {
-          loadFonts(data.font_base).then(() => {
-            renderLayout(data);
-          });
+          loadFonts(data.font_base)
+            .catch(err => console.warn('Font loading error:', err))
+            .finally(() => renderLayout(data));
         } else {
           renderLayout(data);
         }
@@ -335,8 +339,14 @@
       const elements = layout.elements || [];
       const svg_base = data.svg_base || "";
       
+      console.log('=== RENDER LAYOUT START ===');
+      console.log('Data keys:', Object.keys(data));
+      console.log('Layout name:', layout.name);
+      console.log('Elements count:', elements.length);
       console.log('SVG Base:', svg_base);
-      console.log('Rendering', elements.length, 'elements');
+      console.log('BG URL:', data.bg_url);
+      console.log('Weather data:', data.weather);
+      console.log('Elements:', elements);
       
       if (data.bg_url) {
         const bgImg = document.createElement('img');
@@ -349,127 +359,136 @@
       }
       
       for (const el of elements) {
-        const elDiv = document.createElement('div');
-        elDiv.className = 'el';
-        
-        const kind = (el.kind || 'box').toLowerCase();
-        elDiv.classList.add(kind);
-        
-        elDiv.style.left = (el.x || 0) + 'px';
-        elDiv.style.top = (el.y || 0) + 'px';
-        elDiv.style.width = (el.w || el.width || 100) + 'px';
-        elDiv.style.height = (el.h || el.height || 100) + 'px';
-        
-        const zIndex = el.zIndex || getLayerZIndex(el, kind);
-        elDiv.style.zIndex = zIndex;
-        
-        if (el.opacity != null) {
-          elDiv.style.opacity = el.opacity;
-        }
-        
-        if (kind === 'text' || kind === 'icon') {
-          const contentDiv = document.createElement('div');
-          contentDiv.className = 'el-content';
+        try {
+          const elDiv = document.createElement('div');
+          elDiv.className = 'el';
           
-          let textContent = el.text || '';
-          if (el.type && el.type !== 'CUSTOM') {
-            textContent = resolveDynamicText(el.type, data);
+          const kind = (el.kind || 'box').toLowerCase();
+          elDiv.classList.add(kind);
+          
+          elDiv.style.left = (el.x || 0) + 'px';
+          elDiv.style.top = (el.y || 0) + 'px';
+          elDiv.style.width = (el.w || el.width || 100) + 'px';
+          elDiv.style.height = (el.h || el.height || 100) + 'px';
+          
+          const zIndex = el.zIndex || getLayerZIndex(el, kind);
+          elDiv.style.zIndex = zIndex;
+          
+          if (el.opacity != null) {
+            elDiv.style.opacity = el.opacity;
           }
           
-          contentDiv.textContent = textContent;
-          contentDiv.style.fontSize = (el.fontSize || 16) + 'px';
-          contentDiv.style.color = el.color || '#000';
-          contentDiv.style.fontWeight = el.fontWeight || el.weight || 'normal';
-          contentDiv.style.width = '100%';
-          contentDiv.style.height = '100%';
-          contentDiv.style.display = 'flex';
-          contentDiv.style.alignItems = 'center';
-          contentDiv.style.justifyContent = 'center';
-          contentDiv.style.textAlign = 'center';
-          
-          // Apply font family
-          if (el.fontFamily) {
-            contentDiv.style.fontFamily = `'${el.fontFamily}', sans-serif`;
-          }
-          
-          // Apply text shadow/glow if specified
-          if (el.textShadow) {
-            contentDiv.style.textShadow = el.textShadow;
-          } else if (el.textShadowType && el.textShadowType !== 'none') {
-            const shadowColor = el.textShadowColor || '#000000';
-            const intensity = el.textShadowIntensity || 1;
-            const blur = Math.round(4 * intensity);
+          if (kind === 'text' || kind === 'icon') {
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'el-content';
             
-            if (el.textShadowType === 'glow') {
-              // Multiple layers for glow effect
-              contentDiv.style.textShadow = `
-                0 0 ${blur}px ${shadowColor},
-                0 0 ${blur * 2}px ${shadowColor},
-                0 0 ${blur * 3}px ${shadowColor}
-              `;
-            } else if (el.textShadowType === 'shadow' || el.textShadowType === 'drop') {
-              // Drop shadow
-              const offset = Math.round(2 * intensity);
-              contentDiv.style.textShadow = `${offset}px ${offset}px ${blur}px ${shadowColor}`;
-            } else if (el.textShadowType === 'outline') {
-              // Text outline
-              const size = Math.round(1 * intensity);
-              contentDiv.style.textShadow = `
-                -${size}px -${size}px 0 ${shadowColor},
-                ${size}px -${size}px 0 ${shadowColor},
-                -${size}px ${size}px 0 ${shadowColor},
-                ${size}px ${size}px 0 ${shadowColor}
-              `;
+            let textContent = el.text || '';
+            if (el.type && el.type !== 'CUSTOM') {
+              textContent = resolveDynamicText(el.type, data);
             }
-          }
-          
-          elDiv.appendChild(contentDiv);
-          
-        } else if (kind === 'box') {
-          if (el.background || el.fill) {
-            elDiv.style.background = el.background || el.fill;
-          }
-          if (el.borderColor) {
-            elDiv.style.border = '1px solid ' + el.borderColor;
-          }
-          if (el.borderRadius || el.radius) {
-            elDiv.style.borderRadius = (el.borderRadius || el.radius) + 'px';
-          }
-          
-        } else if (kind === 'svg' || kind === 'svg-overlay' || kind === 'image') {
-          let src = el.src || el.svgName || '';
-          
-          if (src === 'weather-icon') {
-            if (data.weather?.icon_url) {
-              src = data.weather.icon_url;
-              elDiv.classList.add('weather-icon');
+            
+            contentDiv.textContent = textContent;
+            contentDiv.style.fontSize = (el.fontSize || 16) + 'px';
+            contentDiv.style.color = el.color || '#000';
+            contentDiv.style.fontWeight = el.fontWeight || el.weight || 'normal';
+            contentDiv.style.width = '100%';
+            contentDiv.style.height = '100%';
+            contentDiv.style.display = 'flex';
+            contentDiv.style.alignItems = 'center';
+            contentDiv.style.justifyContent = 'center';
+            contentDiv.style.textAlign = 'center';
+            
+            // Apply font family
+            if (el.fontFamily) {
+              contentDiv.style.fontFamily = `'${el.fontFamily}', sans-serif`;
+            }
+            
+            // Apply text shadow/glow if specified
+            if (el.textShadow) {
+              contentDiv.style.textShadow = el.textShadow;
+            } else if (el.textShadowType && el.textShadowType !== 'none') {
+              const shadowColor = el.textShadowColor || '#000000';
+              const intensity = el.textShadowIntensity || 1;
+              const blur = Math.round(4 * intensity);
+              
+              if (el.textShadowType === 'glow') {
+                // Multiple layers for glow effect
+                contentDiv.style.textShadow = `
+                  0 0 ${blur}px ${shadowColor},
+                  0 0 ${blur * 2}px ${shadowColor},
+                  0 0 ${blur * 3}px ${shadowColor}
+                `;
+              } else if (el.textShadowType === 'shadow' || el.textShadowType === 'drop') {
+                // Drop shadow
+                const offset = Math.round(2 * intensity);
+                contentDiv.style.textShadow = `${offset}px ${offset}px ${blur}px ${shadowColor}`;
+              } else if (el.textShadowType === 'outline') {
+                // Text outline
+                const size = Math.round(1 * intensity);
+                contentDiv.style.textShadow = `
+                  -${size}px -${size}px 0 ${shadowColor},
+                  ${size}px -${size}px 0 ${shadowColor},
+                  -${size}px ${size}px 0 ${shadowColor},
+                  ${size}px ${size}px 0 ${shadowColor}
+                `;
+              }
+            }
+            
+            elDiv.appendChild(contentDiv);
+            
+          } else if (kind === 'box') {
+            if (el.background || el.fill) {
+              elDiv.style.background = el.background || el.fill;
+            }
+            if (el.borderColor) {
+              elDiv.style.border = '1px solid ' + el.borderColor;
+            }
+            if (el.borderRadius || el.radius) {
+              elDiv.style.borderRadius = (el.borderRadius || el.radius) + 'px';
+            }
+            
+          } else if (kind === 'svg' || kind === 'svg-overlay' || kind === 'image') {
+            let src = el.src || el.svgName || '';
+            
+            if (src === 'weather-icon') {
+              if (data.weather?.icon_url) {
+                src = data.weather.icon_url;
+                elDiv.classList.add('weather-icon');
+              } else {
+                console.warn('No weather icon URL available');
+                continue;
+              }
+            }
+            
+            const fullUrl = resolveUrl(src, svg_base);
+            
+            if (fullUrl.endsWith('.svg')) {
+              await inlineSvgInto(elDiv, fullUrl);
             } else {
-              console.warn('No weather icon URL available');
-              continue;
+              const img = document.createElement('img');
+              img.src = fullUrl;
+              img.style.width = '100%';
+              img.style.height = '100%';
+              img.style.objectFit = 'contain';
+              img.onerror = () => {
+                console.error('Image failed to load:', fullUrl);
+              };
+              elDiv.appendChild(img);
             }
           }
           
-          const fullUrl = resolveUrl(src, svg_base);
+          canvas.appendChild(elDiv);
+          console.log(`✓ Rendered ${kind} element at (${el.x}, ${el.y})`);
           
-          if (fullUrl.endsWith('.svg')) {
-            await inlineSvgInto(elDiv, fullUrl);
-          } else {
-            const img = document.createElement('img');
-            img.src = fullUrl;
-            img.style.width = '100%';
-            img.style.height = '100%';
-            img.style.objectFit = 'contain';
-            img.onerror = () => {
-              console.error('Image failed to load:', fullUrl);
-            };
-            elDiv.appendChild(img);
-          }
+        } catch (error) {
+          console.error('Error rendering element:', el, error);
+          // Continue to next element even if this one fails
         }
-        
-        canvas.appendChild(elDiv);
       }
       
-      console.log('✓ Layout rendered successfully');
+      const renderedCount = canvas.querySelectorAll('.el').length;
+      console.log(`✓ Layout rendered successfully - ${renderedCount} elements on canvas`);
+      console.log('=== RENDER LAYOUT COMPLETE ===');
     }
   </script>
 </body>
