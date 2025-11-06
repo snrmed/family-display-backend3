@@ -5,94 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Kin:D Frame Render</title>
 <style>
-  @font-face {
-    font-family: 'Inter';
-    font-style: normal;
-    font-weight: 100 900;
-    font-display: swap;
-    src: local('Inter');
-  }
   
-  @font-face {
-    font-family: 'Roboto';
-    font-style: normal;
-    font-weight: 400;
-    font-display: swap;
-    src: local('Roboto');
+    :root {
+    --font-default: "Roboto","Noto Sans","DejaVu Sans","Liberation Sans",
+                    "Open Sans","Cantarell",Arial,sans-serif;
+    --font-serif: "Merriweather","Liberation Serif","DejaVu Serif",
+                  "Noto Serif","Times New Roman",serif;
+    --font-mono: "DejaVu Sans Mono","Liberation Mono","Noto Sans Mono",
+                 "Consolas","Courier New",monospace;
   }
-  
-  @font-face {
-    font-family: 'Atkinson Hyperlegible';
-    font-style: normal;
-    font-weight: 400;
-    font-display: swap;
-    src: local('Atkinson Hyperlegible');
-  }
-  
-  @font-face {
-    font-family: 'Source Sans 3';
-    font-style: normal;
-    font-weight: 200 900;
-    font-display: swap;
-    src: local('Source Sans 3');
-  }
-  
-  @font-face {
-    font-family: 'Public Sans';
-    font-style: normal;
-    font-weight: 100 900;
-    font-display: swap;
-    src: local('Public Sans');
-  }
-  
-  @font-face {
-    font-family: 'Manrope';
-    font-style: normal;
-    font-weight: 200 800;
-    font-display: swap;
-    src: local('Manrope');
-  }
-  
-  @font-face {
-    font-family: 'Space Grotesk';
-    font-style: normal;
-    font-weight: 300 700;
-    font-display: swap;
-    src: local('Space Grotesk');
-  }
-  
-  @font-face {
-    font-family: 'Outfit';
-    font-style: normal;
-    font-weight: 100 900;
-    font-display: swap;
-    src: local('Outfit');
-  }
-  
-  @font-face {
-    font-family: 'Plus Jakarta Sans';
-    font-style: normal;
-    font-weight: 200 800;
-    font-display: swap;
-    src: local('Plus Jakarta Sans');
-  }
-  
-  @font-face {
-    font-family: 'Merriweather';
-    font-style: normal;
-    font-weight: 400;
-    font-display: swap;
-    src: local('Merriweather');
-  }
-  
-  @font-face {
-    font-family: 'Noto Sans';
-    font-style: normal;
-    font-weight: 400;
-    font-display: swap;
-    src: local('Noto Sans');
-  }
-  
+ 
   * {
     margin: 0;
     padding: 0;
@@ -195,22 +117,16 @@
      * Map designer font names to available system fonts
      * Only using fonts guaranteed to be in Debian: Liberation and DejaVu
      */
-    function mapToSystemFont(fontFamily) {
-      const systemFontMap = {
-        'Inter': 'Liberation Sans',
-        'Roboto': 'Liberation Sans',
-        'Public Sans': 'Liberation Sans',
-        'Source Sans 3': 'Liberation Sans',
-        'Space Grotesk': 'DejaVu Sans',
-        'Outfit': 'DejaVu Sans',
-        'Plus Jakarta Sans': 'Liberation Sans',
-        'Atkinson Hyperlegible': 'DejaVu Sans',
-        'Manrope': 'Liberation Sans',
-        'Noto Sans': 'Liberation Sans',
-        'Merriweather': 'DejaVu Serif',
-        'Noto Serif': 'DejaVu Serif'
-      };
-      
+  function mapToSystemFont(fontFamily) {
+    const map = {
+      'Inter':'Liberation Sans','Roboto':'Liberation Sans',
+      'Public Sans':'Liberation Sans','Source Sans 3':'Liberation Sans',
+      'Space Grotesk':'DejaVu Sans','Outfit':'DejaVu Sans',
+      'Plus Jakarta Sans':'Liberation Sans','Atkinson Hyperlegible':'DejaVu Sans',
+      'Manrope':'Liberation Sans','Noto Sans':'Liberation Sans',
+      'Merriweather':'DejaVu Serif','Noto Serif':'DejaVu Serif',
+      'Comic Sans MS':'DejaVu Sans'
+    };  
       return systemFontMap[fontFamily] || 'Liberation Sans';
     }
     
@@ -276,6 +192,24 @@
         
         case "WEATHER_ICON":
           return "☀️"; // Fallback for icon elements using text
+
+        case "RAIN":
+        case "WEATHER_RAIN":
+          return (data.weather && (data.weather.rain || data.weather.rain === 0))
+            ? `${data.weather.rain}mm` : "--mm";
+
+        case "WIND":
+        case "WEATHER_WIND":
+          return (data.weather && (data.weather.wind || data.weather.wind === 0))
+            ? `${data.weather.wind} km/h` : "-- km/h";
+
+        case "TOMORROW_DESC":
+          return data.weather?.tomorrow?.desc || "No forecast";
+
+        case "TOMORROW_TEMP":
+          if (data.weather?.tomorrow?.temp_min != null && data.weather?.tomorrow?.temp_max != null)
+            return `${data.weather.tomorrow.temp_min}° / ${data.weather.tomorrow.temp_max}°`;
+          return "--° / --°";
         
         case "DATE":
           return data.date || new Date().toLocaleDateString();
@@ -399,7 +333,7 @@
             // Apply font family using system fonts
             if (el.fontFamily) {
               const systemFont = mapToSystemFont(el.fontFamily);
-              contentDiv.style.fontFamily = `"${systemFont}", "Liberation Sans", "DejaVu Sans", -apple-system, sans-serif`;
+              contentDiv.style.fontFamily = `"${systemFont}", var(--font-default)`;
             }
             
             // Apply text shadow/glow if specified
