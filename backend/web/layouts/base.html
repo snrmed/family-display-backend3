@@ -160,6 +160,22 @@
     z-index: 1;
     object-fit: cover;
   }
+
+/* --- System font stacks aligned to Dockerfile installs --- */
+:root{
+  --font-default: "Roboto","Noto Sans","DejaVu Sans","Liberation Sans","Open Sans","Cantarell",Arial,sans-serif;
+  --font-title: "Roboto","Noto Sans","DejaVu Sans","Liberation Sans","Open Sans","Cantarell",Arial,sans-serif;
+  --font-serif: "Merriweather","Liberation Serif","DejaVu Serif","Noto Serif","Times New Roman",serif;
+  --font-mono: "DejaVu Sans Mono","Liberation Mono","Noto Sans Mono","Consolas","Courier New",monospace;
+}
+
+/* Force defaults unless an element explicitly overrides */
+html, body { font-family: var(--font-default); }
+.el.text, .badge, .chip, .card, .weather, .date, .joke, .title, .subtitle {
+  font-family: var(--font-default) !important;
+}
+.h1, h1 { font-family: var(--font-title) !important; }
+code, pre, .mono { font-family: var(--font-mono) !important; }
 </style>
 </head>
 <body>
