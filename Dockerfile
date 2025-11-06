@@ -4,7 +4,9 @@ FROM python:3.11-slim
 # System deps for headless Chromium (expanded list)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl wget git ca-certificates \
-    fonts-liberation fonts-noto-color-emoji \
+    fonts-liberation fonts-noto-core fonts-noto-color-emoji \
+    fonts-dejavu-core fonts-roboto fonts-open-sans \
+    fonts-ubuntu fonts-cantarell \
     libasound2 libatk-bridge2.0-0 libatk1.0-0 \
     libcups2 libdbus-1-3 libdrm2 libxkbcommon0 \
     libnss3 libxcomposite1 libxdamage1 libxfixes3 \
