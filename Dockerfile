@@ -33,45 +33,45 @@ RUN set -eux; \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ttf-mscorefonts-installer || true; \
     # Small fontconfig alias: stable generic family mapping; avoid color emoji on e-ink
     mkdir -p /etc/fonts/conf.d; \
-    bash -c 'cat > /etc/fonts/conf.d/60-family-aliases-kd.conf <<EOF
-<?xml version="1.0"?>
-<!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">
-<fontconfig>
-  <alias>
-    <family>sans-serif</family>
-    <prefer>
-      <family>Roboto</family>
-      <family>DejaVu Sans</family>
-      <family>Noto Sans</family>
-      <family>Liberation Sans</family>
-      <family>Open Sans</family>
-      <family>Ubuntu</family>
-      <family>Cantarell</family>
-    </prefer>
-  </alias>
-  <alias>
-    <family>serif</family>
-    <prefer>
-      <family>Noto Serif</family>
-      <family>Liberation Serif</family>
-      <family>DejaVu Serif</family>
-    </prefer>
-  </alias>
-  <alias>
-    <family>monospace</family>
-    <prefer>
-      <family>DejaVu Sans Mono</family>
-      <family>Liberation Mono</family>
-      <family>Noto Sans Mono</family>
-    </prefer>
-  </alias>
-  <selectfont>
-    <rejectfont>
-      <pattern><family>Noto Color Emoji</family></pattern>
-    </rejectfont>
-  </selectfont>
-</fontconfig>
-EOF'
+    printf '%s\n' \
+      '<?xml version="1.0"?>' \
+      '<!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">' \
+      '<fontconfig>' \
+      '  <alias>' \
+      '    <family>sans-serif</family>' \
+      '    <prefer>' \
+      '      <family>Roboto</family>' \
+      '      <family>DejaVu Sans</family>' \
+      '      <family>Noto Sans</family>' \
+      '      <family>Liberation Sans</family>' \
+      '      <family>Open Sans</family>' \
+      '      <family>Ubuntu</family>' \
+      '      <family>Cantarell</family>' \
+      '    </prefer>' \
+      '  </alias>' \
+      '  <alias>' \
+      '    <family>serif</family>' \
+      '    <prefer>' \
+      '      <family>Noto Serif</family>' \
+      '      <family>Liberation Serif</family>' \
+      '      <family>DejaVu Serif</family>' \
+      '    </prefer>' \
+      '  </alias>' \
+      '  <alias>' \
+      '    <family>monospace</family>' \
+      '    <prefer>' \
+      '      <family>DejaVu Sans Mono</family>' \
+      '      <family>Liberation Mono</family>' \
+      '      <family>Noto Sans Mono</family>' \
+      '    </prefer>' \
+      '  </alias>' \
+      '  <selectfont>' \
+      '    <rejectfont>' \
+      '      <pattern><family>Noto Color Emoji</family></pattern>' \
+      '    </rejectfont>' \
+      '  </selectfont>' \
+      '</fontconfig>' \
+      > /etc/fonts/conf.d/60-family-aliases-kd.conf; \
     fc-cache -f && rm -rf /var/lib/apt/lists/*
 
 # avoid playwright trying to download at pip time
