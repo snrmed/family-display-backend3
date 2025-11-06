@@ -33,7 +33,7 @@ RUN set -eux; \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ttf-mscorefonts-installer || true; \
     # Small fontconfig alias: stable generic family mapping; avoid color emoji on e-ink
     mkdir -p /etc/fonts/conf.d; \
-    bash -c 'cat > /etc/fonts/conf.d/60-family-aliases-kd.conf <<EOF
+    cat <<'EOF' > /etc/fonts/conf.d/60-family-aliases-kd.conf
 <?xml version="1.0"?>
 <!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">
 <fontconfig>
@@ -71,7 +71,7 @@ RUN set -eux; \
     </rejectfont>
   </selectfont>
 </fontconfig>
-EOF'
+EOF
     fc-cache -f && rm -rf /var/lib/apt/lists/*
 
 # avoid playwright trying to download at pip time
