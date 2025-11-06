@@ -103,7 +103,7 @@
     width: 800px;
     height: 480px;
     overflow: hidden;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-family: "Roboto", "Open Sans", "Noto Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
     background: #fff;
   }
   
@@ -183,14 +183,8 @@
         console.log('Layout exists:', !!data.layout);
         console.log('Layout elements count:', data.layout?.elements?.length || 0);
         
-        // Load fonts if provided in data, then render
-        if (data.font_base) {
-          loadFonts(data.font_base)
-            .catch(err => console.warn('Font loading error:', err))
-            .finally(() => renderLayout(data));
-        } else {
-          renderLayout(data);
-        }
+        // Render the layout immediately (no font loading needed)
+        renderLayout(data);
       } catch (error) {
         console.error('Failed to parse render data:', error);
         document.body.innerHTML = '<div style="padding: 20px;">Error: Invalid render data</div>';
@@ -198,34 +192,25 @@
     }
     
     /**
-     * Load fonts from backend (if available)
+     * Map designer font names to available system fonts
      */
-    async function loadFonts(fontBase) {
-      const fonts = [
-        { family: 'Inter', file: 'Inter/Inter-VariableFont_slnt,wght.ttf' },
-        { family: 'Roboto', file: 'Roboto/Roboto-Regular.ttf' },
-        { family: 'Atkinson Hyperlegible', file: 'AtkinsonHyperlegible/AtkinsonHyperlegible-Regular.ttf' },
-        { family: 'Source Sans 3', file: 'SourceSans3/SourceSans3-VariableFont_wght.ttf' },
-        { family: 'Public Sans', file: 'PublicSans/PublicSans-VariableFont_wght.ttf' },
-        { family: 'Manrope', file: 'Manrope/Manrope-VariableFont_wght.ttf' },
-        { family: 'Space Grotesk', file: 'SpaceGrotesk/SpaceGrotesk-VariableFont_wght.ttf' },
-        { family: 'Outfit', file: 'Outfit/Outfit-VariableFont_wght.ttf' },
-        { family: 'Plus Jakarta Sans', file: 'PlusJakartaSans/PlusJakartaSans-VariableFont_wght.ttf' },
-        { family: 'Merriweather', file: 'Merriweather/Merriweather-Regular.ttf' },
-        { family: 'Noto Sans', file: 'NotoSans/NotoSans-Regular.ttf' }
-      ];
+    function mapToSystemFont(fontFamily) {
+      const systemFontMap = {
+        'Inter': 'Roboto',
+        'Roboto': 'Roboto',
+        'Public Sans': 'Open Sans',
+        'Source Sans 3': 'Open Sans',
+        'Space Grotesk': 'Ubuntu',
+        'Outfit': 'Ubuntu',
+        'Plus Jakarta Sans': 'Open Sans',
+        'Atkinson Hyperlegible': 'DejaVu Sans',
+        'Manrope': 'Roboto',
+        'Noto Sans': 'Noto Sans',
+        'Merriweather': 'Noto Serif',
+        'Noto Serif': 'Noto Serif'
+      };
       
-      for (const font of fonts) {
-        try {
-          const fontUrl = `${fontBase}/${font.file}`;
-          const fontFace = new FontFace(font.family, `url(${fontUrl})`);
-          await fontFace.load();
-          document.fonts.add(fontFace);
-          console.log(`✓ Loaded font: ${font.family}`);
-        } catch (error) {
-          console.warn(`Could not load font ${font.family}:`, error);
-        }
-      }
+      return systemFontMap[fontFamily] || 'Roboto';
     }
     
     /**
@@ -410,9 +395,10 @@
             contentDiv.style.justifyContent = 'center';
             contentDiv.style.textAlign = 'center';
             
-            // Apply font family
+            // Apply font family using system fonts
             if (el.fontFamily) {
-              contentDiv.style.fontFamily = `'${el.fontFamily}', sans-serif`;
+              const systemFont = mapToSystemFont(el.fontFamily);
+              contentDiv.style.fontFamily = `"${systemFont}", "Roboto", "Open Sans", "Noto Sans", -apple-system, BlinkMacSystemFont, sans-serif`;
             }
             
             // Apply text shadow/glow if specified
