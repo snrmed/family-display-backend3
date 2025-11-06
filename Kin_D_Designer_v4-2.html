@@ -934,27 +934,20 @@ const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 480;
 
 const FONT_OPTIONS = [
+  { value: 'Inter', label: 'Inter (Sans)' },
   { value: 'Roboto', label: 'Roboto (Sans)' },
-  { value: 'Open Sans', label: 'Open Sans' },
-  { value: 'DejaVu Sans', label: 'DejaVu Sans' },
-  { value: 'Liberation Sans', label: 'Liberation Sans' },
-  { value: 'Noto Sans', label: 'Noto Sans' },
-  { value: 'Cantarell', label: 'Cantarell' },
-  { value: 'Arial', label: 'Arial' },
-  { value: 'Verdana', label: 'Verdana' },
-  { value: 'Trebuchet MS', label: 'Trebuchet MS' },
-  { value: 'DejaVu Serif', label: 'DejaVu Serif' },
-  { value: 'Liberation Serif', label: 'Liberation Serif' },
-  { value: 'Noto Serif', label: 'Noto Serif' },
-  { value: 'Times New Roman', label: 'Times New Roman' },
-  { value: 'Georgia', label: 'Georgia' },
-  { value: 'DejaVu Sans Mono', label: 'DejaVu Sans Mono' },
-  { value: 'Liberation Mono', label: 'Liberation Mono' },
-  { value: 'Courier New', label: 'Courier New' },
-  { value: 'Comic Sans MS', label: 'Comic Sans MS' },
-  { value: 'Impact', label: 'Impact' }
+  { value: 'Public Sans', label: 'Public Sans (Sans)' },
+  { value: 'Source Sans 3', label: 'Source Sans 3 (Sans)' },
+  { value: 'Space Grotesk', label: 'Space Grotesk (Display)' },
+  { value: 'Outfit', label: 'Outfit (Display)' },
+  { value: 'Plus Jakarta Sans', label: 'Plus Jakarta Sans (Sans)' },
+  { value: 'Atkinson Hyperlegible', label: 'Atkinson Hyperlegible (Readable)' },
+  { value: 'Manrope', label: 'Manrope (Sans)' },
+  { value: 'Noto Sans', label: 'Noto Sans (Sans)' },
+  { value: 'Merriweather', label: 'Merriweather (Serif)' }
 ];
 
+const FONT_WHITELIST = new Set(FONT_OPTIONS.map(font => font.value));
 const DEFAULT_FONT_FAMILY = FONT_OPTIONS[0].value;
 
 // Australian cities with timezones
@@ -1040,6 +1033,12 @@ function populateFontOptions() {
   });
 
   select.value = DEFAULT_FONT_FAMILY;
+}
+
+function sanitizeFontFamily(fontFamily) {
+  if (!fontFamily) return DEFAULT_FONT_FAMILY;
+  const normalized = fontFamily.replace(/["']/g, '').trim();
+  return FONT_WHITELIST.has(normalized) ? normalized : DEFAULT_FONT_FAMILY;
 }
 
 function showSetupModal() {
@@ -1532,7 +1531,7 @@ function addElement(kind, x, y, w, h, options = {}) {
     content.style.fontSize = (options.fontSize || 24) + 'px';
     content.style.color = options.color || '#ffffff';
     content.style.fontWeight = options.fontWeight || '400';
-    const fontFamily = options.fontFamily || DEFAULT_FONT_FAMILY;
+    const fontFamily = sanitizeFontFamily(options.fontFamily);
     content.style.fontFamily = "'" + fontFamily + "', sans-serif";
     el.dataset.fontFamily = fontFamily;
     el.appendChild(content);
@@ -1681,9 +1680,9 @@ function updateInspector() {
 
     const fontSelect = document.getElementById('fontFamily');
     if (fontSelect) {
-      const currentFont = selectedEl.dataset.fontFamily || extractPrimaryFont(style.fontFamily);
-      const isValid = FONT_OPTIONS.some(option => option.value === currentFont);
-      fontSelect.value = isValid ? currentFont : DEFAULT_FONT_FAMILY;
+      const currentFont = sanitizeFontFamily(selectedEl.dataset.fontFamily || extractPrimaryFont(style.fontFamily));
+      fontSelect.value = currentFont;
+      selectedEl.dataset.fontFamily = currentFont;
     }
 
     // Show/hide custom text group
@@ -1771,7 +1770,9 @@ function updateTextStyle() {
   const fontSize = document.getElementById('fontSize').value;
   const color = document.getElementById('textColor').value;
   const weight = document.getElementById('fontWeight').value;
-  const fontFamily = document.getElementById('fontFamily').value || DEFAULT_FONT_FAMILY;
+  const fontSelect = document.getElementById('fontFamily');
+  const fontFamily = sanitizeFontFamily(fontSelect.value);
+  fontSelect.value = fontFamily;
 
   content.style.fontSize = fontSize + 'px';
   content.style.color = color;
@@ -1947,7 +1948,8 @@ function toJSON() {
       base.fontSize = parseInt(style.fontSize);
       base.color = rgbToHex(style.color);
       base.fontWeight = style.fontWeight;
-      base.fontFamily = el.dataset.fontFamily || extractPrimaryFont(style.fontFamily);
+      const savedFont = el.dataset.fontFamily || extractPrimaryFont(style.fontFamily);
+      base.fontFamily = sanitizeFontFamily(savedFont);
 
       // Text shadow/glow
       if (el.dataset.textShadowType && el.dataset.textShadowType !== 'none') {
@@ -2183,7 +2185,7 @@ function rgbToHex(rgb) {
 function extractPrimaryFont(fontFamily) {
   if (!fontFamily) return DEFAULT_FONT_FAMILY;
   const primary = fontFamily.split(',')[0];
-  return primary.replace(/["']/g, '').trim() || DEFAULT_FONT_FAMILY;
+  return sanitizeFontFamily(primary);
 }
 
 function drawGrid() {
