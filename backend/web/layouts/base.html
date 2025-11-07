@@ -242,51 +242,79 @@
     /**
      * Resolve dynamic text content
      */
-    function resolveDynamicText(type, data) {
-      switch (type) {
-        case "WEATHER_TEMP":
-        case "TEMP":
-          return data.weather?.temp ? `${data.weather.temp}°` : "--°";
-        
-        case "WEATHER_CITY":
-        case "CITY":
-          return data.weather?.city || "Unknown";
-        
-        case "WEATHER_DESC":
-        case "DESC":
-          return data.weather?.desc || "No data";
-        
-        case "WEATHER_DESC_EXTENDED":
-          return data.weather?.desc_extended || data.weather?.desc || "No data";
-        
-        case "WEATHER_HUMIDITY":
-        case "HUMIDITY":
-          return data.weather?.humidity ? `${data.weather.humidity}%` : "--%";
-        
-        case "WEATHER_MINMAX":
-        case "MINMAX":
-          if (data.weather?.temp_min && data.weather?.temp_max) {
-            return `${data.weather.temp_min}° / ${data.weather.temp_max}°`;
-          }
-          return "--° / --°";
-        
-        case "WEATHER_NOTE":
-        case "NOTE":
-          return data.weather?.desc || "No data";
-        
-        case "WEATHER_ICON":
-          return "☀️"; // Fallback for icon elements using text
-        
-        case "DATE":
-          return data.date || new Date().toLocaleDateString();
-        
-        case "JOKE":
-          return data.dad_joke || "No joke today!";
-        
-        default:
-          return "";
+   function resolveDynamicText(type, data) {
+  console.log(`Resolving type: ${type}`);
+  
+  switch (type) {
+    // Temperature
+    case "WEATHER_TEMP":
+    case "TEMP":
+      return data.weather?.temp ? `${data.weather.temp}°` : "--°";
+    
+    // Location
+    case "WEATHER_CITY":
+    case "CITY":
+      return data.weather?.city || "Unknown";
+    
+    // Weather Conditions
+    case "WEATHER_DESC":
+    case "DESC":
+      return data.weather?.desc || "No data";
+    
+    case "WEATHER_DESC_EXTENDED":
+      return data.weather?.desc_extended || data.weather?.desc || "No data";
+    
+    case "WEATHER_NOTE":
+    case "NOTE":
+      return data.weather?.desc || "No data";
+    
+    // Temperature Range
+    case "WEATHER_MINMAX":
+    case "MINMAX":
+      if (data.weather?.temp_min != null && data.weather?.temp_max != null) {
+        return `${data.weather.temp_min}° / ${data.weather.temp_max}°`;
       }
-    }
+      return "--° / --°";
+    
+    // Weather Metrics
+    case "HUMIDITY":
+    case "WEATHER_HUMIDITY":
+      return data.weather?.humidity ? `${data.weather.humidity}%` : "--%";
+    
+    case "RAIN":
+      return data.weather?.rain != null ? `${data.weather.rain}mm` : "0mm";
+    
+    case "WIND":
+      return data.weather?.wind != null ? `${data.weather.wind} km/h` : "0 km/h";
+    
+    // Tomorrow's Forecast
+    case "TOMORROW_DESC":
+      return data.weather?.tomorrow?.desc || "No forecast";
+    
+    case "TOMORROW_TEMP":
+      if (data.weather?.tomorrow?.temp_min != null && data.weather?.tomorrow?.temp_max != null) {
+        return `${data.weather.tomorrow.temp_min}° / ${data.weather.tomorrow.temp_max}°`;
+      }
+      return "--° / --°";
+    
+    // Date & Time
+    case "DATE":
+      return data.date || new Date().toLocaleDateString();
+    
+    // Content
+    case "JOKE":
+      return data.dad_joke || "No joke today!";
+    
+    // Weather Icon (fallback emoji)
+    case "WEATHER_ICON":
+      return "☀️";
+    
+    // Custom text (shouldn't reach here normally)
+    case "CUSTOM":
+    default:
+      return "";
+  }
+}
     
     /**
      * Get layer z-index based on element kind
@@ -377,24 +405,31 @@
           }
           
           if (kind === 'text' || kind === 'icon') {
-            const contentDiv = document.createElement('div');
-            contentDiv.className = 'el-content';
-            
-            let textContent = el.text || '';
-            if (el.type && el.type !== 'CUSTOM') {
-              textContent = resolveDynamicText(el.type, data);
-            }
-            
-            contentDiv.textContent = textContent;
-            contentDiv.style.fontSize = (el.fontSize || 16) + 'px';
-            contentDiv.style.color = el.color || '#000';
-            contentDiv.style.fontWeight = el.fontWeight || el.weight || 'normal';
-            contentDiv.style.width = '100%';
-            contentDiv.style.height = '100%';
-            contentDiv.style.display = 'flex';
-            contentDiv.style.alignItems = 'center';
-            contentDiv.style.justifyContent = 'center';
-            contentDiv.style.textAlign = 'center';
+  const contentDiv = document.createElement('div');
+  contentDiv.className = 'el-content';
+  
+  // Get text content
+  let textContent = el.text || '';
+  if (el.type && el.type !== 'CUSTOM') {
+    textContent = resolveDynamicText(el.type, data);
+    console.log(`✓ Dynamic text resolved for ${el.type}: "${textContent}"`);
+  } else {
+    console.log(`✓ Static text: "${textContent}"`);
+  }
+  
+  // CRITICAL: Set the text content
+    contentDiv.textContent = textContent;
+  
+  // Apply styling
+    contentDiv.style.fontSize = (el.fontSize || 16) + 'px';
+    contentDiv.style.color = el.color || '#000';
+    contentDiv.style.fontWeight = el.fontWeight || el.weight || 'normal';
+    contentDiv.style.width = '100%';
+    contentDiv.style.height = '100%';
+    contentDiv.style.display = 'flex';
+    contentDiv.style.alignItems = 'center';
+    contentDiv.style.justifyContent = 'center';
+    contentDiv.style.textAlign = 'center';
             
             // Apply font family using system fonts
             if (el.fontFamily) {
