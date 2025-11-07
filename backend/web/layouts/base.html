@@ -5,307 +5,490 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Kin:D Frame Render</title>
 <style>
-  /* ---------- System font stack ---------- */
-  :root {
-    --font-default: "Roboto","Noto Sans","DejaVu Sans","Liberation Sans",
-                    "Open Sans","Cantarell",Arial,sans-serif;
-    --font-serif: "Merriweather","Liberation Serif","DejaVu Serif",
-                  "Noto Serif","Times New Roman",serif;
-    --font-mono: "DejaVu Sans Mono","Liberation Mono","Noto Sans Mono",
-                 "Consolas","Courier New",monospace;
-  }
-
-  * {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-  }
-
-  body {
-    width: 800px;
-    height: 480px;
-    overflow: hidden;
-    font-family: var(--font-default);
-    background: #fff;
-  }
-
-  #canvas {
-    position: relative;
-    width: 800px;
-    height: 480px;
-    overflow: hidden;
-  }
-
-  .el {
-    position: absolute;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .el.text {
-    z-index: 50;
-    white-space: pre-wrap;
-    word-wrap: break-word;
-    overflow: hidden;
-  }
-
-  .el.icon { z-index: 40; }
-  .el.box  { z-index: 15; }
-  .el.svg,
-  .el.svg-overlay,
-  .el.image { z-index: 20; }
-  .el.weather-icon { z-index: 35; }
-
-  .el svg {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-  }
-  /* === Text Visibility / Safety Overrides === */
-.el-content{
-  color:#000 !important;
-  -webkit-text-fill-color:#000 !important;  
-  -webkit-text-stroke:0 !important;
-  mix-blend-mode:normal !important;
-  filter:none !important;
-  opacity:1 !important;
-  transform:translateZ(0);                   
-  background: rgba(255,255,0,0.18);          /* Temporary: shows the bounding box of the text */
-}
-.el.text{ opacity:1 !important; }            
-.background-image{ z-index:0 !important; }   
-
-  .background-image {
-    position: absolute;
-    top: 0; left: 0;
-    width: 100%;
-    height: 100%;
-    z-index: 1;
-    object-fit: cover;
-  }
+  @font-face {
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: local('Inter');
+  }
+  
+  @font-face {
+    font-family: 'Roboto';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: local('Roboto');
+  }
+  
+  @font-face {
+    font-family: 'Atkinson Hyperlegible';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: local('Atkinson Hyperlegible');
+  }
+  
+  @font-face {
+    font-family: 'Source Sans 3';
+    font-style: normal;
+    font-weight: 200 900;
+    font-display: swap;
+    src: local('Source Sans 3');
+  }
+  
+  @font-face {
+    font-family: 'Public Sans';
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: local('Public Sans');
+  }
+  
+  @font-face {
+    font-family: 'Manrope';
+    font-style: normal;
+    font-weight: 200 800;
+    font-display: swap;
+    src: local('Manrope');
+  }
+  
+  @font-face {
+    font-family: 'Space Grotesk';
+    font-style: normal;
+    font-weight: 300 700;
+    font-display: swap;
+    src: local('Space Grotesk');
+  }
+  
+  @font-face {
+    font-family: 'Outfit';
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: local('Outfit');
+  }
+  
+  @font-face {
+    font-family: 'Plus Jakarta Sans';
+    font-style: normal;
+    font-weight: 200 800;
+    font-display: swap;
+    src: local('Plus Jakarta Sans');
+  }
+  
+  @font-face {
+    font-family: 'Merriweather';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: local('Merriweather');
+  }
+  
+  @font-face {
+    font-family: 'Noto Sans';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: local('Noto Sans');
+  }
+  
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  
+  body {
+    width: 800px;
+    height: 480px;
+    overflow: hidden;
+    font-family: "Liberation Sans", "DejaVu Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    background: #fff;
+  }
+  
+  #canvas {
+    position: relative;
+    width: 800px;
+    height: 480px;
+    overflow: hidden;
+  }
+  
+  .el {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .el.text {
+    z-index: 30;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+  
+  .el.icon {
+    z-index: 30;
+  }
+  
+  .el.box {
+    z-index: 15;
+  }
+  
+  .el.svg,
+  .el.svg-overlay,
+  .el.image {
+    z-index: 20;
+  }
+  
+  .el.weather-icon {
+    z-index: 35;
+  }
+  
+  .el svg {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+  
+  .background-image {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+    object-fit: cover;
+  }
 </style>
 </head>
 <body>
-  <div id="canvas"></div>
-
-<script>
-/* ------------------------------------------------------
-   Map designer fonts → installed system fonts
------------------------------------------------------- */
-function mapToSystemFont(fontFamily) {
-  const map = {
-    'Inter':'Liberation Sans','Roboto':'Liberation Sans',
-    'Public Sans':'Liberation Sans','Source Sans 3':'Liberation Sans',
-    'Space Grotesk':'DejaVu Sans','Outfit':'DejaVu Sans',
-    'Plus Jakarta Sans':'Liberation Sans','Atkinson Hyperlegible':'DejaVu Sans',
-    'Manrope':'Liberation Sans','Noto Sans':'Liberation Sans',
-    'Merriweather':'DejaVu Serif','Noto Serif':'DejaVu Serif',
-    'Comic Sans MS':'DejaVu Sans',
-    // --- FIX: Mapping Courier New to a monospace system font ---
-    'Courier New':'Liberation Mono'
-  };
-  return map[fontFamily] || 'Liberation Sans';
-}
-
-/* ------------------------------------------------------
-   Resolve text by dynamic type
------------------------------------------------------- */
-function resolveDynamicText(type, data) {
-  switch (type) {
-    case "WEATHER_TEMP":
-    case "TEMP":
-      return data.weather?.temp ? `${data.weather.temp}°` : "--°";
-
-    case "WEATHER_CITY":
-    case "CITY":
-      return data.weather?.city || "Unknown";
-
-    case "WEATHER_DESC":
-    case "DESC":
-      return data.weather?.desc || "No data";
-
-    case "WEATHER_DESC_EXTENDED":
-      return data.weather?.desc_extended || data.weather?.desc || "No data";
-
-    case "WEATHER_HUMIDITY":
-    case "HUMIDITY":
-      return data.weather?.humidity ? `${data.weather.humidity}%` : "--%";
-
-    case "WEATHER_MINMAX":
-    case "MINMAX":
-      if (data.weather?.temp_min && data.weather?.temp_max)
-        return `${data.weather.temp_min}° / ${data.weather.temp_max}°`;
-      return "--° / --°";
-
-    case "WEATHER_NOTE":
-    case "NOTE":
-      return data.weather?.desc || "No data";
-
-    case "WEATHER_ICON":
-      return "☀️";
-
-    /* --- Added types from docs --- */
-    case "RAIN":
-    case "WEATHER_RAIN":
-      return (data.weather && (data.weather.rain || data.weather.rain === 0))
-        ? `${data.weather.rain}mm` : "--mm";
-
-    case "WIND":
-    case "WEATHER_WIND":
-      return (data.weather && (data.weather.wind || data.weather.wind === 0))
-        ? `${data.weather.wind} km/h` : "-- km/h";
-
-    case "TOMORROW_DESC":
-      return data.weather?.tomorrow?.desc || "No forecast";
-
-    case "TOMORROW_TEMP":
-      if (data.weather?.tomorrow?.temp_min != null && data.weather?.tomorrow?.temp_max != null)
-        return `${data.weather.tomorrow.temp_min}° / ${data.weather.tomorrow.temp_max}°`;
-      return "--° / --°";
-
-    case "DATE":
-      return data.date || new Date().toLocaleDateString();
-
-    case "JOKE":
-      return data.dad_joke || "No joke today!";
-
-    default:
-      return "";
-  }
-}
-
-/* ------------------------------------------------------
-   Layer z-index
------------------------------------------------------- */
-function getLayerZIndex(el, kind) {
-  if (kind === 'text' || kind === 'icon') {
-    return el.type && el.type !== 'CUSTOM' ? 50 : 40;
-  } else if (kind === 'box') return 15;
-  else if (kind === 'svg' || kind === 'svg-overlay') return 20;
-  return 10;
-}
-
-/* ------------------------------------------------------
-   Inline SVG helper
------------------------------------------------------- */
-async function inlineSvgInto(elDiv, url) {
-  try {
-    const r = await fetch(url);
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const svgText = await r.text();
-    elDiv.innerHTML = svgText;
-    const svg = elDiv.querySelector('svg');
-    if (svg) { svg.style.width='100%'; svg.style.height='100%'; }
-  } catch (e) {
-    console.error('SVG load error', url, e);
-  }
-}
-
-/* ------------------------------------------------------
-   Main renderer
------------------------------------------------------- */
-async function renderLayout(data) {
-  const canvas = document.getElementById('canvas');
-  
-  const layout = data.layout || {};
-  const elements = layout.elements || [];
-
-  // Insert background image first
-  if (data.bg_url) {
-    const bg = document.createElement('img');
-    bg.src = data.bg_url;
-    bg.className = 'background-image';
-    canvas.appendChild(bg);
-  }
-
-  // Render all overlay elements
-  for (const el of elements) {
-    try {
-      const elDiv = document.createElement('div');
-      const kind = (el.kind || 'box').toLowerCase();
-      elDiv.className = 'el ' + kind;
-
-      elDiv.style.left = (el.x||0)+'px';
-      elDiv.style.top  = (el.y||0)+'px';
-      elDiv.style.width  = (el.w||el.width||100)+'px';
-      elDiv.style.height = (el.h||el.height||100)+'px';
-      
-      // Apply element opacity to the container div
-      const opacityValue = el.opacity ?? 1;
-      elDiv.style.opacity = opacityValue;
-      elDiv.style.zIndex  = el.zIndex || getLayerZIndex(el, kind);
-
-      if (kind === 'text' || kind === 'icon') {
-        const content = document.createElement('div');
-        content.className = 'el-content';
-        
-        content.style.opacity = opacityValue; 
-        
-
-        const dbg = !!(data && (data.debug_text || (layout.meta && layout.meta.debug_text)));
-        if (dbg) {
-          content.style.background = 'rgba(255,255,0,0.25)';
-          content.style.outline = '1px dashed magenta';
-          content.style.color = '#000';
-        }
-
-        let textContent = el.text || '';
-        if (el.type && el.type !== 'CUSTOM')
-          textContent = resolveDynamicText(el.type, data);
-        content.textContent = (textContent == null || textContent === '')
-            ? (el.text || '—') : textContent;
-
-        content.style.fontSize = (el.fontSize||16)+'px';
-        content.style.color = el.color || '#000';
-        content.style.webkitTextFillColor = el.color || '#000';
-        content.style.fontWeight = el.fontWeight || 'normal';
-        content.style.width = '100%';
-        content.style.height = '100%';
-        content.style.display = 'flex';
-        content.style.alignItems = 'center';
-        content.style.justifyContent = 'center';
-        content.style.textAlign = 'center';
-        content.style.whiteSpace = 'pre-wrap';
-        content.style.wordWrap = 'break-word';
-        content.style.overflow = 'hidden';
-
-        const sysFont = mapToSystemFont(el.fontFamily);
-        content.style.fontFamily = `"${sysFont}", var(--font-default)`;
-
-        elDiv.appendChild(content);
-
-      } else if (kind === 'box') {
-        if (el.background || el.fill) elDiv.style.background = el.background || el.fill;
-        if (el.borderColor) elDiv.style.border = '1px solid ' + el.borderColor;
-        if (el.borderRadius || el.radius)
-          elDiv.style.borderRadius = (el.borderRadius||el.radius)+'px';
-
-      } else if (kind === 'svg' || kind === 'svg-overlay' || kind === 'image') {
-        let src = el.src || '';
-        if (src === 'weather-icon' && data.weather?.icon_url)
-          src = data.weather.icon_url;
-        if (src) await inlineSvgInto(elDiv, src);
-      }
-
-      canvas.appendChild(elDiv);
-    } catch(e){ console.error('Element render failed', e, el); }
-  }
-}
-
-/* ------------------------------------------------------
-   Boot: decode ?data= payload and render
------------------------------------------------------- */
-const p = new URLSearchParams(location.search);
-const enc = p.get('data');
-if (enc) {
-  try {
-    const json = JSON.parse(decodeURIComponent(enc));
-    renderLayout(json);
-  } catch(e){ console.error('Render parse failed', e); }
-} else {
-  document.body.innerHTML = '<div style="padding:20px">Error: no data param</div>';
-}
-</script>
+  <div id="canvas"></div>
+  
+  <script>
+    // Parse data from URL query parameter
+    const urlParams = new URLSearchParams(window.location.search);
+    const encodedData = urlParams.get('data');
+    
+    if (!encodedData) {
+      console.error('No data parameter provided');
+      document.body.innerHTML = '<div style="padding: 20px;">Error: No render data provided</div>';
+    } else {
+      try {
+        const dataJson = decodeURIComponent(encodedData);
+        const data = JSON.parse(dataJson);
+        
+        console.log('=== DATA RECEIVED ===');
+        console.log('Raw data keys:', Object.keys(data));
+        console.log('Layout exists:', !!data.layout);
+        console.log('Layout elements count:', data.layout?.elements?.length || 0);
+        
+        // Render the layout immediately (no font loading needed)
+        renderLayout(data);
+      } catch (error) {
+        console.error('Failed to parse render data:', error);
+        document.body.innerHTML = '<div style="padding: 20px;">Error: Invalid render data</div>';
+      }
+    }
+    
+    /**
+     * Map designer font names to available system fonts
+     * Only using fonts guaranteed to be in Debian: Liberation and DejaVu
+     */
+    function mapToSystemFont(fontFamily) {
+      const systemFontMap = {
+        'Inter': 'Liberation Sans',
+        'Roboto': 'Liberation Sans',
+        'Public Sans': 'Liberation Sans',
+        'Source Sans 3': 'Liberation Sans',
+        'Space Grotesk': 'DejaVu Sans',
+        'Outfit': 'DejaVu Sans',
+        'Plus Jakarta Sans': 'Liberation Sans',
+        'Atkinson Hyperlegible': 'DejaVu Sans',
+        'Manrope': 'Liberation Sans',
+        'Noto Sans': 'Liberation Sans',
+        'Merriweather': 'DejaVu Serif',
+        'Noto Serif': 'DejaVu Serif'
+      };
+      
+      return systemFontMap[fontFamily] || 'Liberation Sans';
+    }
+    
+    /**
+     * Resolve relative/absolute paths to full URLs
+     */
+    function resolveUrl(path, svg_base) {
+      if (!path) return "";
+      
+      if (path.startsWith("http://") || path.startsWith("https://")) {
+        return path;
+      }
+      
+      if (path.startsWith("/")) {
+        if (svg_base && svg_base.startsWith("http")) {
+          const base = svg_base.split("/gcs/")[0];
+          return base + path;
+        }
+        return path;
+      }
+      
+      if (svg_base) {
+        return svg_base + "/" + path;
+      }
+      
+      return path;
+    }
+    
+    /**
+     * Resolve dynamic text content
+     */
+    function resolveDynamicText(type, data) {
+      switch (type) {
+        case "WEATHER_TEMP":
+        case "TEMP":
+          return data.weather?.temp ? `${data.weather.temp}°` : "--°";
+        
+        case "WEATHER_CITY":
+        case "CITY":
+          return data.weather?.city || "Unknown";
+        
+        case "WEATHER_DESC":
+        case "DESC":
+          return data.weather?.desc || "No data";
+        
+        case "WEATHER_DESC_EXTENDED":
+          return data.weather?.desc_extended || data.weather?.desc || "No data";
+        
+        case "WEATHER_HUMIDITY":
+        case "HUMIDITY":
+          return data.weather?.humidity ? `${data.weather.humidity}%` : "--%";
+        
+        case "WEATHER_MINMAX":
+        case "MINMAX":
+          if (data.weather?.temp_min && data.weather?.temp_max) {
+            return `${data.weather.temp_min}° / ${data.weather.temp_max}°`;
+          }
+          return "--° / --°";
+        
+        case "WEATHER_NOTE":
+        case "NOTE":
+          return data.weather?.desc || "No data";
+        
+        case "WEATHER_ICON":
+          return "☀️"; // Fallback for icon elements using text
+        
+        case "DATE":
+          return data.date || new Date().toLocaleDateString();
+        
+        case "JOKE":
+          return data.dad_joke || "No joke today!";
+        
+        default:
+          return "";
+      }
+    }
+    
+    /**
+     * Get layer z-index based on element kind
+     */
+    function getLayerZIndex(el, kind) {
+      if (kind === 'text' || kind === 'icon') {
+        return el.type && el.type !== 'CUSTOM' ? 35 : 20;
+      } else if (kind === 'box') {
+        return 15;
+      } else if (kind === 'svg' || kind === 'svg-overlay') {
+        return el.src === 'weather-icon' ? 35 : 20;
+      }
+      return 10;
+    }
+    
+    /**
+     * Inline SVG content into element
+     */
+    async function inlineSvgInto(elDiv, url) {
+      try {
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const svgText = await response.text();
+        elDiv.innerHTML = svgText;
+        
+        const svgEl = elDiv.querySelector('svg');
+        if (svgEl) {
+          svgEl.style.width = '100%';
+          svgEl.style.height = '100%';
+          svgEl.removeAttribute('width');
+          svgEl.removeAttribute('height');
+        }
+      } catch (error) {
+        console.error('Failed to load SVG:', url, error);
+        elDiv.innerHTML = `<div style="color: red; font-size: 12px;">SVG Load Error</div>`;
+      }
+    }
+    
+    /**
+     * Main render function
+     */
+    async function renderLayout(data) {
+      const canvas = document.getElementById('canvas');
+      const layout = data.layout || {};
+      const elements = layout.elements || [];
+      const svg_base = data.svg_base || "";
+      
+      console.log('=== RENDER LAYOUT START ===');
+      console.log('Data keys:', Object.keys(data));
+      console.log('Layout name:', layout.name);
+      console.log('Elements count:', elements.length);
+      console.log('SVG Base:', svg_base);
+      console.log('BG URL:', data.bg_url);
+      console.log('Weather data:', data.weather);
+      console.log('Elements:', elements);
+      
+      if (data.bg_url) {
+        const bgImg = document.createElement('img');
+        bgImg.src = data.bg_url;
+        bgImg.className = 'background-image';
+        bgImg.onerror = () => {
+          console.warn('Background image failed to load:', data.bg_url);
+        };
+        canvas.appendChild(bgImg);
+      }
+      
+      for (const el of elements) {
+        try {
+          const elDiv = document.createElement('div');
+          elDiv.className = 'el';
+          
+          const kind = (el.kind || 'box').toLowerCase();
+          elDiv.classList.add(kind);
+          
+          elDiv.style.left = (el.x || 0) + 'px';
+          elDiv.style.top = (el.y || 0) + 'px';
+          elDiv.style.width = (el.w || el.width || 100) + 'px';
+          elDiv.style.height = (el.h || el.height || 100) + 'px';
+          
+          const zIndex = el.zIndex || getLayerZIndex(el, kind);
+          elDiv.style.zIndex = zIndex;
+          
+          if (el.opacity != null) {
+            elDiv.style.opacity = el.opacity;
+          }
+          
+          if (kind === 'text' || kind === 'icon') {
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'el-content';
+            
+            let textContent = el.text || '';
+            if (el.type && el.type !== 'CUSTOM') {
+              textContent = resolveDynamicText(el.type, data);
+            }
+            
+            contentDiv.textContent = textContent;
+            contentDiv.style.fontSize = (el.fontSize || 16) + 'px';
+            contentDiv.style.color = el.color || '#000';
+            contentDiv.style.fontWeight = el.fontWeight || el.weight || 'normal';
+            contentDiv.style.width = '100%';
+            contentDiv.style.height = '100%';
+            contentDiv.style.display = 'flex';
+            contentDiv.style.alignItems = 'center';
+            contentDiv.style.justifyContent = 'center';
+            contentDiv.style.textAlign = 'center';
+            
+            // Apply font family using system fonts
+            if (el.fontFamily) {
+              const systemFont = mapToSystemFont(el.fontFamily);
+              contentDiv.style.fontFamily = `"${systemFont}", "Liberation Sans", "DejaVu Sans", -apple-system, sans-serif`;
+            }
+            
+            // Apply text shadow/glow if specified
+            if (el.textShadow) {
+              contentDiv.style.textShadow = el.textShadow;
+            } else if (el.textShadowType && el.textShadowType !== 'none') {
+              const shadowColor = el.textShadowColor || '#000000';
+              const intensity = el.textShadowIntensity || 1;
+              const blur = Math.round(4 * intensity);
+              
+              if (el.textShadowType === 'glow') {
+                // Multiple layers for glow effect
+                contentDiv.style.textShadow = `
+                  0 0 ${blur}px ${shadowColor},
+                  0 0 ${blur * 2}px ${shadowColor},
+                  0 0 ${blur * 3}px ${shadowColor}
+                `;
+              } else if (el.textShadowType === 'shadow' || el.textShadowType === 'drop') {
+                // Drop shadow
+                const offset = Math.round(2 * intensity);
+                contentDiv.style.textShadow = `${offset}px ${offset}px ${blur}px ${shadowColor}`;
+              } else if (el.textShadowType === 'outline') {
+                // Text outline
+                const size = Math.round(1 * intensity);
+                contentDiv.style.textShadow = `
+                  -${size}px -${size}px 0 ${shadowColor},
+                  ${size}px -${size}px 0 ${shadowColor},
+                  -${size}px ${size}px 0 ${shadowColor},
+                  ${size}px ${size}px 0 ${shadowColor}
+                `;
+              }
+            }
+            
+            elDiv.appendChild(contentDiv);
+            
+          } else if (kind === 'box') {
+            if (el.background || el.fill) {
+              elDiv.style.background = el.background || el.fill;
+            }
+            if (el.borderColor) {
+              elDiv.style.border = '1px solid ' + el.borderColor;
+            }
+            if (el.borderRadius || el.radius) {
+              elDiv.style.borderRadius = (el.borderRadius || el.radius) + 'px';
+            }
+            
+          } else if (kind === 'svg' || kind === 'svg-overlay' || kind === 'image') {
+            let src = el.src || el.svgName || '';
+            
+            if (src === 'weather-icon') {
+              if (data.weather?.icon_url) {
+                src = data.weather.icon_url;
+                elDiv.classList.add('weather-icon');
+              } else {
+                console.warn('No weather icon URL available');
+                continue;
+              }
+            }
+            
+            const fullUrl = resolveUrl(src, svg_base);
+            
+            if (fullUrl.endsWith('.svg')) {
+              await inlineSvgInto(elDiv, fullUrl);
+            } else {
+              const img = document.createElement('img');
+              img.src = fullUrl;
+              img.style.width = '100%';
+              img.style.height = '100%';
+              img.style.objectFit = 'contain';
+              img.onerror = () => {
+                console.error('Image failed to load:', fullUrl);
+              };
+              elDiv.appendChild(img);
+            }
+          }
+          
+          canvas.appendChild(elDiv);
+          console.log(`✓ Rendered ${kind} element at (${el.x}, ${el.y})`);
+          
+        } catch (error) {
+          console.error('Error rendering element:', el, error);
+          // Continue to next element even if this one fails
+        }
+      }
+      
+      const renderedCount = canvas.querySelectorAll('.el').length;
+      console.log(`✓ Layout rendered successfully - ${renderedCount} elements on canvas`);
+      console.log('=== RENDER LAYOUT COMPLETE ===');
+    }
+  </script>
 </body>
 </html>
