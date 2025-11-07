@@ -68,6 +68,7 @@ RENDER_PATH = os.getenv("RENDER_PATH", "backend/web/layouts/base.html")
 
 PROJECT_ROOT = BASE_DIR.parent
 STATIC_SEARCH_BASES = [Path.cwd(), BASE_DIR, PROJECT_ROOT]
+DEFAULT_LAYOUT_KEY = "assets/default.json"
 
 LOCAL_JOKES = [
     "Why don't scientists trust atoms? Because they make up everything!",
@@ -136,6 +137,29 @@ def gcs_write_json(key: str, data: dict):
     blob = bucket.blob(key)
     blob.upload_from_string(json.dumps(data, indent=2), content_type="application/json")
     logger.info(f"💾 Saved: {key}")
+
+# ============================================================================
+# DEVICE LAYOUT LOADING
+# ============================================================================
+
+def load_device_layout(device_id: str) -> dict:
+    """
+    Load the device's layout; fallback to global default if missing.
+    """
+    # 1) Device layout
+    try:
+        return gcs_read_json(f"devices/{device_id}/layouts/current.json")
+    except Exception:
+        pass
+
+    # 2) Global default
+    try:
+        return gcs_read_json(DEFAULT_LAYOUT_KEY)
+    except Exception:
+        pass
+
+    # 3) Empty skeleton as last resort
+    return {"name": "Default", "elements": []}
 
 def gcs_write_bytes(key: str, data: bytes, content_type: str = "image/png"):
     if not storage_enabled:
@@ -335,12 +359,8 @@ async def build_render_data(device: str = "familydisplay") -> dict:
 
     logger.info(f"Building render data for {device}: {city} ({tz_name})")
 
-    # layout
-    layout_key = f"devices/{device}/layouts/current.json"
-    try:
-        layout = gcs_read_json(layout_key)
-    except Exception:
-        layout = {"name": "Default", "elements": []}
+    # Load layout (with default fallback)
+    layout = load_device_layout(device)
 
     # weather
     weather = await get_weather(f"{city},AU")
