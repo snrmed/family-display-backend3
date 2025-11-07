@@ -431,13 +431,85 @@ async def build_render_data(device: str = "familydisplay") -> dict:
         
         if storage_enabled:
             svg_base = make_public_url("gcs/assets/svgs")
+            font_base = make_public_url("gcs/assets/fonts")
+            icon_base = make_public_url("gcs/assets/weather-icons")
         else:
             svg_base = make_public_url("designer/svgs")
+            font_base = make_public_url("designer/fonts")
+            icon_base = make_public_url("designer/weather-icons")
         
-        # Font base for loading fonts in base.html
-        font_base = make_public_url("fonts")
         
-        return {
+        # Build dynamic_text map for Designer dynamic types
+        w = weather or {}
+        fc = (w.get("forecast") or []) if isinstance(w, dict) else []
+        tomorrow = fc[1] if len(fc) > 1 else {}
+
+        def _fmt_temp(val):
+            if val is None:
+                return ""
+            try:
+                return f"{round(float(val))}°C"
+            except Exception:
+                return f"{val}°C"
+
+        def _fmt_minmax(tmin, tmax):
+            if tmin is None and tmax is None:
+                return ""
+            tmin_s = "" if tmin is None else str(round(float(tmin)))
+            tmax_s = "" if tmax is None else str(round(float(tmax)))
+            if tmin_s and tmax_s:
+                return f"{tmin_s}/{tmax_s}°C"
+            return f"{tmin_s or tmax_s}°C"
+
+        def _fmt_speed(val):
+            if val is None:
+                return ""
+            try:
+                v = float(val)
+                return f"{round(v)} km/h"
+            except Exception:
+                return f"{val} km/h"
+
+        def _fmt_rain(val):
+            if val is None:
+                return ""
+            try:
+                v = float(val)
+                s = f"{v:.1f}" if v and abs(v) < 1 else f"{round(v)}"
+                return f"{s}mm"
+            except Exception:
+                return f"{val}mm"
+
+        def _icon_url(code):
+            icon = w.get("icon") or ""
+            if isinstance(icon, str) and icon.startswith("http"):
+                return icon
+            return f"{icon_base}/{icon}.png" if icon else ""
+
+        dynamic_text = {
+            "CITY": w.get("city") or "",
+            "WEATHER_CITY": w.get("city") or "",
+            "DATE": date_str,
+            "JOKE": dad_joke or "",
+            "TEMP": _fmt_temp(w.get("temperature")),
+            "WEATHER_TEMP": _fmt_temp(w.get("temperature")),
+            "MINMAX": _fmt_minmax(w.get("temp_min"), w.get("temp_max")),
+            "WEATHER_MINMAX": _fmt_minmax(w.get("temp_min"), w.get("temp_max")),
+            "WEATHER_DESC": (w.get("description") or "").title(),
+            "WEATHER_DESC_EXTENDED": (w.get("description_extended") or w.get("description") or "").strip(),
+            "WEATHER_ICON": _icon_url(w.get("icon")),
+            "HUMIDITY": ("" if w.get("humidity") is None else f"{int(round(float(w.get('humidity'))))}%"),
+            "WEATHER_HUMIDITY": ("" if w.get("humidity") is None else f"{int(round(float(w.get('humidity'))))}%"),
+            "WIND": _fmt_speed(w.get("wind_speed")),
+            "RAIN": _fmt_rain(w.get("rain")),
+            "WEATHER_NOTE": (w.get("note") or ""),
+            "TOMORROW_DESC": ((tomorrow.get("description") or "").title() if isinstance(tomorrow, dict) else ""),
+            "TOMORROW_TEMP": (_fmt_temp(tomorrow.get("temperature")) if isinstance(tomorrow, dict) else ""),
+            "CUSTOM": "",
+            "ENABLE_OPENWEATHER": "true" if os.getenv("ENABLE_OPENWEATHER", "true").lower() == "true" else "false",
+            "OPENWEATHER_KEY": os.getenv("OPENWEATHER_KEY", ""),
+        }
+return {
             "layout": layout,
             "weather": weather,
             "dad_joke": dad_joke,
@@ -446,15 +518,11 @@ async def build_render_data(device: str = "familydisplay") -> dict:
             "pexels": pexels_info,
             "svg_base": svg_base,
             "font_base": font_base,
+            "icon_base": icon_base,
+            "dynamic_text": dynamic_text,
             "device": device_config,
             "timestamp": now.isoformat()
-        }
-    except Exception as e:
-        logger.error(f"Failed to build render data: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-async def render_html_to_png(html_path: str, context: Dict[str, Any]) -> bytes:
+        }ytes:
     """Render base.html to PNG using Playwright"""
     if not ENABLE_RENDERING or playwright_browser is None:
         raise RuntimeError("Rendering disabled")
@@ -465,13 +533,17 @@ async def render_html_to_png(html_path: str, context: Dict[str, Any]) -> bytes:
     
     raw_json = json.dumps(context)
     encoded_data = quote(raw_json, safe="")
-    url = f"file://{os.path.abspath(html_path)}?data={encoded_data}"
+    public_base = os.getenv("PUBLIC_BASE_URL", "").rstrip("/")
+    url = f"{public_base}/layouts/base.html?data={encoded_data}"
     
-    logger.info(f"🎨 Rendering: {url[:100]}...")
+    logger.info(f"🎨 Rendering: {url[:120]}...")
     
     try:
-        await page.goto(url, wait_until="networkidle", timeout=10000)
-        await page.wait_for_timeout(1500)
+        await page.goto(url, wait_until="networkidle", timeout=20000)
+        # Ensure webfonts are loaded before capture
+        await page.evaluate("document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()")
+        await page.wait_for_timeout(50)
+
         png_bytes = await page.screenshot(type="png", full_page=True)
         return png_bytes
     finally:
