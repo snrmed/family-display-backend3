@@ -20,10 +20,23 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Kin:D Family Display Backend v4")
+
 @app.get("/")
 def ok():
     return {"ok": True, "service": "family-display-backend"}
 
+BASE_DIR = Path(__file__).resolve().parent
+LAYOUTS_DIR = BASE_DIR / "web" / "layouts"
+
+@app.get("/layouts/base.html")
+def get_base_html():
+    """Return the main base.html layout file from /web/layouts."""
+    path = LAYOUTS_DIR / "base.html"
+    if not path.exists():
+        # optional: return simple 404 if missing
+        return {"error": "base.html not found"}
+    return FileResponse(str(path), media_type="text/html")
+    
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
