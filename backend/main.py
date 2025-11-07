@@ -399,7 +399,7 @@ async def build_render_data(device: str = "familydisplay") -> dict:
     # bases (proxied paths)
     if storage_enabled:
         svg_base = make_public_url("gcs/assets/svgs")
-        font_base = make_public_url("fonts")  # proxied /fonts
+        font_base = make_public_url("gcs/assets/fonts")
         icon_base = make_public_url("gcs/assets/weather-icons")
     else:
         svg_base = make_public_url("designer/svgs")
