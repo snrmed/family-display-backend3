@@ -753,7 +753,42 @@ async def admin_render_now(token: str = None, device: str = "familydisplay"):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# ──────────────────────────────────────────────────────────────────────────────
+## ============================================================================
+# DEVICE MANAGEMENT ROUTES
+# ============================================================================
+
+@app.get("/v1/devices")
+def list_devices():
+    """List device IDs found under devices/ in the bucket."""
+    if not storage_enabled:
+        return {"devices": []}
+    seen = set()
+    try:
+        for blob in bucket.list_blobs(prefix="devices/"):
+            parts = blob.name.split("/")
+            if len(parts) >= 2 and parts[0] == "devices" and parts[1]:
+                seen.add(parts[1])
+    except Exception as e:
+        logger.warning(f"Could not list devices: {e}")
+    return {"devices": sorted(seen)}
+
+
+@app.post("/v1/devices/{device_id}/layouts/init_from_default")
+def init_layout_from_default(device_id: str):
+    """
+    Copy assets/default.json → devices/<device_id>/layouts/current.json
+    (idempotent; overwrites existing file)
+    """
+    if not storage_enabled:
+        raise HTTPException(status_code=503, detail="GCS not enabled")
+    try:
+        default_layout = gcs_read_json(DEFAULT_LAYOUT_KEY)
+        gcs_write_json(f"devices/{device_id}/layouts/current.json", default_layout)
+        logger.info(f"✅ Initialized layout for {device_id} from default.json")
+        return {"status": "ok", "device": device_id}
+    except Exception as e:
+        logger.error(f"Failed to initialize layout: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
