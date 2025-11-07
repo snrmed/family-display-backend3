@@ -20,6 +20,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Kin:D Family Display Backend v4")
+@app.get("/")
+def ok():
+    return {"ok": True, "service": "family-display-backend"}
 
 app.add_middleware(
     CORSMiddleware,
