@@ -630,6 +630,34 @@ def debug_layout(device: str = "familydisplay"):
         }
 
 # ──────────────────────────────────────────────────────────────────────────────
+# DESIGNER ROUTE (LOADS HTML DIRECTLY FROM GCS)
+# ──────────────────────────────────────────────────────────────────────────────
+
+@app.get("/designer/", response_class=HTMLResponse)
+async def designer():
+    """Serve Designer HTML directly from GCS bucket."""
+    if not storage_enabled:
+        raise HTTPException(status_code=503, detail="Storage not configured")
+
+    designer_key = "web/designer/overlay_designer_v4_clean.html"
+    try:
+        html_content = gcs_read_text(designer_key)
+        logger.info(f"✅ Designer loaded from {designer_key}")
+        return HTMLResponse(content=html_content, media_type="text/html")
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error": "Designer not found in bucket",
+                "expected_key": designer_key,
+                "bucket": GCS_BUCKET,
+            },
+        )
+    except Exception as e:
+        logger.error(f"Failed to load designer: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ──────────────────────────────────────────────────────────────────────────────
 # STATIC MOUNTS (optional in-container dev)
 # ──────────────────────────────────────────────────────────────────────────────
 
