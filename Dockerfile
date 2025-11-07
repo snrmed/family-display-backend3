@@ -1,95 +1,40 @@
 # ---- Base ----
 FROM python:3.11-slim
 
-# Fonts + headless deps (lean for e-ink)
-# - Enable Debian contrib/non-free for MS core fonts
-# - Install small, crisp families: DejaVu, Liberation, Noto(core only), Roboto, Open Sans, Cantarell
-# - Install MS core fonts non-interactively
-# - No CJK / No color-emoji (keeps image small for your e-ink themes)
+# Avoid interactive tz / font prompts
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# System deps required by Playwright/Chromium + lean font set
 RUN set -eux; \
-    sed -ri 's/ main([ ]|$)/ main contrib non-free non-free-firmware /g' /etc/apt/sources.list || true; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
       ca-certificates curl wget git \
       fontconfig \
-      # core families (good legibility on e-ink)
-      fonts-dejavu-core fonts-dejavu-extra \
-      fonts-liberation || true; \
-    # Liberation package name varies on some bases; try v2 first then fallback
-    apt-get install -y --no-install-recommends fonts-liberation2 || true; \
-    apt-get install -y --no-install-recommends \
-      fonts-noto-core \
-      fonts-roboto \
-      fonts-open-sans \
-      fonts-cantarell \
-      # X/GTK bits your Playwright/Chromium needs
-      libasound2 libatk-bridge2.0-0 libatk1.0-0 libcups2 libdbus-1-3 libdrm2 \
-      libxkbcommon0 libnss3 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
-      libgtk-3-0 libgbm1 libx11-6 libx11-xcb1 libxcb1 libxext6 libxrender1 \
-      libxtst6 libxi6 libpango-1.0-0 libcairo2 libglib2.0-0; \
-    # Pre-accept EULA and install the Microsoft core fonts
-    echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" | debconf-set-selections; \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ttf-mscorefonts-installer || true; \
-    # Small fontconfig alias: stable generic family mapping; avoid color emoji on e-ink
-    mkdir -p /etc/fonts/conf.d; \
-    printf '%s\n' \
-      '<?xml version="1.0"?>' \
-      '<!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">' \
-      '<fontconfig>' \
-      '  <alias>' \
-      '    <family>sans-serif</family>' \
-      '    <prefer>' \
-      '      <family>Roboto</family>' \
-      '      <family>DejaVu Sans</family>' \
-      '      <family>Noto Sans</family>' \
-      '      <family>Liberation Sans</family>' \
-      '      <family>Open Sans</family>' \
-      '      <family>Cantarell</family>' \
-      '    </prefer>' \
-      '  </alias>' \
-      '  <alias>' \
-      '    <family>serif</family>' \
-      '    <prefer>' \
-      '      <family>Noto Serif</family>' \
-      '      <family>Liberation Serif</family>' \
-      '      <family>DejaVu Serif</family>' \
-      '    </prefer>' \
-      '  </alias>' \
-      '  <alias>' \
-      '    <family>monospace</family>' \
-      '    <prefer>' \
-      '      <family>DejaVu Sans Mono</family>' \
-      '      <family>Liberation Mono</family>' \
-      '      <family>Noto Sans Mono</family>' \
-      '    </prefer>' \
-      '  </alias>' \
-      '  <selectfont>' \
-      '    <rejectfont>' \
-      '      <pattern><family>Noto Color Emoji</family></pattern>' \
-      '    </rejectfont>' \
-      '  </selectfont>' \
-      '</fontconfig>' \
-      > /etc/fonts/conf.d/60-family-aliases-kd.conf; \
-    fc-cache -f && rm -rf /var/lib/apt/lists/*
+      libnss3 libx11-6 libx11-xcb1 libxcb1 libxcomposite1 libxdamage1 libxext6 \
+      libxfixes3 libxrandr2 libgbm1 libgtk-3-0 libasound2 libatspi2.0-0 libdrm2 \
+      libxshmfence1 \
+      fonts-dejavu-core fonts-liberation fonts-noto-core \
+    && rm -rf /var/lib/apt/lists/*
 
-# avoid playwright trying to download at pip time
-ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
-ENV PYTHONUNBUFFERED=1
-
+# App root
 WORKDIR /app
 
-# install python deps
+# Copy and install Python deps first (better layer caching)
 COPY backend/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
-# install browser (your original step preserved)
-RUN playwright install --with-deps chromium || playwright install chromium
+# Install Playwright Chromium into image
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+RUN python -m playwright install --with-deps chromium
 
-# copy the rest
+# Copy the rest of the project
 COPY . /app
 
-# run from backend/
-WORKDIR /app/backend
-
+# Cloud Run port
 ENV PORT=8080
+
+# Start the FastAPI app
+WORKDIR /app/backend
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
