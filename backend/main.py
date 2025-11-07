@@ -2,14 +2,15 @@ import os
 import json
 import random
 import logging
-from datetime import datetime, timedelta, timezone
+import traceback
+from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 from pathlib import Path
 from typing import Dict, Any, List
 from urllib.parse import quote
 
-from fastapi import FastAPI, HTTPException, Header, Request
-from fastapi.responses import HTMLResponse, Response, JSONResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse, Response, JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -20,6 +21,10 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Kin:D Family Display Backend v4")
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Health / Ready + Base Layout Route
+# ──────────────────────────────────────────────────────────────────────────────
 
 @app.get("/")
 def ok():
@@ -33,10 +38,9 @@ def get_base_html():
     """Return the main base.html layout file from /web/layouts."""
     path = LAYOUTS_DIR / "base.html"
     if not path.exists():
-        # optional: return simple 404 if missing
-        return {"error": "base.html not found"}
+        return JSONResponse({"error": "base.html not found"}, status_code=404)
     return FileResponse(str(path), media_type="text/html")
-    
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -45,9 +49,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ============================================================================
+# ──────────────────────────────────────────────────────────────────────────────
 # CONFIGURATION
-# ============================================================================
+# ──────────────────────────────────────────────────────────────────────────────
 
 PORT = int(os.getenv("PORT", "8080"))
 GCS_BUCKET = os.getenv("GCS_BUCKET", "family-display-packs")
@@ -62,7 +66,6 @@ RENDER_WIDTH = int(os.getenv("RENDER_WIDTH", "800"))
 RENDER_HEIGHT = int(os.getenv("RENDER_HEIGHT", "480"))
 RENDER_PATH = os.getenv("RENDER_PATH", "backend/web/layouts/base.html")
 
-BASE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = BASE_DIR.parent
 STATIC_SEARCH_BASES = [Path.cwd(), BASE_DIR, PROJECT_ROOT]
 
@@ -72,9 +75,9 @@ LOCAL_JOKES = [
     "Why did the scarecrow win an award? He was outstanding in his field!",
 ]
 
-# ============================================================================
+# ──────────────────────────────────────────────────────────────────────────────
 # GOOGLE CLOUD STORAGE
-# ============================================================================
+# ──────────────────────────────────────────────────────────────────────────────
 
 storage_enabled = False
 bucket = None
@@ -88,16 +91,16 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ GCS disabled: {e}")
 
-# ============================================================================
+# ──────────────────────────────────────────────────────────────────────────────
 # UTILITIES
-# ============================================================================
+# ──────────────────────────────────────────────────────────────────────────────
 
 def make_public_url(path: str) -> str:
-    """Generate public URL for assets"""
-    if PUBLIC_BASE_URL:
-        return f"{PUBLIC_BASE_URL}/{path}"
-    return f"/{path}"
-
+    """Return a proxied/public URL for an object path."""
+    base = PUBLIC_BASE_URL.rstrip("/") if PUBLIC_BASE_URL else ""
+    if base:
+        return f"{base}/{path.lstrip('/')}"
+    return f"/{path.lstrip('/')}"
 
 def resolve_static_dir(*relative_paths: str) -> Path | None:
     """Find the first existing directory from a list of relative paths."""
@@ -105,17 +108,13 @@ def resolve_static_dir(*relative_paths: str) -> Path | None:
         candidate = Path(relative_path)
         if candidate.is_absolute() and candidate.exists():
             return candidate
-
         for base in STATIC_SEARCH_BASES:
             base_candidate = (base / relative_path).resolve()
             if base_candidate.exists():
                 return base_candidate
-
     return None
 
-
 def gcs_read_json(key: str) -> dict:
-    """Read JSON from GCS"""
     if not storage_enabled:
         raise RuntimeError("GCS not enabled")
     blob = bucket.blob(key)
@@ -123,9 +122,7 @@ def gcs_read_json(key: str) -> dict:
         raise FileNotFoundError(f"Blob not found: {key}")
     return json.loads(blob.download_as_text())
 
-
 def gcs_read_text(key: str) -> str:
-    """Read text file from GCS"""
     if not storage_enabled:
         raise RuntimeError("GCS not enabled")
     blob = bucket.blob(key)
@@ -133,84 +130,68 @@ def gcs_read_text(key: str) -> str:
         raise FileNotFoundError(f"Blob not found: {key}")
     return blob.download_as_text()
 
-
 def gcs_write_json(key: str, data: dict):
-    """Write JSON to GCS"""
     if not storage_enabled:
         raise RuntimeError("GCS not enabled")
     blob = bucket.blob(key)
     blob.upload_from_string(json.dumps(data, indent=2), content_type="application/json")
     logger.info(f"💾 Saved: {key}")
 
-
 def gcs_write_bytes(key: str, data: bytes, content_type: str = "image/png"):
-    """Write bytes to GCS"""
     if not storage_enabled:
         raise RuntimeError("GCS not enabled")
     blob = bucket.blob(key)
     blob.upload_from_string(data, content_type=content_type)
     logger.info(f"💾 Saved: {key}")
 
-
-# ============================================================================
+# ──────────────────────────────────────────────────────────────────────────────
 # DEVICE CONFIGURATION
-# ============================================================================
+# ──────────────────────────────────────────────────────────────────────────────
 
 DEFAULT_DEVICE_CONFIG = {
-    "location": {
-        "city": "Darwin",
-        "timezone": "Australia/Darwin"
-    },
-    "preferences": {
-        "iconTheme": "happy-skies"
-    }
+    "location": {"city": "Darwin", "timezone": "Australia/Darwin"},
+    "preferences": {"iconTheme": DEFAULT_ICON_THEME},
 }
 
 def get_device_config(device_id: str = "familydisplay") -> dict:
-    """Load device configuration"""
     if not storage_enabled:
         return DEFAULT_DEVICE_CONFIG
-    
     try:
         config_key = f"devices/{device_id}/config.json"
         config = gcs_read_json(config_key)
         logger.info(f"✅ Loaded config for {device_id}")
         return config
-    except:
+    except Exception:
         logger.info(f"Using default config for {device_id}")
         return DEFAULT_DEVICE_CONFIG
 
-
 def save_device_config(device_id: str, config: dict):
-    """Save device configuration"""
     if not storage_enabled:
         raise RuntimeError("GCS not enabled")
-    
     config_key = f"devices/{device_id}/config.json"
     gcs_write_json(config_key, config)
     logger.info(f"✅ Saved config for {device_id}")
 
-
-# ============================================================================
+# ──────────────────────────────────────────────────────────────────────────────
 # RENDERING & BROWSER
-# ============================================================================
+# ──────────────────────────────────────────────────────────────────────────────
 
 if ENABLE_RENDERING:
     try:
         from playwright.async_api import async_playwright
-        
+
         async def init_browser():
             global playwright_browser
             pw = await async_playwright().start()
             playwright_browser = await pw.chromium.launch(
-                args=['--no-sandbox', '--disable-dev-shm-usage']
+                args=["--no-sandbox", "--disable-dev-shm-usage"]
             )
             logger.info("🎭 Playwright browser initialized")
-        
+
         @app.on_event("startup")
         async def startup():
             await init_browser()
-        
+
         @app.on_event("shutdown")
         async def shutdown():
             if playwright_browser:
@@ -219,60 +200,46 @@ if ENABLE_RENDERING:
         logger.warning(f"⚠️ Playwright disabled: {e}")
         ENABLE_RENDERING = False
 
-
-# ============================================================================
+# ──────────────────────────────────────────────────────────────────────────────
 # CONTENT PROVIDERS
-# ============================================================================
+# ──────────────────────────────────────────────────────────────────────────────
 
 def resolve_weather_icon_url(theme: str, code: str) -> str:
-    """Resolve weather icon URL"""
+    """Resolve weather icon URL (proxied)."""
     path = f"assets/weather-icons/{theme}/{code}.svg"
     return make_public_url(f"gcs/{path}")
 
-
 async def get_weather(city: str) -> dict:
-    """Get weather data from OpenWeather API"""
+    """Get weather from OpenWeather; returns normalized keys."""
     api_key = os.getenv("OPENWEATHER_KEY")
-    
+
     if ENABLE_OPENWEATHER and api_key:
         try:
             async with httpx.AsyncClient() as client:
-                # Get current weather
-                current_url = f"https://api.openweathermap.org/data/2.5/weather"
-                params = {
-                    "q": city,
-                    "appid": api_key,
-                    "units": "metric"
-                }
+                current_url = "https://api.openweathermap.org/data/2.5/weather"
+                params = {"q": city, "appid": api_key, "units": "metric"}
                 r = await client.get(current_url, params=params, timeout=10)
-                
+
                 if r.status_code == 200:
                     data = r.json()
-                    
-                    # Get forecast for tomorrow
-                    lat = data["coord"]["lat"]
-                    lon = data["coord"]["lon"]
-                    forecast_url = f"https://api.openweathermap.org/data/2.5/forecast"
-                    forecast_params = {
-                        "lat": lat,
-                        "lon": lon,
-                        "appid": api_key,
-                        "units": "metric"
-                    }
-                    forecast_r = await client.get(forecast_url, params=forecast_params, timeout=10)
-                    
+
+                    # tomorrow forecast (24h)
+                    lat, lon = data["coord"]["lat"], data["coord"]["lon"]
+                    forecast_url = "https://api.openweathermap.org/data/2.5/forecast"
+                    forecast_params = {"lat": lat, "lon": lon, "appid": api_key, "units": "metric"}
+                    fr = await client.get(forecast_url, params=forecast_params, timeout=10)
+
                     tomorrow_data = None
-                    if forecast_r.status_code == 200:
-                        forecast = forecast_r.json()
+                    if fr.status_code == 200:
+                        forecast = fr.json()
                         if forecast.get("list"):
-                            # Get tomorrow's forecast (24 hours ahead)
-                            tomorrow_entry = forecast["list"][8] if len(forecast["list"]) > 8 else forecast["list"][-1]
+                            entry = forecast["list"][8] if len(forecast["list"]) > 8 else forecast["list"][-1]
                             tomorrow_data = {
-                                "temp_min": round(tomorrow_entry["main"]["temp_min"]),
-                                "temp_max": round(tomorrow_entry["main"]["temp_max"]),
-                                "desc": tomorrow_entry["weather"][0]["description"].title()
+                                "temp_min": round(entry["main"]["temp_min"]),
+                                "temp_max": round(entry["main"]["temp_max"]),
+                                "desc": entry["weather"][0]["description"].title(),
                             }
-                    
+
                     return {
                         "temp": round(data["main"]["temp"]),
                         "humidity": data["main"]["humidity"],
@@ -284,11 +251,12 @@ async def get_weather(city: str) -> dict:
                         "temp_min": round(data["main"]["temp_min"]),
                         "temp_max": round(data["main"]["temp_max"]),
                         "timezone_offset": data.get("timezone", 0),
-                        "tomorrow": tomorrow_data
+                        "tomorrow": tomorrow_data,
                     }
         except Exception as e:
             logger.warning(f"OpenWeather API failed: {e}")
-    
+
+    # fallback sample
     return {
         "temp": 32,
         "humidity": 65,
@@ -300,295 +268,249 @@ async def get_weather(city: str) -> dict:
         "temp_min": 30,
         "temp_max": 36,
         "timezone_offset": 0,
-        "tomorrow": {
-            "temp_min": 29,
-            "temp_max": 35,
-            "desc": "Partly Cloudy"
-        }
+        "tomorrow": {"temp_min": 29, "temp_max": 35, "desc": "Partly Cloudy"},
     }
 
-
 async def get_joke() -> str:
-    """Get dad joke"""
     if ENABLE_JOKES_API:
         try:
             async with httpx.AsyncClient() as client:
                 r = await client.get(
                     "https://icanhazdadjoke.com/",
                     headers={"Accept": "application/json"},
-                    timeout=5
+                    timeout=5,
                 )
                 if r.status_code == 200:
                     return r.json()["joke"]
         except Exception as e:
             logger.warning(f"Joke API failed: {e}")
-    
     return random.choice(LOCAL_JOKES)
 
-
 def get_pexels_categories() -> list:
-    """Get available Pexels categories from GCS bucket"""
     if not storage_enabled:
         return ["abstract", "geometric", "minimal"]
-    
     try:
-        # List all folders in pexels/current/
-        blobs = bucket.list_blobs(prefix="pexels/current/", delimiter="/")
-        
-        # Extract unique category names from file prefixes
+        blobs = bucket.list_blobs(prefix="pexels/current/")
         categories = set()
         for blob in blobs:
-            # File format: pexels/current/category_number.jpg
-            filename = blob.name.split("/")[-1]
-            if "_" in filename:
-                category = filename.split("_")[0]
-                categories.add(category)
-        
-        sorted_categories = sorted(list(categories))
-        logger.info(f"📂 Found {len(sorted_categories)} Pexels categories: {sorted_categories}")
-        return sorted_categories if sorted_categories else ["abstract", "geometric", "minimal"]
+            fn = blob.name.split("/")[-1]
+            if "_" in fn:
+                categories.add(fn.split("_")[0])
+        out = sorted(categories)
+        return out or ["abstract", "geometric", "minimal"]
     except Exception as e:
         logger.warning(f"Could not list Pexels categories: {e}")
         return ["abstract", "geometric", "minimal"]
 
-
-def choose_pexels_background(selected_category: str = None) -> dict:
-    """Choose a random Pexels background from the selected category"""
+def choose_pexels_background(selected_category: str = None) -> dict | None:
     if not storage_enabled:
         return None
-    
     try:
         prefix = "pexels/current/"
-        
-        # If a specific category is selected, filter by it
+        blobs = list(bucket.list_blobs(prefix=prefix))
         if selected_category:
-            blobs = list(bucket.list_blobs(prefix=prefix))
-            category_blobs = [
-                blob for blob in blobs 
-                if blob.name.split("/")[-1].startswith(f"{selected_category}_")
-            ]
-        else:
-            category_blobs = list(bucket.list_blobs(prefix=prefix))
-        
-        if category_blobs:
-            chosen = random.choice(category_blobs)
+            blobs = [b for b in blobs if b.name.split("/")[-1].startswith(f"{selected_category}_")]
+        if blobs:
+            chosen = random.choice(blobs)
             filename = chosen.name.split("/")[-1]
             category = filename.split("_")[0] if "_" in filename else "unknown"
-            
             return {
                 "url": make_public_url(f"gcs/{chosen.name}"),
                 "category": category,
-                "filename": filename
+                "filename": filename,
             }
     except Exception as e:
         logger.warning(f"Could not choose Pexels background: {e}")
-    
     return None
 
+# ──────────────────────────────────────────────────────────────────────────────
+# RENDER DATA
+# ──────────────────────────────────────────────────────────────────────────────
 
 async def build_render_data(device: str = "familydisplay") -> dict:
-    """Build complete render data for a device"""
+    device_config = get_device_config(device)
+    city = device_config.get("location", {}).get("city", "Darwin")
+    tz_name = device_config.get("location", {}).get("timezone", "Australia/Darwin")
+    icon_theme = device_config.get("preferences", {}).get("iconTheme", DEFAULT_ICON_THEME)
+
+    logger.info(f"Building render data for {device}: {city} ({tz_name})")
+
+    # layout
+    layout_key = f"devices/{device}/layouts/current.json"
     try:
-        device_config = get_device_config(device)
-        city = device_config.get("location", {}).get("city", "Darwin")
-        tz_name = device_config.get("location", {}).get("timezone", "Australia/Darwin")
-        icon_theme = device_config.get("preferences", {}).get("iconTheme", DEFAULT_ICON_THEME)
-        
-        logger.info(f"Building render data for {device}: {city} ({tz_name})")
-        
-        # Load layout
-        layout_key = f"devices/{device}/layouts/current.json"
+        layout = gcs_read_json(layout_key)
+    except Exception:
+        layout = {"name": "Default", "elements": []}
+
+    # weather
+    weather = await get_weather(f"{city},AU")
+    icon_code = weather.get("icon", "01d")
+    weather["icon_url"] = resolve_weather_icon_url(icon_theme, icon_code)
+    weather["city"] = city
+
+    # local datetime
+    try:
+        tz = ZoneInfo(tz_name)
+        now = datetime.now(tz)
+    except Exception as e:
+        logger.warning(f"Invalid timezone {tz_name}: {e}, using UTC")
+        now = datetime.now(timezone.utc)
+    weather["local_datetime"] = now.isoformat()
+
+    # content
+    dad_joke = await get_joke()
+
+    # background
+    selected_category = layout.get("meta", {}).get("pexelsCategory")
+    pexels_info = choose_pexels_background(selected_category) if (ENABLE_PEXELS and storage_enabled) else None
+    if pexels_info:
+        bg_url = pexels_info["url"]
+    else:
+        bg_url = make_public_url("gcs/pexels/current/abstract_0.jpg")
+
+    # categories list
+    categories = get_pexels_categories() if ENABLE_PEXELS else []
+    if ENABLE_PEXELS:
+        pexels_info = pexels_info or {}
+        pexels_info["categories"] = categories
+
+    date_str = now.strftime("%a, %d %b")
+
+    # bases (proxied paths)
+    if storage_enabled:
+        svg_base = make_public_url("gcs/assets/svgs")
+        font_base = make_public_url("fonts")  # proxied /fonts
+        icon_base = make_public_url("gcs/assets/weather-icons")
+    else:
+        svg_base = make_public_url("designer/svgs")
+        font_base = make_public_url("designer/fonts")
+        icon_base = make_public_url("designer/weather-icons")
+
+    # dynamic_text map (keys match get_weather())
+    w = weather or {}
+    tomorrow = (w.get("tomorrow") or {}) if isinstance(w, dict) else {}
+
+    def _fmt_temp(val):
+        if val is None:
+            return ""
         try:
-            layout = gcs_read_json(layout_key)
-        except:
-            layout = {"name": "Default", "elements": []}
-        
-        # Get weather
-        weather = await get_weather(f"{city},AU")
-        
-        # Add weather icon URL
-        icon_code = weather.get("icon", "01d")
-        weather["icon_url"] = resolve_weather_icon_url(icon_theme, icon_code)
-        weather["city"] = city
+            return f"{round(float(val))}°C"
+        except Exception:
+            return f"{val}°C"
 
-        # Calculate local time using device timezone
+    def _fmt_minmax(tmin, tmax):
+        if tmin is None and tmax is None:
+            return ""
+        tmin_s = "" if tmin is None else str(round(float(tmin)))
+        tmax_s = "" if tmax is None else str(round(float(tmax)))
+        if tmin_s and tmax_s:
+            return f"{tmin_s}/{tmax_s}°C"
+        return f"{tmin_s or tmax_s}°C"
+
+    def _fmt_speed(val):
+        if val is None:
+            return ""
         try:
-            tz = ZoneInfo(tz_name)
-            now = datetime.now(tz)
-        except Exception as e:
-            logger.warning(f"Invalid timezone {tz_name}: {e}, using UTC")
-            now = datetime.now(timezone.utc)
-        
-        weather["local_datetime"] = now.isoformat()
+            v = float(val)
+            return f"{round(v)} km/h"
+        except Exception:
+            return f"{val} km/h"
 
-        # Get joke
-        dad_joke = await get_joke()
+    def _fmt_rain(val):
+        if val is None:
+            return ""
+        try:
+            v = float(val)
+            s = f"{v:.1f}" if v and abs(v) < 1 else f"{round(v)}"
+            return f"{s}mm"
+        except Exception:
+            return f"{val}mm"
 
-        # Get Pexels background
-        selected_category = layout.get("meta", {}).get("pexelsCategory")
-        pexels_info = None
+    def _icon_url():
+        if w.get("icon_url"):
+            return w["icon_url"]
+        icon = w.get("icon") or ""
+        return f"{icon_base}/{icon}.svg" if icon else ""
 
-        if ENABLE_PEXELS and storage_enabled:
-            pexels_info = choose_pexels_background(selected_category)
+    dynamic_text = {
+        "CITY": w.get("city") or "",
+        "WEATHER_CITY": w.get("city") or "",
+        "DATE": date_str,
+        "JOKE": dad_joke or "",
+        "TEMP": _fmt_temp(w.get("temp")),
+        "WEATHER_TEMP": _fmt_temp(w.get("temp")),
+        "MINMAX": _fmt_minmax(w.get("temp_min"), w.get("temp_max")),
+        "WEATHER_MINMAX": _fmt_minmax(w.get("temp_min"), w.get("temp_max")),
+        "WEATHER_DESC": (w.get("desc") or "").title(),
+        "WEATHER_DESC_EXTENDED": (w.get("desc_extended") or w.get("desc") or "").strip(),
+        "WEATHER_ICON": _icon_url(),
+        "HUMIDITY": ("" if w.get("humidity") is None else f"{int(round(float(w.get('humidity'))))}%"),
+        "WEATHER_HUMIDITY": ("" if w.get("humidity") is None else f"{int(round(float(w.get('humidity'))))}%"),
+        "WIND": _fmt_speed(w.get("wind")),
+        "RAIN": _fmt_rain(w.get("rain")),
+        "WEATHER_NOTE": (w.get("note") or ""),
+        "TOMORROW_DESC": (tomorrow.get("desc") or "").title() if isinstance(tomorrow, dict) else "",
+        "TOMORROW_TEMP": _fmt_minmax(tomorrow.get("temp_min"), tomorrow.get("temp_max")) if isinstance(tomorrow, dict) else "",
+        "CUSTOM": "",
+        "ENABLE_OPENWEATHER": "true" if os.getenv("ENABLE_OPENWEATHER", "true").lower() == "true" else "false",
+        "OPENWEATHER_KEY": os.getenv("OPENWEATHER_KEY", ""),
+    }
 
-        if pexels_info:
-            bg_url = pexels_info["url"]
-        else:
-            bg_url = make_public_url("gcs/pexels/current/abstract_0.jpg")
-        
-        # Get all available categories for frontend
-        categories = get_pexels_categories() if ENABLE_PEXELS else []
-        
-        if ENABLE_PEXELS:
-            pexels_info = pexels_info or {}
-            pexels_info["categories"] = categories
-        
-        date_str = now.strftime("%a, %d %b")
-        
-        if storage_enabled:
-            svg_base = make_public_url("gcs/assets/svgs")
-            font_base = make_public_url("gcs/assets/fonts")
-            icon_base = make_public_url("gcs/assets/weather-icons")
-        else:
-            svg_base = make_public_url("designer/svgs")
-            font_base = make_public_url("designer/fonts")
-            icon_base = make_public_url("designer/weather-icons")
-        
-        
-        # Build dynamic_text map for Designer dynamic types
-        w = weather or {}
-        fc = (w.get("forecast") or []) if isinstance(w, dict) else []
-        tomorrow = fc[1] if len(fc) > 1 else {}
+    context = {
+        "layout": layout,
+        "weather": weather,
+        "dad_joke": dad_joke,
+        "date": date_str,
+        "bg_url": bg_url,
+        "pexels": pexels_info,
+        "svg_base": svg_base,
+        "font_base": font_base,
+        "icon_base": icon_base,
+        "dynamic_text": dynamic_text,
+        "device": device_config,
+        "timestamp": now.isoformat(),
+    }
+    return context
 
-        def _fmt_temp(val):
-            if val is None:
-                return ""
-            try:
-                return f"{round(float(val))}°C"
-            except Exception:
-                return f"{val}°C"
+# ──────────────────────────────────────────────────────────────────────────────
+# RENDER HTML → PNG
+# ──────────────────────────────────────────────────────────────────────────────
 
-        def _fmt_minmax(tmin, tmax):
-            if tmin is None and tmax is None:
-                return ""
-            tmin_s = "" if tmin is None else str(round(float(tmin)))
-            tmax_s = "" if tmax is None else str(round(float(tmax)))
-            if tmin_s and tmax_s:
-                return f"{tmin_s}/{tmax_s}°C"
-            return f"{tmin_s or tmax_s}°C"
-
-        def _fmt_speed(val):
-            if val is None:
-                return ""
-            try:
-                v = float(val)
-                return f"{round(v)} km/h"
-            except Exception:
-                return f"{val} km/h"
-
-        def _fmt_rain(val):
-            if val is None:
-                return ""
-            try:
-                v = float(val)
-                s = f"{v:.1f}" if v and abs(v) < 1 else f"{round(v)}"
-                return f"{s}mm"
-            except Exception:
-                return f"{val}mm"
-
-        def _icon_url(code):
-            icon = w.get("icon") or ""
-            if isinstance(icon, str) and icon.startswith("http"):
-                return icon
-            return f"{icon_base}/{icon}.png" if icon else ""
-
-        dynamic_text = {
-            "CITY": w.get("city") or "",
-            "WEATHER_CITY": w.get("city") or "",
-            "DATE": date_str,
-            "JOKE": dad_joke or "",
-            "TEMP": _fmt_temp(w.get("temperature")),
-            "WEATHER_TEMP": _fmt_temp(w.get("temperature")),
-            "MINMAX": _fmt_minmax(w.get("temp_min"), w.get("temp_max")),
-            "WEATHER_MINMAX": _fmt_minmax(w.get("temp_min"), w.get("temp_max")),
-            "WEATHER_DESC": (w.get("description") or "").title(),
-            "WEATHER_DESC_EXTENDED": (w.get("description_extended") or w.get("description") or "").strip(),
-            "WEATHER_ICON": _icon_url(w.get("icon")),
-            "HUMIDITY": ("" if w.get("humidity") is None else f"{int(round(float(w.get('humidity'))))}%"),
-            "WEATHER_HUMIDITY": ("" if w.get("humidity") is None else f"{int(round(float(w.get('humidity'))))}%"),
-            "WIND": _fmt_speed(w.get("wind_speed")),
-            "RAIN": _fmt_rain(w.get("rain")),
-            "WEATHER_NOTE": (w.get("note") or ""),
-            "TOMORROW_DESC": ((tomorrow.get("description") or "").title() if isinstance(tomorrow, dict) else ""),
-            "TOMORROW_TEMP": (_fmt_temp(tomorrow.get("temperature")) if isinstance(tomorrow, dict) else ""),
-            "CUSTOM": "",
-            "ENABLE_OPENWEATHER": "true" if os.getenv("ENABLE_OPENWEATHER", "true").lower() == "true" else "false",
-            "OPENWEATHER_KEY": os.getenv("OPENWEATHER_KEY", ""),
-        }
-return {
-            "layout": layout,
-            "weather": weather,
-            "dad_joke": dad_joke,
-            "date": date_str,
-            "bg_url": bg_url,
-            "pexels": pexels_info,
-            "svg_base": svg_base,
-            "font_base": font_base,
-            "icon_base": icon_base,
-            "dynamic_text": dynamic_text,
-            "device": device_config,
-            "timestamp": now.isoformat()
-        }ytes:
-    """Render base.html to PNG using Playwright"""
+async def render_html_to_png(render_path: str, context: dict) -> bytes:
+    """Render base.html to PNG using Playwright (HTTP render)."""
     if not ENABLE_RENDERING or playwright_browser is None:
         raise RuntimeError("Rendering disabled")
-    
+
     page = await playwright_browser.new_page(
         viewport={"width": RENDER_WIDTH, "height": RENDER_HEIGHT}
     )
-    
+
     raw_json = json.dumps(context)
     encoded_data = quote(raw_json, safe="")
     public_base = os.getenv("PUBLIC_BASE_URL", "").rstrip("/")
     url = f"{public_base}/layouts/base.html?data={encoded_data}"
-    
+
     logger.info(f"🎨 Rendering: {url[:120]}...")
-    
+
     try:
         await page.goto(url, wait_until="networkidle", timeout=20000)
         # Ensure webfonts are loaded before capture
-        await page.evaluate("document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()")
+        await page.evaluate(
+            "document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()"
+        )
         await page.wait_for_timeout(50)
-
         png_bytes = await page.screenshot(type="png", full_page=True)
         return png_bytes
     finally:
         await page.close()
 
-
-# ============================================================================
+# ──────────────────────────────────────────────────────────────────────────────
 # API ROUTES
-# ============================================================================
+# ──────────────────────────────────────────────────────────────────────────────
 
-@app.get("/")
-async def root():
-    return {
-        "service": "Kin:D Family Display Backend v4",
-        "version": "4.0",
-        "rendering_enabled": ENABLE_RENDERING,
-        "storage_enabled": storage_enabled,
-        "features": {
-            "device_config": True,
-            "pexels_randomization": True,
-            "dynamic_categories": True
-        }
-    }
-
-
-# Device Config Routes
+# Device Config
 @app.get("/v1/devices/{device_id}/config")
 def api_get_device_config(device_id: str):
-    """Get device configuration"""
     try:
         config = get_device_config(device_id)
         return JSONResponse(content=config)
@@ -596,10 +518,8 @@ def api_get_device_config(device_id: str):
         logger.error(f"Failed to get device config: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @app.post("/v1/devices/{device_id}/config")
 async def api_save_device_config(device_id: str, request: Request):
-    """Save device configuration"""
     try:
         config = await request.json()
         save_device_config(device_id, config)
@@ -608,11 +528,9 @@ async def api_save_device_config(device_id: str, request: Request):
         logger.error(f"Failed to save device config: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# Layout Routes
+# Layouts
 @app.get("/v1/devices/{device_id}/layouts/current")
 def api_get_layout(device_id: str):
-    """Get current layout for device"""
     try:
         layout_key = f"devices/{device_id}/layouts/current.json"
         layout = gcs_read_json(layout_key)
@@ -623,10 +541,8 @@ def api_get_layout(device_id: str):
         logger.error(f"Failed to get layout: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @app.post("/v1/devices/{device_id}/layouts/current")
 async def api_save_layout(device_id: str, request: Request):
-    """Save layout for device"""
     try:
         layout = await request.json()
         layout_key = f"devices/{device_id}/layouts/current.json"
@@ -636,11 +552,9 @@ async def api_save_layout(device_id: str, request: Request):
         logger.error(f"Failed to save layout: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# Render Data Route
+# Render Data
 @app.get("/v1/render_data")
 async def api_render_data(device: str = "familydisplay"):
-    """Get complete render data"""
     try:
         data = await build_render_data(device)
         return JSONResponse(content=data)
@@ -648,78 +562,62 @@ async def api_render_data(device: str = "familydisplay"):
         logger.error(f"Failed to build render data: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# Frame Render Route
+# Frame Render
 @app.get("/v1/frame")
 async def api_frame(device: str = "familydisplay"):
-    """Render PNG frame"""
     if not ENABLE_RENDERING:
         raise HTTPException(status_code=503, detail="Rendering disabled")
-    
     try:
         data = await build_render_data(device)
-        
         render_path = Path(RENDER_PATH)
         if not render_path.exists():
-            render_path = Path("web/layouts/base.html")
-        
+            render_path = BASE_DIR / "web" / "layouts" / "base.html"
         png_bytes = await render_html_to_png(str(render_path), data)
-        
-        # Save to GCS
+
         if storage_enabled:
             render_key = f"devices/{device}/renders/latest.png"
             gcs_write_bytes(render_key, png_bytes)
-        
+
         return Response(content=png_bytes, media_type="image/png")
     except Exception as e:
         logger.error(f"Failed to render frame: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# Debug roue
+# Debug
 @app.get("/v1/debug/render_data")
 async def debug_render_data(device: str = "familydisplay"):
-    """Debug endpoint - shows exactly what data will be passed to renderer"""
     try:
         data = await build_render_data(device)
-        
-        # Pretty print for readability
         return {
             "success": True,
             "device": device,
             "data_keys": list(data.keys()),
             "layout_name": data.get("layout", {}).get("name"),
             "element_count": len(data.get("layout", {}).get("elements", [])),
-            "elements": data.get("layout", {}).get("elements", []),
             "weather": data.get("weather"),
             "dad_joke": data.get("dad_joke"),
             "date": data.get("date"),
             "bg_url": data.get("bg_url"),
             "svg_base": data.get("svg_base"),
             "font_base": data.get("font_base"),
-            "full_data": data  # Complete data structure
+            "icon_base": data.get("icon_base"),
+            "dynamic_text": data.get("dynamic_text"),
         }
     except Exception as e:
         logger.error(f"Debug render data error: {e}", exc_info=True)
-        return {
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }
-
+        return {"success": False, "error": str(e), "traceback": traceback.format_exc()}
 
 @app.get("/v1/debug/layout")
 def debug_layout(device: str = "familydisplay"):
-    """Debug endpoint - shows raw layout from GCS"""
     try:
         layout_key = f"devices/{device}/layouts/current.json"
         layout = gcs_read_json(layout_key)
-        
         return {
             "success": True,
             "device": device,
             "layout_key": layout_key,
             "layout": layout,
-            "element_count": len(layout.get("elements", []))
+            "element_count": len(layout.get("elements", [])),
         }
     except Exception as e:
         logger.error(f"Debug layout error: {e}", exc_info=True)
@@ -728,85 +626,18 @@ def debug_layout(device: str = "familydisplay"):
             "error": str(e),
             "layout_key": f"devices/{device}/layouts/current.json",
             "gcs_bucket": GCS_BUCKET,
-            "storage_enabled": storage_enabled
+            "storage_enabled": storage_enabled,
         }
 
-# Designer Route
-@app.get("/designer/", response_class=HTMLResponse)
-async def designer():
-    """Serve designer HTML from GCS"""
-    if not storage_enabled:
-        raise HTTPException(status_code=503, detail="Storage not configured")
-    
-    try:
-        designer_key = "web/designer/overlay_designer_v4_clean.html"
-        html_content = gcs_read_text(designer_key)
-        return HTMLResponse(content=html_content)
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="Designer not found in bucket")
-    except Exception as e:
-        logger.error(f"Failed to load designer: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+# ──────────────────────────────────────────────────────────────────────────────
+# STATIC MOUNTS (optional in-container dev)
+# ──────────────────────────────────────────────────────────────────────────────
 
-
-# SVG List Route
-@app.get("/api/list-svgs")
-async def list_svgs():
-    """List available SVG files"""
-    if not storage_enabled:
-        return {"svgs": []}
-    
-    try:
-        blobs = bucket.list_blobs(prefix="assets/svgs/")
-        svgs = []
-        for blob in blobs:
-            if blob.name.endswith('.svg'):
-                filename = blob.name.split('/')[-1]
-                svgs.append({
-                    "name": filename,
-                    "path": f"/gcs/{blob.name}",
-                    "url": make_public_url(f"gcs/{blob.name}")
-                })
-        return {"svgs": svgs}
-    except Exception as e:
-        logger.error(f"Failed to list SVGs: {e}")
-        return {"svgs": []}
-
-
-# Presets List Route
-@app.get("/api/list-presets")
-async def list_presets():
-    """List available preset layouts"""
-    presets_dir = resolve_static_dir("web/presets", "backend/web/presets")
-
-    if presets_dir and presets_dir.exists():
-        presets = []
-        for file in presets_dir.glob("*.json"):
-            presets.append(file.stem)
-        return {"presets": presets}
-    return {"presets": []}
-
-
-# Pexels Categories Route
-@app.get("/api/list-pexels-categories")
-async def list_pexels_categories():
-    """List available Pexels categories"""
-    try:
-        categories = get_pexels_categories()
-        return {"categories": categories}
-    except Exception as e:
-        logger.error(f"Failed to list Pexels categories: {e}")
-        return {"categories": ["abstract", "geometric", "minimal"]}
-
-
-# Static Files - FIXED for container working directory
 try:
     presets_dir = resolve_static_dir("web/presets", "backend/web/presets")
     if presets_dir and presets_dir.is_dir():
         app.mount("/presets", StaticFiles(directory=str(presets_dir)), name="presets")
         logger.info(f"✓ Mounted /presets from {presets_dir}")
-    else:
-        logger.info("/presets directory not found; skipping mount")
 except Exception as e:
     logger.warning(f"Could not mount /presets: {e}")
 
@@ -815,58 +646,66 @@ try:
     if fonts_dir and fonts_dir.is_dir():
         app.mount("/fonts", StaticFiles(directory=str(fonts_dir)), name="fonts")
         logger.info(f"✓ Mounted /fonts from {fonts_dir}")
-    else:
-        logger.info("/fonts directory not found; skipping mount")
 except Exception as e:
     logger.warning(f"Could not mount /fonts: {e}")
 
+# ──────────────────────────────────────────────────────────────────────────────
+# GCS ASSET PROXY
+# ──────────────────────────────────────────────────────────────────────────────
 
-# GCS Asset Proxy
 @app.get("/gcs/{path:path}")
 async def gcs_proxy(path: str):
-    """Proxy GCS assets through HTTP"""
     if not storage_enabled:
         raise HTTPException(status_code=503, detail="GCS not enabled")
-    
     try:
         blob = bucket.blob(path)
         if not blob.exists():
             raise HTTPException(status_code=404, detail="Asset not found")
-        
         data = blob.download_as_bytes()
-        
-        # Determine content type
-        if path.endswith('.svg'):
-            content_type = 'image/svg+xml'
-        elif path.endswith('.json'):
-            content_type = 'application/json'
-        elif path.endswith('.jpg') or path.endswith('.jpeg'):
-            content_type = 'image/jpeg'
-        elif path.endswith('.png'):
-            content_type = 'image/png'
+
+        if path.endswith(".svg"):
+            content_type = "image/svg+xml"
+        elif path.endswith(".json"):
+            content_type = "application/json"
+        elif path.endswith(".jpg") or path.endswith(".jpeg"):
+            content_type = "image/jpeg"
+        elif path.endswith(".png"):
+            content_type = "image/png"
+        elif path.endswith(".woff2"):
+            content_type = "font/woff2"
+        elif path.endswith(".css"):
+            content_type = "text/css"
         else:
-            content_type = 'application/octet-stream'
-        
+            content_type = "application/octet-stream"
+
         return Response(content=data, media_type=content_type)
-        
     except Exception as e:
         logger.error(f"GCS proxy error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# ──────────────────────────────────────────────────────────────────────────────
+# ADMIN
+# ──────────────────────────────────────────────────────────────────────────────
 
-# Admin Routes
 @app.get("/admin/render_now")
 async def admin_render_now(token: str = None, device: str = "familydisplay"):
-    """Force render now"""
     if token != ADMIN_TOKEN:
         raise HTTPException(status_code=401, detail="Invalid token")
-    
     try:
-        await api_frame(device)
+        # Use the same path resolution as /v1/frame
+        data = await build_render_data(device)
+        render_path = Path(RENDER_PATH)
+        if not render_path.exists():
+            render_path = BASE_DIR / "web" / "layouts" / "base.html"
+        png_bytes = await render_html_to_png(str(render_path), data)
+        if storage_enabled:
+            render_key = f"devices/{device}/renders/latest.png"
+            gcs_write_bytes(render_key, png_bytes)
         return {"status": "rendered", "device": device}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# ──────────────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     import uvicorn
