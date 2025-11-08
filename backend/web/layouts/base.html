@@ -162,15 +162,35 @@
     object-fit: cover;
   }
 
-  /* ✨ ADDED: robust defaults for text rendering even if other CSS fails */
   :root{
     --textColor:#111;
     --fontFamilyDefault: "Inter","Plus Jakarta Sans","Noto Sans","DejaVu Sans",Arial,Helvetica,sans-serif;
-    --fontWeightDefault: 600; /* SemiBold default */
+    --fontWeightDefault: 600;
   }
   [data-el="text"], .text{
     color: var(--textColor,#111) !important;
     -webkit-text-fill-color: currentColor !important;
+  }
+  
+  .error-display {
+    padding: 20px;
+    font-family: monospace;
+    background: #1a1a1a;
+    color: #ff4444;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .error-display h2 {
+    margin-bottom: 10px;
+  }
+  .error-display code {
+    display: block;
+    background: #2a2a2a;
+    padding: 10px;
+    margin: 10px 0;
+    white-space: pre-wrap;
+    word-break: break-all;
+    font-size: 10px;
   }
 </style>
 </head>
@@ -182,39 +202,94 @@
     const urlParams = new URLSearchParams(window.location.search);
     const encodedData = urlParams.get('data');
     
+    console.log('=== BASE.HTML INITIALIZATION ===');
+    console.log('URL:', window.location.href);
+    console.log('Has data param:', !!encodedData);
+    console.log('Data param length:', encodedData ? encodedData.length : 0);
+    
     if (!encodedData) {
-      console.error('No data parameter provided');
-      document.body.innerHTML = '<div style="padding: 20px;">Error: No render data provided</div>';
+      console.error('❌ No data parameter provided');
+      document.body.innerHTML = `
+        <div class="error-display">
+          <h2>❌ Error: No data parameter provided</h2>
+          <p><strong>Expected URL format:</strong></p>
+          <code>/layouts/base.html?data=&lt;encoded_json&gt;</code>
+          <p><strong>Current URL:</strong></p>
+          <code>${window.location.href}</code>
+          <p><strong>Possible causes:</strong></p>
+          <ul style="margin-left: 20px;">
+            <li>Backend failed to pass data parameter</li>
+            <li>PUBLIC_BASE_URL not configured correctly</li>
+            <li>Layout JSON not found in GCS bucket</li>
+          </ul>
+        </div>
+      `;
     } else {
       try {
+        console.log('📦 Decoding data...');
         const dataJson = decodeURIComponent(encodedData);
+        console.log('✓ Data decoded, length:', dataJson.length);
+        console.log('First 200 chars:', dataJson.substring(0, 200));
+        
+        console.log('📋 Parsing JSON...');
         const data = JSON.parse(dataJson);
         
+        console.log('=== DATA PARSED SUCCESSFULLY ===');
+        console.log('Data keys:', Object.keys(data));
+        console.log('Layout:', data.layout ? 'EXISTS' : 'MISSING');
+        console.log('Layout name:', data.layout?.name);
+        console.log('Elements:', data.layout?.elements?.length || 0);
+        console.log('Weather:', data.weather ? 'EXISTS' : 'MISSING');
+        console.log('Weather icon URL:', data.weather?.icon_url);
+        console.log('BG URL:', data.bg_url);
+        console.log('SVG base:', data.svg_base);
+        console.log('Dynamic text keys:', data.dynamic_text ? Object.keys(data.dynamic_text).length : 0);
+        
+        if (!data.layout) {
+          throw new Error('Missing layout object in data');
+        }
+        
+        if (!data.layout.elements) {
+          throw new Error('Missing elements array in layout');
+        }
+        
+        // Set font base
         const fontBase = (data.font_base && String(data.font_base)) || '/gcs/assets/fonts';
         const fontsLinkEl = document.getElementById('kin-fonts');
-        if (fontsLinkEl) fontsLinkEl.href = fontBase.replace(/\/+$/, '') + '/fonts.css';
+        if (fontsLinkEl) {
+          fontsLinkEl.href = fontBase.replace(/\/+$/, '') + '/fonts.css';
+          console.log('✓ Font stylesheet:', fontsLinkEl.href);
+        }
         
-        console.log('=== DATA RECEIVED ===');
-        console.log('Raw data keys:', Object.keys(data));
-        console.log('Layout exists:', !!data.layout);
-        console.log('Layout elements count:', data.layout?.elements?.length || 0);
-        
-        // Render the layout immediately (no font loading needed here;
-        // Playwright waits for document.fonts.ready in backend)
+        // Render the layout immediately
         renderLayout(data);
       } catch (error) {
-        console.error('Failed to parse render data:', error);
-        document.body.innerHTML = '<div style="padding: 20px;">Error: Invalid render data</div>';
+        console.error('❌ CRITICAL ERROR:', error);
+        console.error('Stack trace:', error.stack);
+        document.body.innerHTML = `
+          <div class="error-display">
+            <h2>❌ Error: Invalid render data</h2>
+            <p><strong>Error message:</strong></p>
+            <code>${error.message}</code>
+            <p><strong>Stack trace:</strong></p>
+            <code>${error.stack}</code>
+            <p><strong>Encoded data length:</strong> ${encodedData.length} characters</p>
+            <p><strong>First 500 chars of encoded data:</strong></p>
+            <code>${encodedData.substring(0, 500)}</code>
+            <p><strong>Debugging steps:</strong></p>
+            <ol style="margin-left: 20px;">
+              <li>Check if layout exists: <code>gsutil ls gs://family-display-packs/devices/familydisplay/layouts/current.json</code></li>
+              <li>Validate layout JSON: <code>gsutil cat gs://... | python3 -m json.tool</code></li>
+              <li>Test render data: <code>curl https://your-backend/v1/debug/render_data</code></li>
+              <li>Test frame URL: <code>curl https://your-backend/v1/debug/frame_url</code></li>
+            </ol>
+          </div>
+        `;
       }
     }
     
-    /**
-     * Map designer font names to available fonts.
-     * ✨ CHANGED: If a specific family is requested, prefer it
-     * (your webfonts.css has registered these names). Otherwise fallback.
-     */
     function mapToSystemFont(fontFamily) {
-      if (fontFamily) return fontFamily; // prefer exact family (loaded via fonts.css)
+      if (fontFamily) return fontFamily;
       const systemFontMap = {
         'Inter': 'Liberation Sans',
         'Roboto': 'Liberation Sans',
@@ -232,9 +307,6 @@
       return systemFontMap[fontFamily] || 'Liberation Sans';
     }
     
-    /**
-     * Resolve relative/absolute paths to full URLs
-     */
     function resolveUrl(path, svg_base) {
       if (!path) return "";
       
@@ -257,31 +329,24 @@
       return path;
     }
     
-    /**
-     * Resolve dynamic text content
-     * ✨ CHANGED: if backend provides data.dynamic_text, prefer it.
-     */
     function resolveDynamicText(type, data) {
-      console.log(`Resolving type: ${type}`);
+      console.log(`Resolving dynamic text for type: ${type}`);
       
-      // Prefer server-prepared dynamic_text (added in patched main.py)
       if (data.dynamic_text && Object.prototype.hasOwnProperty.call(data.dynamic_text, type)) {
-        return data.dynamic_text[type] ?? "";
+        const value = data.dynamic_text[type] ?? "";
+        console.log(`✓ Resolved from dynamic_text: "${value}"`);
+        return value;
       }
 
-      // Fallback to existing local logic (kept as-is)
       switch (type) {
-        // Temperature
         case "WEATHER_TEMP":
         case "TEMP":
           return data.weather?.temp ? `${data.weather.temp}°` : "--°";
         
-        // Location
         case "WEATHER_CITY":
         case "CITY":
           return data.weather?.city || "Unknown";
         
-        // Weather Conditions
         case "WEATHER_DESC":
         case "DESC":
           return data.weather?.desc || "No data";
@@ -293,7 +358,6 @@
         case "NOTE":
           return data.weather?.desc || "No data";
         
-        // Temperature Range
         case "WEATHER_MINMAX":
         case "MINMAX":
           if (data.weather?.temp_min != null && data.weather?.temp_max != null) {
@@ -301,7 +365,6 @@
           }
           return "--° / --°";
         
-        // Weather Metrics
         case "HUMIDITY":
         case "WEATHER_HUMIDITY":
           return data.weather?.humidity ? `${data.weather.humidity}%` : "--%";
@@ -312,7 +375,6 @@
         case "WIND":
           return data.weather?.wind != null ? `${data.weather.wind} km/h` : "0 km/h";
         
-        // Tomorrow's Forecast
         case "TOMORROW_DESC":
           return data.weather?.tomorrow?.desc || "No forecast";
         
@@ -322,29 +384,21 @@
           }
           return "--° / --°";
         
-        // Date & Time
         case "DATE":
           return data.date || new Date().toLocaleDateString();
         
-        // Content
         case "JOKE":
           return data.dad_joke || "No joke today!";
         
-        // Weather Icon (text fallback)
         case "WEATHER_ICON":
-          // If text-bound by mistake, prefer backend value if present; else emoji
           return (data.dynamic_text && data.dynamic_text.WEATHER_ICON) || "☀️";
         
-        // Custom text (shouldn't reach here normally)
         case "CUSTOM":
         default:
           return "";
       }
     }
     
-    /**
-     * Get layer z-index based on element kind
-     */
     function getLayerZIndex(el, kind) {
       if (kind === 'text' || kind === 'icon') {
         return el.type && el.type !== 'CUSTOM' ? 35 : 20;
@@ -356,11 +410,9 @@
       return 10;
     }
     
-    /**
-     * Inline SVG content into element
-     */
     async function inlineSvgInto(elDiv, url) {
       try {
+        console.log(`Loading SVG from: ${url}`);
         const response = await fetch(url);
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`);
@@ -376,15 +428,13 @@
           svgEl.removeAttribute('width');
           svgEl.removeAttribute('height');
         }
+        console.log('✓ SVG loaded successfully');
       } catch (error) {
         console.error('Failed to load SVG:', url, error);
         elDiv.innerHTML = `<div style="color: red; font-size: 12px;">SVG Load Error</div>`;
       }
     }
     
-    /**
-     * Main render function
-     */
     async function renderLayout(data) {
       const canvas = document.getElementById('canvas');
       const layout = data.layout || {};
@@ -392,13 +442,10 @@
       const svg_base = data.svg_base || "";
       
       console.log('=== RENDER LAYOUT START ===');
-      console.log('Data keys:', Object.keys(data));
       console.log('Layout name:', layout.name);
       console.log('Elements count:', elements.length);
       console.log('SVG Base:', svg_base);
       console.log('BG URL:', data.bg_url);
-      console.log('Weather data:', data.weather);
-      console.log('Elements:', elements);
       
       if (data.bg_url) {
         const bgImg = document.createElement('img');
@@ -408,6 +455,7 @@
           console.warn('Background image failed to load:', data.bg_url);
         };
         canvas.appendChild(bgImg);
+        console.log('✓ Background image added');
       }
       
       for (const el of elements) {
@@ -434,19 +482,14 @@
             const contentDiv = document.createElement('div');
             contentDiv.className = 'el-content';
             
-            // Get text content
             let textContent = el.text || '';
             if (el.type && el.type !== 'CUSTOM') {
               textContent = resolveDynamicText(el.type, data);
               console.log(`✓ Dynamic text resolved for ${el.type}: "${textContent}"`);
-            } else {
-              console.log(`✓ Static text: "${textContent}"`);
             }
             
-            // CRITICAL: Set the text content
             contentDiv.textContent = textContent;
             
-            // Apply styling
             contentDiv.style.fontSize = (el.fontSize || 16) + 'px';
             contentDiv.style.color = el.color || '#000';
             contentDiv.style.fontWeight = el.fontWeight || el.weight || 'normal';
@@ -457,13 +500,11 @@
             contentDiv.style.justifyContent = 'center';
             contentDiv.style.textAlign = 'center';
             
-            // Apply font family (prefer the exact family; fallback to map)
             if (el.fontFamily) {
               const preferred = mapToSystemFont(el.fontFamily);
               contentDiv.style.fontFamily = `"${preferred}", "Liberation Sans", "DejaVu Sans", -apple-system, sans-serif`;
             }
             
-            // Apply text shadow/glow if specified
             if (el.textShadow) {
               contentDiv.style.textShadow = el.textShadow;
             } else if (el.textShadowType && el.textShadowType !== 'none') {
@@ -472,18 +513,15 @@
               const blur = Math.round(4 * intensity);
               
               if (el.textShadowType === 'glow') {
-                // Multiple layers for glow effect
                 contentDiv.style.textShadow = `
                   0 0 ${blur}px ${shadowColor},
                   0 0 ${blur * 2}px ${shadowColor},
                   0 0 ${blur * 3}px ${shadowColor}
                 `;
               } else if (el.textShadowType === 'shadow' || el.textShadowType === 'drop') {
-                // Drop shadow
                 const offset = Math.round(2 * intensity);
                 contentDiv.style.textShadow = `${offset}px ${offset}px ${blur}px ${shadowColor}`;
               } else if (el.textShadowType === 'outline') {
-                // Text outline
                 const size = Math.round(1 * intensity);
                 contentDiv.style.textShadow = `
                   -${size}px -${size}px 0 ${shadowColor},
@@ -511,7 +549,6 @@
             let src = el.src || el.svgName || '';
             
             if (src === 'weather-icon') {
-              // ✨ CHANGED: prefer backend icon URL, else dynamic_text fallback
               if (data.weather?.icon_url) {
                 src = data.weather.icon_url;
                 elDiv.classList.add('weather-icon');
@@ -546,7 +583,6 @@
           
         } catch (error) {
           console.error('Error rendering element:', el, error);
-          // Continue to next element even if this one fails
         }
       }
       
