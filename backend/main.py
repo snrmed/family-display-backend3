@@ -503,7 +503,7 @@ async def build_render_data(device: str = "familydisplay") -> dict:
 # ──────────────────────────────────────────────────────────────────────────────
 
 async def render_html_to_png(render_path: str, context: dict) -> bytes:
-    """Render base.html to PNG using Playwright (HTTP render)."""
+    """Render base.html to PNG using Playwright with data injection."""
     if not ENABLE_RENDERING or playwright_browser is None:
         raise RuntimeError("Rendering disabled")
 
@@ -511,33 +511,44 @@ async def render_html_to_png(render_path: str, context: dict) -> bytes:
         viewport={"width": RENDER_WIDTH, "height": RENDER_HEIGHT}
     )
 
-    raw_json = json.dumps(context)
-    encoded_data = quote(raw_json, safe="")
     public_base = os.getenv("PUBLIC_BASE_URL", "").rstrip("/")
     
     if not public_base:
         raise RuntimeError("PUBLIC_BASE_URL environment variable not configured")
     
-    url = f"{public_base}/layouts/base.html?data={encoded_data}"
-
-    logger.info(f"🎨 Rendering URL (first 200 chars): {url[:200]}...")
-    logger.info(f"📊 Context keys: {list(context.keys())}")
+    # Navigate to base.html without data parameter
+    url = f"{public_base}/layouts/base.html"
+    
+    logger.info(f"🎨 Rendering via: {url}")
+    logger.info(f"📊 Context data size: {len(json.dumps(context))} bytes")
     logger.info(f"📐 Layout elements: {len(context.get('layout', {}).get('elements', []))}")
-    logger.info(f"🌍 Weather icon URL: {context.get('weather', {}).get('icon_url', 'N/A')}")
 
     try:
-        response = await page.goto(url, wait_until="networkidle", timeout=30000)
+        # Navigate to the page first
+        response = await page.goto(url, wait_until="domcontentloaded", timeout=30000)
         
         if not response or response.status != 200:
             logger.error(f"Failed to load page. Status: {response.status if response else 'None'}")
             raise RuntimeError(f"Page load failed with status {response.status if response else 'unknown'}")
         
-        # Ensure webfonts are loaded before capture
+        # Inject the data directly into the page (avoids URL length limits)
+        logger.info("💉 Injecting render data into page...")
+        await page.evaluate(f"""
+            window.renderData = {json.dumps(context)};
+            if (typeof renderLayout === 'function') {{
+                renderLayout(window.renderData);
+            }}
+        """)
+        
+        # Wait for fonts to load
         await page.evaluate(
             "document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()"
         )
-        await page.wait_for_timeout(100)
         
+        # Wait for rendering to complete
+        await page.wait_for_timeout(300)
+        
+        # Take screenshot
         png_bytes = await page.screenshot(type="png", full_page=True)
         logger.info(f"✓ Screenshot captured: {len(png_bytes)} bytes")
         return png_bytes
@@ -547,7 +558,7 @@ async def render_html_to_png(render_path: str, context: dict) -> bytes:
         raise
     finally:
         await page.close()
-
+        
 # ──────────────────────────────────────────────────────────────────────────────
 # API ROUTES
 # ──────────────────────────────────────────────────────────────────────────────
