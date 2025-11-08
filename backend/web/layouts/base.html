@@ -200,6 +200,12 @@
   <script>
     console.log('=== BASE.HTML INITIALIZATION ===');
     
+    const canvasEl = document.getElementById('canvas');
+
+    if (!canvasEl) {
+      console.error('❌ Canvas element #canvas not found in DOM');
+    }
+
     // Try multiple data sources
     let data = null;
     let dataSource = 'none';
@@ -230,18 +236,20 @@
     
     if (!data) {
       console.error('❌ No data available');
-      document.body.innerHTML = `
-        <div class="error-display">
-          <h2>❌ Error: No render data available</h2>
-          <p><strong>Expected data from:</strong></p>
-          <ul style="margin-left: 20px;">
-            <li>window.renderData (injected via Playwright)</li>
-            <li>OR ?data=... URL parameter</li>
-          </ul>
-          <p><strong>Current status:</strong></p>
-          <code>window.renderData: ${!!window.renderData}</code>
-        </div>
-      `;
+      if (canvasEl) {
+        canvasEl.innerHTML = `
+          <div class="error-display">
+            <h2>❌ Error: No render data available</h2>
+            <p><strong>Expected data from:</strong></p>
+            <ul style="margin-left: 20px;">
+              <li>window.renderData (injected via Playwright)</li>
+              <li>OR ?data=... URL parameter</li>
+            </ul>
+            <p><strong>Current status:</strong></p>
+            <code>window.renderData: ${!!window.renderData}</code>
+          </div>
+        `;
+      }
     } else {
       try {
         console.log('=== DATA LOADED ===');
@@ -265,12 +273,14 @@
         
       } catch (error) {
         console.error('❌ ERROR:', error);
-        document.body.innerHTML = `
-          <div class="error-display">
-            <h2>❌ Error: ${error.message}</h2>
-            <code>${error.stack}</code>
-          </div>
-        `;
+        if (canvasEl) {
+          canvasEl.innerHTML = `
+            <div class="error-display">
+              <h2>❌ Error: ${error.message}</h2>
+              <code>${error.stack}</code>
+            </div>
+          `;
+        }
       }
     }
     
@@ -389,7 +399,11 @@
     }
     
     async function renderLayout(data) {
-      const canvas = document.getElementById('canvas');
+      const canvas = canvasEl || document.getElementById('canvas');
+      if (!canvas) {
+        throw new Error('Canvas element not found');
+      }
+      canvas.innerHTML = '';
       const layout = data.layout || {};
       const elements = layout.elements || [];
       const svg_base = data.svg_base || "";
