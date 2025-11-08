@@ -198,59 +198,59 @@
   <div id="canvas"></div>
   
   <script>
-    // Parse data from URL query parameter
-    const urlParams = new URLSearchParams(window.location.search);
-    const encodedData = urlParams.get('data');
-    
     console.log('=== BASE.HTML INITIALIZATION ===');
-    console.log('URL:', window.location.href);
-    console.log('Has data param:', !!encodedData);
-    console.log('Data param length:', encodedData ? encodedData.length : 0);
     
-    if (!encodedData) {
-      console.error('❌ No data parameter provided');
+    // Try multiple data sources
+    let data = null;
+    let dataSource = 'none';
+    
+    // 1. Check for injected data (Playwright method - avoids URL length limits)
+    if (window.renderData) {
+      console.log('✓ Found injected renderData');
+      data = window.renderData;
+      dataSource = 'injected';
+    } else {
+      // 2. Fall back to URL parameter
+      const urlParams = new URLSearchParams(window.location.search);
+      const encodedData = urlParams.get('data');
+      
+      if (encodedData) {
+        console.log('✓ Found URL parameter data');
+        try {
+          const dataJson = decodeURIComponent(encodedData);
+          data = JSON.parse(dataJson);
+          dataSource = 'url_parameter';
+        } catch (error) {
+          console.error('❌ Failed to parse URL parameter:', error);
+        }
+      }
+    }
+    
+    console.log('Data source:', dataSource);
+    
+    if (!data) {
+      console.error('❌ No data available');
       document.body.innerHTML = `
         <div class="error-display">
-          <h2>❌ Error: No data parameter provided</h2>
-          <p><strong>Expected URL format:</strong></p>
-          <code>/layouts/base.html?data=&lt;encoded_json&gt;</code>
-          <p><strong>Current URL:</strong></p>
-          <code>${window.location.href}</code>
-          <p><strong>Possible causes:</strong></p>
+          <h2>❌ Error: No render data available</h2>
+          <p><strong>Expected data from:</strong></p>
           <ul style="margin-left: 20px;">
-            <li>Backend failed to pass data parameter</li>
-            <li>PUBLIC_BASE_URL not configured correctly</li>
-            <li>Layout JSON not found in GCS bucket</li>
+            <li>window.renderData (injected via Playwright)</li>
+            <li>OR ?data=... URL parameter</li>
           </ul>
+          <p><strong>Current status:</strong></p>
+          <code>window.renderData: ${!!window.renderData}</code>
         </div>
       `;
     } else {
       try {
-        console.log('📦 Decoding data...');
-        const dataJson = decodeURIComponent(encodedData);
-        console.log('✓ Data decoded, length:', dataJson.length);
-        console.log('First 200 chars:', dataJson.substring(0, 200));
-        
-        console.log('📋 Parsing JSON...');
-        const data = JSON.parse(dataJson);
-        
-        console.log('=== DATA PARSED SUCCESSFULLY ===');
+        console.log('=== DATA LOADED ===');
         console.log('Data keys:', Object.keys(data));
-        console.log('Layout:', data.layout ? 'EXISTS' : 'MISSING');
-        console.log('Layout name:', data.layout?.name);
-        console.log('Elements:', data.layout?.elements?.length || 0);
-        console.log('Weather:', data.weather ? 'EXISTS' : 'MISSING');
-        console.log('Weather icon URL:', data.weather?.icon_url);
-        console.log('BG URL:', data.bg_url);
-        console.log('SVG base:', data.svg_base);
-        console.log('Dynamic text keys:', data.dynamic_text ? Object.keys(data.dynamic_text).length : 0);
+        console.log('Layout exists:', !!data.layout);
+        console.log('Elements count:', data.layout?.elements?.length || 0);
         
-        if (!data.layout) {
-          throw new Error('Missing layout object in data');
-        }
-        
-        if (!data.layout.elements) {
-          throw new Error('Missing elements array in layout');
+        if (!data.layout || !data.layout.elements) {
+          throw new Error('Invalid data structure: missing layout or elements');
         }
         
         // Set font base
@@ -258,31 +258,17 @@
         const fontsLinkEl = document.getElementById('kin-fonts');
         if (fontsLinkEl) {
           fontsLinkEl.href = fontBase.replace(/\/+$/, '') + '/fonts.css';
-          console.log('✓ Font stylesheet:', fontsLinkEl.href);
         }
         
-        // Render the layout immediately
+        // Render
         renderLayout(data);
+        
       } catch (error) {
-        console.error('❌ CRITICAL ERROR:', error);
-        console.error('Stack trace:', error.stack);
+        console.error('❌ ERROR:', error);
         document.body.innerHTML = `
           <div class="error-display">
-            <h2>❌ Error: Invalid render data</h2>
-            <p><strong>Error message:</strong></p>
-            <code>${error.message}</code>
-            <p><strong>Stack trace:</strong></p>
+            <h2>❌ Error: ${error.message}</h2>
             <code>${error.stack}</code>
-            <p><strong>Encoded data length:</strong> ${encodedData.length} characters</p>
-            <p><strong>First 500 chars of encoded data:</strong></p>
-            <code>${encodedData.substring(0, 500)}</code>
-            <p><strong>Debugging steps:</strong></p>
-            <ol style="margin-left: 20px;">
-              <li>Check if layout exists: <code>gsutil ls gs://family-display-packs/devices/familydisplay/layouts/current.json</code></li>
-              <li>Validate layout JSON: <code>gsutil cat gs://... | python3 -m json.tool</code></li>
-              <li>Test render data: <code>curl https://your-backend/v1/debug/render_data</code></li>
-              <li>Test frame URL: <code>curl https://your-backend/v1/debug/frame_url</code></li>
-            </ol>
           </div>
         `;
       }
@@ -309,11 +295,7 @@
     
     function resolveUrl(path, svg_base) {
       if (!path) return "";
-      
-      if (path.startsWith("http://") || path.startsWith("https://")) {
-        return path;
-      }
-      
+      if (path.startsWith("http://") || path.startsWith("https://")) return path;
       if (path.startsWith("/")) {
         if (svg_base && svg_base.startsWith("http")) {
           const base = svg_base.split("/gcs/")[0];
@@ -321,78 +303,55 @@
         }
         return path;
       }
-      
-      if (svg_base) {
-        return svg_base + "/" + path;
-      }
-      
+      if (svg_base) return svg_base + "/" + path;
       return path;
     }
     
     function resolveDynamicText(type, data) {
-      console.log(`Resolving dynamic text for type: ${type}`);
-      
       if (data.dynamic_text && Object.prototype.hasOwnProperty.call(data.dynamic_text, type)) {
-        const value = data.dynamic_text[type] ?? "";
-        console.log(`✓ Resolved from dynamic_text: "${value}"`);
-        return value;
+        return data.dynamic_text[type] ?? "";
       }
-
       switch (type) {
         case "WEATHER_TEMP":
         case "TEMP":
           return data.weather?.temp ? `${data.weather.temp}°` : "--°";
-        
         case "WEATHER_CITY":
         case "CITY":
           return data.weather?.city || "Unknown";
-        
         case "WEATHER_DESC":
         case "DESC":
           return data.weather?.desc || "No data";
-        
         case "WEATHER_DESC_EXTENDED":
           return data.weather?.desc_extended || data.weather?.desc || "No data";
-        
         case "WEATHER_NOTE":
         case "NOTE":
           return data.weather?.desc || "No data";
-        
         case "WEATHER_MINMAX":
         case "MINMAX":
           if (data.weather?.temp_min != null && data.weather?.temp_max != null) {
             return `${data.weather.temp_min}° / ${data.weather.temp_max}°`;
           }
           return "--° / --°";
-        
         case "HUMIDITY":
         case "WEATHER_HUMIDITY":
           return data.weather?.humidity ? `${data.weather.humidity}%` : "--%";
-        
         case "RAIN":
           return data.weather?.rain != null ? `${data.weather.rain}mm` : "0mm";
-        
         case "WIND":
           return data.weather?.wind != null ? `${data.weather.wind} km/h` : "0 km/h";
-        
         case "TOMORROW_DESC":
           return data.weather?.tomorrow?.desc || "No forecast";
-        
         case "TOMORROW_TEMP":
           if (data.weather?.tomorrow?.temp_min != null && data.weather?.tomorrow?.temp_max != null) {
             return `${data.weather.tomorrow.temp_min}° / ${data.weather.tomorrow.temp_max}°`;
           }
           return "--° / --°";
-        
         case "DATE":
           return data.date || new Date().toLocaleDateString();
-        
         case "JOKE":
           return data.dad_joke || "No joke today!";
-        
         case "WEATHER_ICON":
           return (data.dynamic_text && data.dynamic_text.WEATHER_ICON) || "☀️";
-        
         case "CUSTOM":
         default:
           return "";
@@ -412,15 +371,10 @@
     
     async function inlineSvgInto(elDiv, url) {
       try {
-        console.log(`Loading SVG from: ${url}`);
         const response = await fetch(url);
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-        
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const svgText = await response.text();
         elDiv.innerHTML = svgText;
-        
         const svgEl = elDiv.querySelector('svg');
         if (svgEl) {
           svgEl.style.width = '100%';
@@ -428,10 +382,9 @@
           svgEl.removeAttribute('width');
           svgEl.removeAttribute('height');
         }
-        console.log('✓ SVG loaded successfully');
       } catch (error) {
         console.error('Failed to load SVG:', url, error);
-        elDiv.innerHTML = `<div style="color: red; font-size: 12px;">SVG Load Error</div>`;
+        elDiv.innerHTML = `<div style="color: red; font-size: 12px;">SVG Error</div>`;
       }
     }
     
@@ -442,20 +395,13 @@
       const svg_base = data.svg_base || "";
       
       console.log('=== RENDER LAYOUT START ===');
-      console.log('Layout name:', layout.name);
-      console.log('Elements count:', elements.length);
-      console.log('SVG Base:', svg_base);
-      console.log('BG URL:', data.bg_url);
+      console.log('Elements:', elements.length);
       
       if (data.bg_url) {
         const bgImg = document.createElement('img');
         bgImg.src = data.bg_url;
         bgImg.className = 'background-image';
-        bgImg.onerror = () => {
-          console.warn('Background image failed to load:', data.bg_url);
-        };
         canvas.appendChild(bgImg);
-        console.log('✓ Background image added');
       }
       
       for (const el of elements) {
@@ -470,13 +416,8 @@
           elDiv.style.top = (el.y || 0) + 'px';
           elDiv.style.width = (el.w || el.width || 100) + 'px';
           elDiv.style.height = (el.h || el.height || 100) + 'px';
-          
-          const zIndex = el.zIndex || getLayerZIndex(el, kind);
-          elDiv.style.zIndex = zIndex;
-          
-          if (el.opacity != null) {
-            elDiv.style.opacity = el.opacity;
-          }
+          elDiv.style.zIndex = el.zIndex || getLayerZIndex(el, kind);
+          if (el.opacity != null) elDiv.style.opacity = el.opacity;
           
           if (kind === 'text' || kind === 'icon') {
             const contentDiv = document.createElement('div');
@@ -485,9 +426,7 @@
             let textContent = el.text || '';
             if (el.type && el.type !== 'CUSTOM') {
               textContent = resolveDynamicText(el.type, data);
-              console.log(`✓ Dynamic text resolved for ${el.type}: "${textContent}"`);
             }
-            
             contentDiv.textContent = textContent;
             
             contentDiv.style.fontSize = (el.fontSize || 16) + 'px';
@@ -502,7 +441,7 @@
             
             if (el.fontFamily) {
               const preferred = mapToSystemFont(el.fontFamily);
-              contentDiv.style.fontFamily = `"${preferred}", "Liberation Sans", "DejaVu Sans", -apple-system, sans-serif`;
+              contentDiv.style.fontFamily = `"${preferred}", "Liberation Sans", "DejaVu Sans", sans-serif`;
             }
             
             if (el.textShadow) {
@@ -513,37 +452,19 @@
               const blur = Math.round(4 * intensity);
               
               if (el.textShadowType === 'glow') {
-                contentDiv.style.textShadow = `
-                  0 0 ${blur}px ${shadowColor},
-                  0 0 ${blur * 2}px ${shadowColor},
-                  0 0 ${blur * 3}px ${shadowColor}
-                `;
-              } else if (el.textShadowType === 'shadow' || el.textShadowType === 'drop') {
+                contentDiv.style.textShadow = `0 0 ${blur}px ${shadowColor}, 0 0 ${blur * 2}px ${shadowColor}, 0 0 ${blur * 3}px ${shadowColor}`;
+              } else if (el.textShadowType === 'shadow') {
                 const offset = Math.round(2 * intensity);
                 contentDiv.style.textShadow = `${offset}px ${offset}px ${blur}px ${shadowColor}`;
-              } else if (el.textShadowType === 'outline') {
-                const size = Math.round(1 * intensity);
-                contentDiv.style.textShadow = `
-                  -${size}px -${size}px 0 ${shadowColor},
-                  ${size}px -${size}px 0 ${shadowColor},
-                  -${size}px ${size}px 0 ${shadowColor},
-                  ${size}px ${size}px 0 ${shadowColor}
-                `;
               }
             }
             
             elDiv.appendChild(contentDiv);
             
           } else if (kind === 'box') {
-            if (el.background || el.fill) {
-              elDiv.style.background = el.background || el.fill;
-            }
-            if (el.borderColor) {
-              elDiv.style.border = '1px solid ' + el.borderColor;
-            }
-            if (el.borderRadius || el.radius) {
-              elDiv.style.borderRadius = (el.borderRadius || el.radius) + 'px';
-            }
+            if (el.background || el.fill) elDiv.style.background = el.background || el.fill;
+            if (el.borderColor) elDiv.style.border = '1px solid ' + el.borderColor;
+            if (el.borderRadius || el.radius) elDiv.style.borderRadius = (el.borderRadius || el.radius) + 'px';
             
           } else if (kind === 'svg' || kind === 'svg-overlay' || kind === 'image') {
             let src = el.src || el.svgName || '';
@@ -552,11 +473,7 @@
               if (data.weather?.icon_url) {
                 src = data.weather.icon_url;
                 elDiv.classList.add('weather-icon');
-              } else if (data.dynamic_text?.WEATHER_ICON) {
-                src = data.dynamic_text.WEATHER_ICON;
-                elDiv.classList.add('weather-icon');
               } else {
-                console.warn('No weather icon URL available');
                 continue;
               }
             }
@@ -571,24 +488,18 @@
               img.style.width = '100%';
               img.style.height = '100%';
               img.style.objectFit = 'contain';
-              img.onerror = () => {
-                console.error('Image failed to load:', fullUrl);
-              };
               elDiv.appendChild(img);
             }
           }
           
           canvas.appendChild(elDiv);
-          console.log(`✓ Rendered ${kind} element at (${el.x}, ${el.y})`);
           
         } catch (error) {
           console.error('Error rendering element:', el, error);
         }
       }
       
-      const renderedCount = canvas.querySelectorAll('.el').length;
-      console.log(`✓ Layout rendered successfully - ${renderedCount} elements on canvas`);
-      console.log('=== RENDER LAYOUT COMPLETE ===');
+      console.log('✓ Render complete');
     }
   </script>
 </body>
