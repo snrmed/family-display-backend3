@@ -33,13 +33,19 @@ def ok():
 BASE_DIR = Path(__file__).resolve().parent
 LAYOUTS_DIR = BASE_DIR / "web" / "layouts"
 
-@app.get("/layouts/base.html")
-def get_base_html():
-    """Return the main base.html layout file from /web/layouts."""
-    path = LAYOUTS_DIR / "base.html"
-    if not path.exists():
-        return JSONResponse({"error": "base.html not found"}, status_code=404)
-    return FileResponse(str(path), media_type="text/html")
+@app.get("/layouts/base.html", response_class=HTMLResponse)
+async def serve_base_html(request: Request, data: str = None):
+    """Serve base.html with optional data parameter for rendering."""
+    base_path = LAYOUTS_DIR / "base.html"
+    
+    if not base_path.exists():
+        raise HTTPException(status_code=404, detail="base.html not found")
+    
+    # Read and return the HTML file
+    with open(base_path, 'r', encoding='utf-8') as f:
+        html_content = f.read()
+    
+    return HTMLResponse(content=html_content, media_type="text/html")
 
 app.add_middleware(
     CORSMiddleware,
@@ -508,19 +514,37 @@ async def render_html_to_png(render_path: str, context: dict) -> bytes:
     raw_json = json.dumps(context)
     encoded_data = quote(raw_json, safe="")
     public_base = os.getenv("PUBLIC_BASE_URL", "").rstrip("/")
+    
+    if not public_base:
+        raise RuntimeError("PUBLIC_BASE_URL environment variable not configured")
+    
     url = f"{public_base}/layouts/base.html?data={encoded_data}"
 
-    logger.info(f"🎨 Rendering: {url[:120]}...")
+    logger.info(f"🎨 Rendering URL (first 200 chars): {url[:200]}...")
+    logger.info(f"📊 Context keys: {list(context.keys())}")
+    logger.info(f"📐 Layout elements: {len(context.get('layout', {}).get('elements', []))}")
+    logger.info(f"🌍 Weather icon URL: {context.get('weather', {}).get('icon_url', 'N/A')}")
 
     try:
-        await page.goto(url, wait_until="networkidle", timeout=20000)
+        response = await page.goto(url, wait_until="networkidle", timeout=30000)
+        
+        if not response or response.status != 200:
+            logger.error(f"Failed to load page. Status: {response.status if response else 'None'}")
+            raise RuntimeError(f"Page load failed with status {response.status if response else 'unknown'}")
+        
         # Ensure webfonts are loaded before capture
         await page.evaluate(
             "document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()"
         )
-        await page.wait_for_timeout(50)
+        await page.wait_for_timeout(100)
+        
         png_bytes = await page.screenshot(type="png", full_page=True)
+        logger.info(f"✓ Screenshot captured: {len(png_bytes)} bytes")
         return png_bytes
+        
+    except Exception as e:
+        logger.error(f"Rendering error: {e}", exc_info=True)
+        raise
     finally:
         await page.close()
 
@@ -603,7 +627,7 @@ async def api_frame(device: str = "familydisplay"):
         logger.error(f"Failed to render frame: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# Debug
+# Debug Routes
 @app.get("/v1/debug/render_data")
 async def debug_render_data(device: str = "familydisplay"):
     try:
@@ -626,6 +650,34 @@ async def debug_render_data(device: str = "familydisplay"):
     except Exception as e:
         logger.error(f"Debug render data error: {e}", exc_info=True)
         return {"success": False, "error": str(e), "traceback": traceback.format_exc()}
+
+@app.get("/v1/debug/frame_url")
+async def debug_frame_url(device: str = "familydisplay"):
+    """Debug endpoint to see what URL would be generated for rendering."""
+    try:
+        data = await build_render_data(device)
+        raw_json = json.dumps(data)
+        encoded_data = quote(raw_json, safe="")
+        public_base = os.getenv("PUBLIC_BASE_URL", "").rstrip("/")
+        url = f"{public_base}/layouts/base.html?data={encoded_data}"
+        
+        return {
+            "success": True,
+            "url_length": len(url),
+            "data_size": len(raw_json),
+            "url_preview": url[:500] + "..." if len(url) > 500 else url,
+            "layout_loaded": bool(data.get("layout")),
+            "element_count": len(data.get("layout", {}).get("elements", [])),
+            "has_weather": bool(data.get("weather")),
+            "has_bg_url": bool(data.get("bg_url")),
+            "weather_icon_url": data.get("weather", {}).get("icon_url")
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
 
 @app.get("/v1/debug/layout")
 def debug_layout(device: str = "familydisplay"):
@@ -753,9 +805,9 @@ async def admin_render_now(token: str = None, device: str = "familydisplay"):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-## ============================================================================
+# ──────────────────────────────────────────────────────────────────────────────
 # DEVICE MANAGEMENT ROUTES
-# ============================================================================
+# ──────────────────────────────────────────────────────────────────────────────
 
 @app.get("/v1/devices")
 def list_devices():
@@ -789,6 +841,57 @@ def init_layout_from_default(device_id: str):
     except Exception as e:
         logger.error(f"Failed to initialize layout: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+# ──────────────────────────────────────────────────────────────────────────────
+# API HELPER ROUTES (for designer)
+# ──────────────────────────────────────────────────────────────────────────────
+
+@app.get("/api/list-svgs")
+def list_svgs():
+    """List available SVG assets for the designer."""
+    if not storage_enabled:
+        return {"svgs": []}
+    try:
+        blobs = bucket.list_blobs(prefix="assets/svgs/")
+        svgs = []
+        for blob in blobs:
+            filename = blob.name.split("/")[-1]
+            if filename.endswith(".svg"):
+                svgs.append({
+                    "name": filename,
+                    "url": make_public_url(f"gcs/{blob.name}")
+                })
+        return {"svgs": svgs}
+    except Exception as e:
+        logger.error(f"Failed to list SVGs: {e}")
+        return {"svgs": []}
+
+@app.get("/api/list-pexels-categories")
+def list_pexels_categories():
+    """List available Pexels categories."""
+    categories = get_pexels_categories()
+    return {"categories": categories}
+
+@app.get("/api/list-presets")
+def list_presets_api():
+    """List available preset layouts."""
+    try:
+        presets_dir = resolve_static_dir("web/presets", "backend/web/presets")
+        if not presets_dir:
+            return {"presets": []}
+        
+        presets = []
+        for file in presets_dir.glob("*.json"):
+            presets.append(file.stem)
+        
+        return {"presets": sorted(presets)}
+    except Exception as e:
+        logger.error(f"Failed to list presets: {e}")
+        return {"presets": []}
+
+# ──────────────────────────────────────────────────────────────────────────────
+# MAIN
+# ──────────────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     import uvicorn
