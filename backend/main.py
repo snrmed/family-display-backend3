@@ -179,7 +179,7 @@ def gcs_write_bytes(key: str, data: bytes, content_type: str = "image/png"):
 # ──────────────────────────────────────────────────────────────────────────────
 
 DEFAULT_DEVICE_CONFIG = {
-    "location": {"city": "Darwin", "timezone": "Australia/Darwin"},
+    "location": {"city": os.getenv("DEFAULT_CITY", "Darwin"), "timezone": os.getenv("DEFAULT_TZ", "Australia/Darwin")},
     "preferences": {"iconTheme": DEFAULT_ICON_THEME},
 }
 
