@@ -952,20 +952,42 @@ def list_pexels_categories():
 
 @app.get("/api/list-presets")
 def list_presets_api():
-    """List available preset layouts."""
+    """List available preset layouts from GCS (assets/layouts/*.json)."""
+    if not storage_enabled:
+        return {"presets": []}
     try:
-        presets_dir = resolve_static_dir("web/presets", "backend/web/presets")
-        if not presets_dir:
-            return {"presets": []}
-        
         presets = []
-        for file in presets_dir.glob("*.json"):
-            presets.append(file.stem)
-        
+        for blob in bucket.list_blobs(prefix="assets/layouts/"):
+            name = blob.name.split("/")[-1]
+            if not name.endswith(".json"):
+                continue
+            presets.append(name[:-5])
         return {"presets": sorted(presets)}
     except Exception as e:
-        logger.error(f"Failed to list presets: {e}")
+        logger.error(f"Failed to list presets from GCS: {e}")
         return {"presets": []}
+
+from fastapi.responses import JSONResponse
+from fastapi import HTTPException
+
+@app.get("/presets/{name}.json")
+def get_preset_json(name: str):
+    """Serve preset JSONs stored in GCS (assets/layouts/<name>.json)."""
+    if not storage_enabled:
+        raise HTTPException(status_code=404, detail="storage disabled")
+
+    try:
+        blob = bucket.blob(f"assets/layouts/{name}.json")
+        if not blob.exists():
+            raise HTTPException(status_code=404, detail="preset not found")
+
+        text = blob.download_as_text()
+        return JSONResponse(content=json.loads(text))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Failed to load preset {name}: {e}")
+        raise HTTPException(status_code=500, detail="failed to load preset")
 
 # ──────────────────────────────────────────────────────────────────────────────
 # MAIN
