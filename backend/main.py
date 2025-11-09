@@ -397,21 +397,23 @@ async def get_weather(lat: float = None, lon: float = None, city: str = None) ->
     
     async def get_joke() -> str:
         if ENABLE_JOKES_API:
-        try:
-            async with httpx.AsyncClient() as client:
-                r = await client.get(
-                    "https://icanhazdadjoke.com/",
-                    headers={"Accept": "application/json"},
-                    timeout=5,
-                )
-                if r.status_code == 200:
-                    return r.json()["joke"]
-        except Exception as e:
-            logger.warning(f"Joke API failed: {e}")
-    return random.choice(LOCAL_JOKES)
+            try:  # <--- Fixed: Indented inside the 'if'
+                async with httpx.AsyncClient() as client:
+                    r = await client.get(
+                        "https://icanhazdadjoke.com/",
+                        headers={"Accept": "application/json"},
+                        timeout=5,
+                    )
+                    if r.status_code == 200:
+                        return r.json()["joke"]
+            except Exception as e:
+                logger.warning(f"Joke API failed: {e}")
+        
+        # Fixed: Indented to be the fallback return for the function
+        return random.choice(LOCAL_JOKES)
 
-def get_pexels_categories() -> list:
-    if not storage_enabled:
+    def get_pexels_categories() -> list:
+        if not storage_enabled:
         return ["abstract", "geometric", "minimal"]
     try:
         blobs = bucket.list_blobs(prefix="pexels/current/")
