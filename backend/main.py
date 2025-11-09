@@ -413,8 +413,8 @@ async def get_weather(lat: float = None, lon: float = None, city: str = None) ->
         return random.choice(LOCAL_JOKES)
 
     def get_pexels_categories() -> list:
-        if not storage_enabled:
-            return ["abstract", "geometric", "minimal"]
+    if not storage_enabled:
+        return ["abstract", "geometric", "minimal"]
     try:
         blobs = bucket.list_blobs(prefix="pexels/current/")
         categories = set()
