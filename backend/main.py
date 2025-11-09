@@ -229,7 +229,7 @@ if ENABLE_RENDERING:
     except Exception as e:
         logger.warning(f"⚠️ Playwright disabled: {e}")
         ENABLE_RENDERING = False
-
+        
 # ──────────────────────────────────────────────────────────────────────────────
 # CONTENT PROVIDERS
 # ──────────────────────────────────────────────────────────────────────────────
@@ -240,46 +240,109 @@ def resolve_weather_icon_url(theme: str, code: str) -> str:
     return make_public_url(f"gcs/{path}")
 
 async def get_weather(city: str) -> dict:
-    """Get weather from OpenWeather; returns normalized keys."""
+    """Get weather from OpenWeather; returns normalized keys with true daily min/max."""
     api_key = os.getenv("OPENWEATHER_KEY")
 
     if ENABLE_OPENWEATHER and api_key:
         try:
             async with httpx.AsyncClient() as client:
+                # Get current weather
                 current_url = "https://api.openweathermap.org/data/2.5/weather"
                 params = {"q": city, "appid": api_key, "units": "metric"}
                 r = await client.get(current_url, params=params, timeout=10)
 
                 if r.status_code == 200:
                     data = r.json()
-
-                    # tomorrow forecast (24h)
                     lat, lon = data["coord"]["lat"], data["coord"]["lon"]
+                    
+                    # Get 5-day/3-hour forecast to calculate true daily min/max
                     forecast_url = "https://api.openweathermap.org/data/2.5/forecast"
                     forecast_params = {"lat": lat, "lon": lon, "appid": api_key, "units": "metric"}
                     fr = await client.get(forecast_url, params=forecast_params, timeout=10)
 
+                    # Calculate today's actual min/max from first 8 entries (24 hours)
+                    today_min, today_max = None, None
                     tomorrow_data = None
+                    
                     if fr.status_code == 200:
                         forecast = fr.json()
                         if forecast.get("list"):
-                            entry = forecast["list"][8] if len(forecast["list"]) > 8 else forecast["list"][-1]
-                            tomorrow_data = {
-                                "temp_min": round(entry["main"]["temp_min"]),
-                                "temp_max": round(entry["main"]["temp_max"]),
-                                "desc": entry["weather"][0]["description"].title(),
-                            }
+                            # Today's min/max from first 8 entries (24 hours / 3-hour intervals)
+                            today_temps = [entry["main"]["temp"] for entry in forecast["list"][:8]]
+                            today_min = round(min(today_temps)) if today_temps else None
+                            today_max = round(max(today_temps)) if today_temps else None
+                            
+                            # Tomorrow's forecast (entries 8-16, next 24 hours)
+                            if len(forecast["list"]) > 8:
+                                tomorrow_temps = [entry["main"]["temp"] for entry in forecast["list"][8:16]]
+                                tomorrow_entry = forecast["list"][8]
+                                tomorrow_data = {
+                                    "temp_min": round(min(tomorrow_temps)) if tomorrow_temps else None,
+                                    "temp_max": round(max(tomorrow_temps)) if tomorrow_temps else None,
+                                    "desc": tomorrow_entry["weather"][0]["description"].title(),
+                                }
+
+                    # Use forecast min/max if available, otherwise fall back to current API
+                    temp_min = today_min if today_min is not None else round(data["main"]["temp_min"])
+                    temp_max = today_max if today_max is not None else round(data["main"]["temp_max"])
+                    
+                    # Build verbose weather description (without current temp for e-ink)
+                    desc = data["weather"][0]["description"]
+                    humidity = data["main"]["humidity"]
+                    wind_speed = round(data["wind"]["speed"] * 3.6)
+                    rain_amount = data.get("rain", {}).get("1h", 0)
+                    
+                    # Create weather reporter-style description for today
+                    verbose_desc = f"Expecting {desc} with temperatures ranging from {temp_min}°C to {temp_max}°C. "
+                    
+                    if rain_amount > 0:
+                        verbose_desc += f"Rainfall of {rain_amount}mm expected. "
+                    elif "rain" in desc.lower() or "drizzle" in desc.lower():
+                        verbose_desc += "Some rain expected throughout the day. "
+                    
+                    if wind_speed > 30:
+                        verbose_desc += f"Windy conditions with gusts up to {wind_speed} km/h. "
+                    elif wind_speed > 15:
+                        verbose_desc += f"Moderate winds around {wind_speed} km/h. "
+                    
+                    if humidity > 80:
+                        verbose_desc += "High humidity making it feel quite muggy."
+                    elif humidity > 60:
+                        verbose_desc += "Moderate humidity levels."
+                    else:
+                        verbose_desc += "Relatively dry conditions."
+                    
+                    # Build verbose description for tomorrow
+                    tomorrow_verbose = None
+                    if tomorrow_data:
+                        tmr_desc = tomorrow_data["desc"].lower()
+                        tmr_min = tomorrow_data["temp_min"]
+                        tmr_max = tomorrow_data["temp_max"]
+                        
+                        tomorrow_verbose = f"Tomorrow expecting {tmr_desc} with temperatures from {tmr_min}°C to {tmr_max}°C. "
+                        
+                        if "rain" in tmr_desc or "drizzle" in tmr_desc or "shower" in tmr_desc:
+                            tomorrow_verbose += "Rain expected. "
+                        elif "storm" in tmr_desc or "thunder" in tmr_desc:
+                            tomorrow_verbose += "Stormy conditions likely. "
+                        elif "cloud" in tmr_desc:
+                            tomorrow_verbose += "Cloudy skies. "
+                        else:
+                            tomorrow_verbose += "Clear conditions. "
+                        
+                        # Add tomorrow's data to tomorrow_data dict
+                        tomorrow_data["desc_extended"] = tomorrow_verbose
 
                     return {
-                        "temp": round(data["main"]["temp"]),
-                        "humidity": data["main"]["humidity"],
-                        "rain": data.get("rain", {}).get("1h", 0),
-                        "wind": round(data["wind"]["speed"] * 3.6),
+                        "temp": current_temp,
+                        "humidity": humidity,
+                        "rain": rain_amount,
+                        "wind": wind_speed,
                         "icon": data["weather"][0]["icon"],
-                        "desc": data["weather"][0]["description"].title(),
-                        "desc_extended": data["weather"][0]["description"],
-                        "temp_min": round(data["main"]["temp_min"]),
-                        "temp_max": round(data["main"]["temp_max"]),
+                        "desc": desc.title(),
+                        "desc_extended": verbose_desc,
+                        "temp_min": temp_min,
+                        "temp_max": temp_max,
                         "timezone_offset": data.get("timezone", 0),
                         "tomorrow": tomorrow_data,
                     }
@@ -294,11 +357,16 @@ async def get_weather(city: str) -> dict:
         "wind": 15,
         "icon": "01d",
         "desc": "Sunny",
-        "desc_extended": "Sunny with clear skies",
-        "temp_min": 30,
+        "desc_extended": "Expecting sunny conditions with temperatures ranging from 26°C to 36°C. Moderate humidity levels.",
+        "temp_min": 26,
         "temp_max": 36,
         "timezone_offset": 0,
-        "tomorrow": {"temp_min": 29, "temp_max": 35, "desc": "Partly Cloudy"},
+        "tomorrow": {
+            "temp_min": 25, 
+            "temp_max": 35, 
+            "desc": "Partly Cloudy",
+            "desc_extended": "Tomorrow expecting partly cloudy with temperatures from 25°C to 35°C. Cloudy skies."
+        },
     }
 
 async def get_joke() -> str:
