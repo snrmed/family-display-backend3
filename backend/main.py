@@ -396,7 +396,7 @@ async def get_weather(lat: float = None, lon: float = None, city: str = None) ->
     }
     
     async def get_joke() -> str:
-    if ENABLE_JOKES_API:
+        if ENABLE_JOKES_API:
         try:
             async with httpx.AsyncClient() as client:
                 r = await client.get(
