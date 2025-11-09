@@ -4,8 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Kin:D Frame Render</title>
-<style>
-  <link id="kin-fonts" rel="stylesheet" href="" crossorigin="anonymous">
+
+<!-- Corrected font loader (prevents 404 and loads dynamically from font_base) -->
+<link id="kin-fonts" rel="stylesheet" href="" crossorigin="anonymous">
+
 <style>
 :root {
   --textColor:#111;
@@ -14,429 +16,270 @@
     "DejaVu Sans","Liberation Sans",Arial,Helvetica,sans-serif;
   --fontWeightDefault:600;
 }
-  * {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-  }
-  
-  body {
-    width: 800px;
-    height: 480px;
-    overflow: hidden;
-    font-family: "Liberation Sans", "DejaVu Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
-    background: #fff;
-  }
-  
-  #canvas {
-    position: relative;
-    width: 800px;
-    height: 480px;
-    overflow: hidden;
-  }
-  
-  .el {
-    position: absolute;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  
-  .el.text {
-    z-index: 30;
-    white-space: pre-wrap;
-    word-wrap: break-word;
-  }
-  
-  .el.icon {
-    z-index: 30;
-  }
-  
-  .el.box {
-    z-index: 15;
-  }
-  
-  .el.svg,
-  .el.svg-overlay,
-  .el.image {
-    z-index: 20;
-  }
-  
-  .el.weather-icon {
-    z-index: 35;
-  }
-  
-  .el svg {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-  }
-  
-  .background-image {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    z-index: 1;
-    object-fit: cover;
-  }
 
-  [data-el="text"], .text{
-    color: var(--textColor,#111) !important;
-    -webkit-text-fill-color: currentColor !important;
-  }
-  
-  .error-display {
-    padding: 20px;
-    font-family: monospace;
-    background: #1a1a1a;
-    color: #ff4444;
-    font-size: 12px;
-    line-height: 1.5;
-  }
-  .error-display h2 {
-    margin-bottom: 10px;
-  }
-  .error-display code {
-    display: block;
-    background: #2a2a2a;
-    padding: 10px;
-    margin: 10px 0;
-    white-space: pre-wrap;
-    word-break: break-all;
-    font-size: 10px;
-  }
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  width: 800px;
+  height: 480px;
+  overflow: hidden;
+  font-family:
+    "Inter","Nunito","Figtree","Atkinson Hyperlegible",
+    "Lexend","Merriweather",
+    "DejaVu Sans","Liberation Sans",Arial,Helvetica,sans-serif;
+  background: #fff;
+}
+
+#canvas {
+  position: relative;
+  width: 800px;
+  height: 480px;
+  overflow: hidden;
+}
+
+.el {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.el.text { z-index: 30; white-space: pre-wrap; word-wrap: break-word; }
+.el.icon { z-index: 30; }
+.el.box { z-index: 15; }
+.el.svg, .el.svg-overlay, .el.image { z-index: 20; }
+.el.weather-icon { z-index: 35; }
+.el svg { width: 100%; height: 100%; object-fit: contain; }
+
+.background-image {
+  position: absolute;
+  top:0; left:0;
+  width:100%; height:100%;
+  z-index:1;
+  object-fit:cover;
+}
+
+[data-el="text"], .text {
+  color: var(--textColor,#111)!important;
+  -webkit-text-fill-color: currentColor!important;
+}
+
+.error-display {
+  padding:20px;
+  font-family:monospace;
+  background:#1a1a1a;
+  color:#ff4444;
+  font-size:12px;
+  line-height:1.5;
+}
+.error-display h2{ margin-bottom:10px; }
+.error-display code{
+  display:block;
+  background:#2a2a2a;
+  padding:10px;
+  margin:10px 0;
+  white-space:pre-wrap;
+  word-break:break-all;
+  font-size:10px;
+}
 </style>
 </head>
 <body>
   <div id="canvas"></div>
-  
+
   <script>
-    console.log('=== BASE.HTML INITIALIZATION ===');
-    
-    const canvasEl = document.getElementById('canvas');
+  console.log('=== BASE.HTML INITIALIZATION ===');
+  const canvasEl = document.getElementById('canvas');
+  if (!canvasEl) console.error('❌ Canvas element #canvas not found');
 
-    if (!canvasEl) {
-      console.error('❌ Canvas element #canvas not found in DOM');
+  // Acquire data (injected or URL)
+  let data = null, dataSource = 'none';
+  if (window.renderData) { data = window.renderData; dataSource = 'injected'; }
+  else {
+    const p = new URLSearchParams(location.search);
+    const enc = p.get('data');
+    if (enc) {
+      try { data = JSON.parse(decodeURIComponent(enc)); dataSource='url_parameter'; }
+      catch(e){ console.error('❌ parse error', e); }
     }
+  }
+  console.log('Data source:', dataSource);
 
-    // Try multiple data sources
-    let data = null;
-    let dataSource = 'none';
-    
-    // 1. Check for injected data (Playwright method - avoids URL length limits)
-    if (window.renderData) {
-      console.log('✓ Found injected renderData');
-      data = window.renderData;
-      dataSource = 'injected';
-    } else {
-      // 2. Fall back to URL parameter
-      const urlParams = new URLSearchParams(window.location.search);
-      const encodedData = urlParams.get('data');
-      
-      if (encodedData) {
-        console.log('✓ Found URL parameter data');
-        try {
-          const dataJson = decodeURIComponent(encodedData);
-          data = JSON.parse(dataJson);
-          dataSource = 'url_parameter';
-        } catch (error) {
-          console.error('❌ Failed to parse URL parameter:', error);
-        }
+  if (!data) {
+    canvasEl.innerHTML = `<div class="error-display"><h2>❌ Error: No render data</h2><code>window.renderData: ${!!window.renderData}</code></div>`;
+  }
+
+  function mapToSystemFont(name){
+    if (name) return name;
+    const map = {
+      'Inter':'Liberation Sans','Roboto':'Liberation Sans','Public Sans':'Liberation Sans','Source Sans 3':'Liberation Sans',
+      'Space Grotesk':'DejaVu Sans','Outfit':'DejaVu Sans','Plus Jakarta Sans':'Liberation Sans','Atkinson Hyperlegible':'DejaVu Sans',
+      'Manrope':'Liberation Sans','Noto Sans':'Liberation Sans','Merriweather':'DejaVu Serif','Noto Serif':'DejaVu Serif'
+    };
+    return map[name] || 'Liberation Sans';
+  }
+
+  function resolveUrl(path, svg_base){
+    if (!path) return "";
+    if (path.startsWith("http")) return path;
+    if (path.startsWith("/")) {
+      if (svg_base && svg_base.startsWith("http")) {
+        const base = svg_base.split("/gcs/")[0];
+        return base + path;
       }
-    }
-    
-    console.log('Data source:', dataSource);
-    
-    if (!data) {
-      console.error('❌ No data available');
-      if (canvasEl) {
-        canvasEl.innerHTML = `
-          <div class="error-display">
-            <h2>❌ Error: No render data available</h2>
-            <p><strong>Expected data from:</strong></p>
-            <ul style="margin-left: 20px;">
-              <li>window.renderData (injected via Playwright)</li>
-              <li>OR ?data=... URL parameter</li>
-            </ul>
-            <p><strong>Current status:</strong></p>
-            <code>window.renderData: ${!!window.renderData}</code>
-          </div>
-        `;
-      }
-    } else {
-      try {
-        console.log('=== DATA LOADED ===');
-        console.log('Data keys:', Object.keys(data));
-        console.log('Layout exists:', !!data.layout);
-        console.log('Elements count:', data.layout?.elements?.length || 0);
-        
-        if (!data.layout || !data.layout.elements) {
-          throw new Error('Invalid data structure: missing layout or elements');
-        }
-        
-        // Set font base
-        const fontBase = (data.font_base && String(data.font_base)) || '/gcs/assets/fonts';
-        const fontsLinkEl = document.getElementById('kin-fonts');
-        if (fontsLinkEl) {
-          fontsLinkEl.href = fontBase.replace(/\/+$/, '') + '/fonts.css';
-        }
-        
-        // Render
-        renderLayout(data);
-        
-      } catch (error) {
-        console.error('❌ ERROR:', error);
-        if (canvasEl) {
-          canvasEl.innerHTML = `
-            <div class="error-display">
-              <h2>❌ Error: ${error.message}</h2>
-              <code>${error.stack}</code>
-            </div>
-          `;
-        }
-      }
-    }
-    
-    function mapToSystemFont(fontFamily) {
-      if (fontFamily) return fontFamily;
-      const systemFontMap = {
-        'Inter': 'Liberation Sans',
-        'Roboto': 'Liberation Sans',
-        'Public Sans': 'Liberation Sans',
-        'Source Sans 3': 'Liberation Sans',
-        'Space Grotesk': 'DejaVu Sans',
-        'Outfit': 'DejaVu Sans',
-        'Plus Jakarta Sans': 'Liberation Sans',
-        'Atkinson Hyperlegible': 'DejaVu Sans',
-        'Manrope': 'Liberation Sans',
-        'Noto Sans': 'Liberation Sans',
-        'Merriweather': 'DejaVu Serif',
-        'Noto Serif': 'DejaVu Serif'
-      };
-      return systemFontMap[fontFamily] || 'Liberation Sans';
-    }
-    
-    function resolveUrl(path, svg_base) {
-      if (!path) return "";
-      if (path.startsWith("http://") || path.startsWith("https://")) return path;
-      if (path.startsWith("/")) {
-        if (svg_base && svg_base.startsWith("http")) {
-          const base = svg_base.split("/gcs/")[0];
-          return base + path;
-        }
-        return path;
-      }
-      if (svg_base) return svg_base + "/" + path;
       return path;
     }
-    
-    function resolveDynamicText(type, data) {
-      if (data.dynamic_text && Object.prototype.hasOwnProperty.call(data.dynamic_text, type)) {
-        return data.dynamic_text[type] ?? "";
-      }
-      switch (type) {
-        case "WEATHER_TEMP":
-        case "TEMP":
-          return data.weather?.temp ? `${data.weather.temp}°` : "--°";
-        case "WEATHER_CITY":
-        case "CITY":
-          return data.weather?.city || "Unknown";
-        case "WEATHER_DESC":
-        case "DESC":
-          return data.weather?.desc || "No data";
-        case "WEATHER_DESC_EXTENDED":
-          return data.weather?.desc_extended || data.weather?.desc || "No data";
-        case "WEATHER_NOTE":
-        case "NOTE":
-          return data.weather?.desc || "No data";
-        case "WEATHER_MINMAX":
-        case "MINMAX":
-          if (data.weather?.temp_min != null && data.weather?.temp_max != null) {
-            return `${data.weather.temp_min}° / ${data.weather.temp_max}°`;
-          }
-          return "--° / --°";
-        case "HUMIDITY":
-        case "WEATHER_HUMIDITY":
-          return data.weather?.humidity ? `${data.weather.humidity}%` : "--%";
-        case "RAIN":
-          return data.weather?.rain != null ? `${data.weather.rain}mm` : "0mm";
-        case "WIND":
-          return data.weather?.wind != null ? `${data.weather.wind} km/h` : "0 km/h";
-        case "TOMORROW_DESC":
-          return data.weather?.tomorrow?.desc || "No forecast";
-        case "TOMORROW_TEMP":
-          if (data.weather?.tomorrow?.temp_min != null && data.weather?.tomorrow?.temp_max != null) {
-            return `${data.weather.tomorrow.temp_min}° / ${data.weather.tomorrow.temp_max}°`;
-          }
-          return "--° / --°";
-        case "DATE":
-          return data.date || new Date().toLocaleDateString();
-        case "JOKE":
-          return data.dad_joke || "No joke today!";
-        case "WEATHER_ICON":
-          return (data.dynamic_text && data.dynamic_text.WEATHER_ICON) || "☀️";
-        case "CUSTOM":
-        default:
-          return "";
-      }
+    return svg_base ? (svg_base + "/" + path) : path;
+  }
+
+  function resolveDynamicText(type, data){
+    if (data.dynamic_text && Object.prototype.hasOwnProperty.call(data.dynamic_text, type))
+      return data.dynamic_text[type] ?? "";
+    switch (type){
+      case "WEATHER_TEMP":
+      case "TEMP": return data.weather?.temp ? `${data.weather.temp}°` : "--°";
+      case "WEATHER_CITY":
+      case "CITY": return data.weather?.city || "Unknown";
+      case "WEATHER_DESC":
+      case "DESC": return data.weather?.desc || "No data";
+      case "WEATHER_DESC_EXTENDED": return data.weather?.desc_extended || data.weather?.desc || "No data";
+      case "WEATHER_NOTE":
+      case "NOTE": return data.weather?.desc || "No data";
+      case "WEATHER_MINMAX":
+      case "MINMAX":
+        return (data.weather?.temp_min!=null && data.weather?.temp_max!=null)
+          ? `${data.weather.temp_min}° / ${data.weather.temp_max}°`
+          : "--° / --°";
+      case "HUMIDITY":
+      case "WEATHER_HUMIDITY": return data.weather?.humidity ? `${data.weather.humidity}%` : "--%";
+      case "RAIN": return (data.weather?.rain!=null) ? `${data.weather.rain}mm` : "0mm";
+      case "WIND": return (data.weather?.wind!=null) ? `${data.weather.wind} km/h` : "0 km/h";
+      case "TOMORROW_DESC": return data.weather?.tomorrow?.desc || "No forecast";
+      case "TOMORROW_TEMP":
+        return (data.weather?.tomorrow?.temp_min!=null && data.weather?.tomorrow?.temp_max!=null)
+          ? `${data.weather.tomorrow.temp_min}° / ${data.weather.tomorrow.temp_max}°`
+          : "--° / --°";
+      case "DATE": return data.date || new Date().toLocaleDateString();
+      case "JOKE": return data.dad_joke || "No joke today!";
+      case "WEATHER_ICON": return (data.dynamic_text && data.dynamic_text.WEATHER_ICON) || "☀️";
+      case "CUSTOM":
+      default: return "";
     }
-    
-    function getLayerZIndex(el, kind) {
-      if (kind === 'text' || kind === 'icon') {
-        return el.type && el.type !== 'CUSTOM' ? 35 : 20;
-      } else if (kind === 'box') {
-        return 15;
-      } else if (kind === 'svg' || kind === 'svg-overlay') {
-        return el.src === 'weather-icon' ? 35 : 20;
+  }
+
+  function getLayerZIndex(el, kind){
+    if (kind==='text' || kind==='icon') return (el.type && el.type!=='CUSTOM') ? 35 : 20;
+    if (kind==='box') return 15;
+    if (kind==='svg' || kind==='svg-overlay') return (el.src==='weather-icon') ? 35 : 20;
+    return 10;
+  }
+
+  async function inlineSvgInto(elDiv, url){
+    try {
+      const r = await fetch(url);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const svgText = await r.text();
+      elDiv.innerHTML = svgText;
+      const svgEl = elDiv.querySelector('svg');
+      if (svgEl){
+        svgEl.style.width='100%';
+        svgEl.style.height='100%';
+        svgEl.removeAttribute('width');
+        svgEl.removeAttribute('height');
       }
-      return 10;
+    } catch(e){
+      console.error('SVG load error:', url, e);
+      elDiv.innerHTML = `<div style="color:red;font-size:12px;">SVG Error</div>`;
     }
-    
-    async function inlineSvgInto(elDiv, url) {
-      try {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const svgText = await response.text();
-        elDiv.innerHTML = svgText;
-        const svgEl = elDiv.querySelector('svg');
-        if (svgEl) {
-          svgEl.style.width = '100%';
-          svgEl.style.height = '100%';
-          svgEl.removeAttribute('width');
-          svgEl.removeAttribute('height');
+  }
+
+  async function renderLayout(data){
+    const canvas = canvasEl || document.getElementById('canvas');
+    if (!canvas) throw new Error('Canvas element not found');
+    canvas.innerHTML = '';
+    const layout = data.layout || {};
+    const elements = layout.elements || [];
+    const svg_base = data.svg_base || "";
+    console.log('=== RENDER LAYOUT START ===', elements.length);
+
+    if (data.bg_url){
+      const bg = document.createElement('img');
+      bg.src = data.bg_url;
+      bg.className='background-image';
+      canvas.appendChild(bg);
+    }
+
+    for (const el of elements){
+      try{
+        const div = document.createElement('div');
+        const kind = (el.kind || 'box').toLowerCase();
+        div.className = `el ${kind}`;
+        div.style.left = (el.x||0)+'px';
+        div.style.top = (el.y||0)+'px';
+        div.style.width = (el.w||el.width||100)+'px';
+        div.style.height = (el.h||el.height||100)+'px';
+        div.style.zIndex = el.zIndex || getLayerZIndex(el, kind);
+        if (el.opacity!=null) div.style.opacity = el.opacity;
+
+        if (kind==='text' || kind==='icon'){
+          const c = document.createElement('div');
+          c.className = 'el-content';
+          let txt = el.text || '';
+          if (el.type && el.type!=='CUSTOM') txt = resolveDynamicText(el.type, data);
+          c.textContent = txt;
+          c.style.fontSize = (el.fontSize||16)+'px';
+          c.style.color = el.color || '#000';
+          c.style.fontWeight = String(el.fontWeight || el.weight || 'normal');
+          c.style.width='100%'; c.style.height='100%';
+          c.style.display='flex'; c.style.alignItems='center';
+          c.style.justifyContent='center'; c.style.textAlign='center';
+
+          if (el.fontFamily){
+            const pref = mapToSystemFont(el.fontFamily);
+            c.style.fontFamily = `"${pref}","Liberation Sans","DejaVu Sans",sans-serif`;
+          }
+
+          const cs = getComputedStyle(c);
+          console.debug('[font-applied]', {
+            decl: {fam: el.fontFamily, wt: c.style.fontWeight},
+            comp: {fam: cs.fontFamily, wt: cs.fontWeight}
+          });
+
+          div.appendChild(c);
+        } else if (kind==='box'){
+          if (el.background || el.fill) div.style.background = el.background || el.fill;
+          if (el.borderColor) div.style.border = '1px solid '+el.borderColor;
+          if (el.borderRadius || el.radius) div.style.borderRadius = (el.borderRadius || el.radius)+'px';
+        } else if (kind==='svg' || kind==='svg-overlay' || kind==='image'){
+          let src = el.src || el.svgName || '';
+          if (src==='weather-icon'){
+            if (data.weather?.icon_url){ src = data.weather.icon_url; div.classList.add('weather-icon'); }
+            else { continue; }
+          }
+          const url = resolveUrl(src, svg_base);
+          if (url.endsWith('.svg')) await inlineSvgInto(div, url);
+          else {
+            const img = document.createElement('img');
+            img.src=url; img.style.width='100%'; img.style.height='100%'; img.style.objectFit='contain';
+            div.appendChild(img);
+          }
         }
-      } catch (error) {
-        console.error('Failed to load SVG:', url, error);
-        elDiv.innerHTML = `<div style="color: red; font-size: 12px;">SVG Error</div>`;
-      }
+
+        canvas.appendChild(div);
+      } catch(e){ console.error('Element render error', el, e); }
     }
-    
-    async function renderLayout(data) {
-      const canvas = canvasEl || document.getElementById('canvas');
-      if (!canvas) {
-        throw new Error('Canvas element not found');
-      }
-      canvas.innerHTML = '';
-      const layout = data.layout || {};
-      const elements = layout.elements || [];
-      const svg_base = data.svg_base || "";
-      
-      console.log('=== RENDER LAYOUT START ===');
-      console.log('Elements:', elements.length);
-      
-      if (data.bg_url) {
-        const bgImg = document.createElement('img');
-        bgImg.src = data.bg_url;
-        bgImg.className = 'background-image';
-        canvas.appendChild(bgImg);
-      }
-      
-      for (const el of elements) {
-        try {
-          const elDiv = document.createElement('div');
-          elDiv.className = 'el';
-          
-          const kind = (el.kind || 'box').toLowerCase();
-          elDiv.classList.add(kind);
-          
-          elDiv.style.left = (el.x || 0) + 'px';
-          elDiv.style.top = (el.y || 0) + 'px';
-          elDiv.style.width = (el.w || el.width || 100) + 'px';
-          elDiv.style.height = (el.h || el.height || 100) + 'px';
-          elDiv.style.zIndex = el.zIndex || getLayerZIndex(el, kind);
-          if (el.opacity != null) elDiv.style.opacity = el.opacity;
-          
-          if (kind === 'text' || kind === 'icon') {
-            const contentDiv = document.createElement('div');
-            contentDiv.className = 'el-content';
-            
-            let textContent = el.text || '';
-            if (el.type && el.type !== 'CUSTOM') {
-              textContent = resolveDynamicText(el.type, data);
-            }
-            contentDiv.textContent = textContent;
-            
-            contentDiv.style.fontSize = (el.fontSize || 16) + 'px';
-            contentDiv.style.color = el.color || '#000';
-            contentDiv.style.fontWeight = el.fontWeight || el.weight || 'normal';
-            contentDiv.style.width = '100%';
-            contentDiv.style.height = '100%';
-            contentDiv.style.display = 'flex';
-            contentDiv.style.alignItems = 'center';
-            contentDiv.style.justifyContent = 'center';
-            contentDiv.style.textAlign = 'center';
-            
-            if (el.fontFamily) {
-              const preferred = mapToSystemFont(el.fontFamily);
-              contentDiv.style.fontFamily = `"${preferred}", "Liberation Sans", "DejaVu Sans", sans-serif`;
-            }
-            
-            if (el.textShadow) {
-              contentDiv.style.textShadow = el.textShadow;
-            } else if (el.textShadowType && el.textShadowType !== 'none') {
-              const shadowColor = el.textShadowColor || '#000000';
-              const intensity = el.textShadowIntensity || 1;
-              const blur = Math.round(4 * intensity);
-              
-              if (el.textShadowType === 'glow') {
-                contentDiv.style.textShadow = `0 0 ${blur}px ${shadowColor}, 0 0 ${blur * 2}px ${shadowColor}, 0 0 ${blur * 3}px ${shadowColor}`;
-              } else if (el.textShadowType === 'shadow') {
-                const offset = Math.round(2 * intensity);
-                contentDiv.style.textShadow = `${offset}px ${offset}px ${blur}px ${shadowColor}`;
-              }
-            }
-            
-            elDiv.appendChild(contentDiv);
-            
-          } else if (kind === 'box') {
-            if (el.background || el.fill) elDiv.style.background = el.background || el.fill;
-            if (el.borderColor) elDiv.style.border = '1px solid ' + el.borderColor;
-            if (el.borderRadius || el.radius) elDiv.style.borderRadius = (el.borderRadius || el.radius) + 'px';
-            
-          } else if (kind === 'svg' || kind === 'svg-overlay' || kind === 'image') {
-            let src = el.src || el.svgName || '';
-            
-            if (src === 'weather-icon') {
-              if (data.weather?.icon_url) {
-                src = data.weather.icon_url;
-                elDiv.classList.add('weather-icon');
-              } else {
-                continue;
-              }
-            }
-            
-            const fullUrl = resolveUrl(src, svg_base);
-            
-            if (fullUrl.endsWith('.svg')) {
-              await inlineSvgInto(elDiv, fullUrl);
-            } else {
-              const img = document.createElement('img');
-              img.src = fullUrl;
-              img.style.width = '100%';
-              img.style.height = '100%';
-              img.style.objectFit = 'contain';
-              elDiv.appendChild(img);
-            }
-          }
-          
-          canvas.appendChild(elDiv);
-          
-        } catch (error) {
-          console.error('Error rendering element:', el, error);
-        }
-      }
-      
-      console.log('✓ Render complete');
-    }
-  </script>
-  <!-- Existing render script(s) above this line -->
-  <script>
+    console.log('✓ Render complete');
+  }
+
+  // Dynamically apply font CSS and wait before rendering
   (async () => {
-    const d = window.data || window.renderData || {};
-    const fb = (d.font_base && String(d.font_base)) || '/gcs/assets/fonts';
-    const ts = d.timestamp || Date.now();
+    if (!data) return;
+    const fb = (data.font_base && String(data.font_base)) || '/gcs/assets/fonts';
+    const ts = data.timestamp || Date.now();
     const link = document.getElementById('kin-fonts');
     if (link) link.href = fb.replace(/\/+$/,'') + '/fonts.css?v=' + ts;
 
@@ -445,7 +288,10 @@
         await document.fonts.ready;
         await new Promise(r => setTimeout(r,150));
       }
-    } catch(e){}
+    } catch(e){ console.warn('font wait skipped', e); }
+
+    await renderLayout(data);
+    document.documentElement.setAttribute('data-ready','1');
   })();
   </script>
 </body>
