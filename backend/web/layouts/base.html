@@ -8,94 +8,15 @@
       href="{{ font_base }}/fonts.css?v={{ timestamp }}"
       crossorigin="anonymous">
 <style>
-  @font-face {
-    font-family: 'Inter';
-    font-style: normal;
-    font-weight: 100 900;
-    font-display: swap;
-    src: local('Inter');
-  }
-  
-  @font-face {
-    font-family: 'Roboto';
-    font-style: normal;
-    font-weight: 400;
-    font-display: swap;
-    src: local('Roboto');
-  }
-  
-  @font-face {
-    font-family: 'Atkinson Hyperlegible';
-    font-style: normal;
-    font-weight: 400;
-    font-display: swap;
-    src: local('Atkinson Hyperlegible');
-  }
-  
-  @font-face {
-    font-family: 'Source Sans 3';
-    font-style: normal;
-    font-weight: 200 900;
-    font-display: swap;
-    src: local('Source Sans 3');
-  }
-  
-  @font-face {
-    font-family: 'Public Sans';
-    font-style: normal;
-    font-weight: 100 900;
-    font-display: swap;
-    src: local('Public Sans');
-  }
-  
-  @font-face {
-    font-family: 'Manrope';
-    font-style: normal;
-    font-weight: 200 800;
-    font-display: swap;
-    src: local('Manrope');
-  }
-  
-  @font-face {
-    font-family: 'Space Grotesk';
-    font-style: normal;
-    font-weight: 300 700;
-    font-display: swap;
-    src: local('Space Grotesk');
-  }
-  
-  @font-face {
-    font-family: 'Outfit';
-    font-style: normal;
-    font-weight: 100 900;
-    font-display: swap;
-    src: local('Outfit');
-  }
-  
-  @font-face {
-    font-family: 'Plus Jakarta Sans';
-    font-style: normal;
-    font-weight: 200 800;
-    font-display: swap;
-    src: local('Plus Jakarta Sans');
-  }
-  
-  @font-face {
-    font-family: 'Merriweather';
-    font-style: normal;
-    font-weight: 400;
-    font-display: swap;
-    src: local('Merriweather');
-  }
-  
-  @font-face {
-    font-family: 'Noto Sans';
-    font-style: normal;
-    font-weight: 400;
-    font-display: swap;
-    src: local('Noto Sans');
-  }
-  
+  <link id="kin-fonts" rel="stylesheet" href="" crossorigin="anonymous">
+<style>
+:root {
+  --textColor:#111;
+  --fontFamilyDefault:
+    "Inter","Nunito","Figtree","Atkinson Hyperlegible","Lexend","Merriweather",
+    "DejaVu Sans","Liberation Sans",Arial,Helvetica,sans-serif;
+  --fontWeightDefault:600;
+}
   * {
     margin: 0;
     padding: 0;
@@ -518,5 +439,24 @@
       console.log('✓ Render complete');
     }
   </script>
+  <!-- Existing render script(s) above this line -->
+  <script>
+  (async () => {
+    const d = window.data || window.renderData || {};
+    const fb = (d.font_base && String(d.font_base)) || '/gcs/assets/fonts';
+    const ts = d.timestamp || Date.now();
+    const link = document.getElementById('kin-fonts');
+    if (link) link.href = fb.replace(/\/+$/,'') + '/fonts.css?v=' + ts;
+
+    try {
+      if (document.fonts && document.fonts.ready) {
+        await document.fonts.ready;
+        await new Promise(r => setTimeout(r,150));
+      }
+    } catch(e){}
+  })();
+  </script>
+</body>
+</html>
 </body>
 </html>
