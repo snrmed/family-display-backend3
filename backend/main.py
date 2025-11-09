@@ -334,7 +334,6 @@ async def get_weather(city: str) -> dict:
                         tomorrow_data["desc_extended"] = tomorrow_verbose
 
                     return {
-                        "temp": current_temp,
                         "humidity": humidity,
                         "rain": rain_amount,
                         "wind": wind_speed,
