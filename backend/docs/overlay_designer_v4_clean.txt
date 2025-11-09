@@ -1,0 +1,2374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kin:D Designer v4</title>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<link rel="stylesheet" href="/fonts/fonts.css">
+<style>
+:root{
+  --bg:#0f0f0f;
+  --panel:#1a1a1a;
+  --panel-hover:#212121;
+  --border:#2d2d2d;
+  --text:#e8e8e8;
+  --text-muted:#888;
+  --brand:#2d8cf0;
+  --brand-hover:#1a6ec0;
+  --success:#27ae60;
+  --warning:#f39c12;
+  --danger:#e74c3c;
+  --grid:#1a1a1a;
+  --radius:8px;
+  --shadow:0 4px 16px rgba(0,0,0,0.4);
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+
+body{
+  font-family:var(--font-ui, -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif);
+  background:var(--bg);
+  color:var(--text);
+  overflow:hidden;
+  height:100vh;
+}
+
+/* === HEADER === */
+.header{
+  background:var(--panel);
+  border-bottom:2px solid var(--border);
+  padding:16px 24px;
+  display:flex;
+  align-items:center;
+  gap:20px;
+}
+
+.brand{
+  display:flex;
+  align-items:baseline;
+  gap:8px;
+  font-size:22px;
+  font-weight:700;
+}
+
+.brand-logo{
+  color:var(--brand);
+}
+
+.brand-name{
+  color:var(--text);
+}
+
+.brand-tag{
+  font-size:13px;
+  color:var(--text-muted);
+  font-weight:400;
+}
+
+.device-badge{
+  background:var(--panel-hover);
+  padding:6px 12px;
+  border-radius:var(--radius);
+  font-size:12px;
+  color:var(--text-muted);
+  border:1px solid var(--border);
+}
+
+.device-badge strong{
+  color:var(--brand);
+  margin-left:4px;
+}
+
+.header-actions{
+  margin-left:auto;
+  display:flex;
+  gap:12px;
+}
+
+.btn{
+  padding:8px 16px;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  background:var(--panel-hover);
+  color:var(--text);
+  font-size:13px;
+  cursor:pointer;
+  transition:all 0.2s;
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+}
+
+.btn:hover{
+  background:var(--brand);
+  border-color:var(--brand);
+}
+
+.btn:disabled{
+  opacity:0.5;
+  cursor:not-allowed;
+}
+
+.btn-primary{
+  background:var(--brand);
+  border-color:var(--brand);
+}
+
+.btn-primary:hover{
+  background:var(--brand-hover);
+}
+
+/* === LAYOUT === */
+.container{
+  display:flex;
+  height:calc(100vh - 70px);
+}
+
+/* === SIDEBAR === */
+.sidebar{
+  width:280px;
+  background:var(--panel);
+  border-right:2px solid var(--border);
+  overflow-y:auto;
+  padding:20px;
+}
+
+.section{
+  margin-bottom:20px;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  background:var(--bg);
+  overflow:hidden;
+}
+
+.section.collapsed .section-content{
+  display:none;
+}
+
+.section.collapsed .section-toggle::before{
+  content:'▶';
+}
+
+.section-header{
+  padding:12px 16px;
+  background:var(--panel-hover);
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  user-select:none;
+}
+
+.section-header:hover{
+  background:var(--border);
+}
+
+.section-title{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  font-weight:600;
+  font-size:13px;
+  text-transform:uppercase;
+  letter-spacing:0.5px;
+}
+
+.section-icon{
+  font-size:16px;
+}
+
+.section-toggle{
+  color:var(--text-muted);
+  font-size:12px;
+}
+
+.section-toggle::before{
+  content:'▼';
+}
+
+.section-content{
+  padding:16px;
+}
+
+.form-group{
+  margin-bottom:12px;
+}
+
+.form-label{
+  display:block;
+  font-size:12px;
+  color:var(--text-muted);
+  margin-bottom:6px;
+  text-transform:uppercase;
+  letter-spacing:0.5px;
+}
+
+.form-input,.form-select{
+  width:100%;
+  padding:8px 12px;
+  background:var(--panel-hover);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  color:var(--text);
+  font-size:13px;
+}
+
+.form-input:focus,.form-select:focus{
+  outline:none;
+  border-color:var(--brand);
+}
+
+.quick-grid{
+  display:grid;
+  grid-template-columns:repeat(2,1fr);
+  gap:8px;
+}
+
+.quick-btn{
+  padding:16px;
+  background:var(--panel-hover);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  cursor:pointer;
+  text-align:center;
+  transition:all 0.2s;
+}
+
+.quick-btn:hover{
+  background:var(--border);
+  border-color:var(--brand);
+}
+
+.quick-icon{
+  font-size:24px;
+  margin-bottom:8px;
+}
+
+.quick-label{
+  font-size:12px;
+  color:var(--text-muted);
+}
+
+.value-display{
+  float:right;
+  color:var(--brand);
+  font-weight:600;
+}
+
+.row{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+}
+
+/* === CANVAS === */
+.canvas-area{
+  flex:1;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:var(--bg);
+  position:relative;
+}
+
+.canvas-container{
+  position:relative;
+  width:800px;
+  height:480px;
+}
+
+.canvas{
+  width:800px;
+  height:480px;
+  background:linear-gradient(135deg,#1e3c72 0%,#2a5298 50%,#7e22ce 100%);
+  background-size:cover;
+  background-position:center;
+  position:relative;
+  box-shadow:var(--shadow);
+}
+
+.grid-overlay{
+  position:absolute;
+  top:0;
+  left:0;
+  width:800px;
+  height:480px;
+  pointer-events:none;
+  display:none;
+}
+
+.grid-overlay.visible{
+  display:block;
+}
+
+.grid-overlay line{
+  stroke:rgba(255,255,255,0.1);
+  stroke-width:1;
+}
+
+/* === ELEMENTS === */
+.el{
+  position:absolute;
+  cursor:move;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+.el.selected{
+  outline:2px solid var(--brand);
+}
+
+.el.text,.el.icon{
+  z-index:30;
+  white-space:pre-wrap;
+  word-wrap:break-word;
+}
+
+.el.box{
+  z-index:15;
+  border:1px solid transparent;
+}
+
+.el.svg-overlay{
+  z-index:20;
+}
+
+.el-content{
+  width:100%;
+  height:100%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+  user-select:none;
+}
+
+.resize-handle{
+  position:absolute;
+  width:12px;
+  height:12px;
+  background:var(--brand);
+  border:2px solid #fff;
+  border-radius:50%;
+  z-index:1000;
+}
+
+.resize-handle.tl{top:-6px;left:-6px;cursor:nw-resize}
+.resize-handle.tr{top:-6px;right:-6px;cursor:ne-resize}
+.resize-handle.bl{bottom:-6px;left:-6px;cursor:sw-resize}
+.resize-handle.br{bottom:-6px;right:-6px;cursor:se-resize}
+.resize-handle.t{top:-6px;left:50%;transform:translateX(-50%);cursor:n-resize}
+.resize-handle.b{bottom:-6px;left:50%;transform:translateX(-50%);cursor:s-resize}
+.resize-handle.l{left:-6px;top:50%;transform:translateY(-50%);cursor:w-resize}
+.resize-handle.r{right:-6px;top:50%;transform:translateY(-50%);cursor:e-resize}
+
+/* === INSPECTOR === */
+.inspector{
+  width:300px;
+  background:var(--panel);
+  border-left:2px solid var(--border);
+  overflow-y:auto;
+  padding:20px;
+}
+
+.inspector-empty{
+  text-align:center;
+  padding:60px 20px;
+  color:var(--text-muted);
+}
+
+.inspector-empty-icon{
+  font-size:48px;
+  margin-bottom:16px;
+}
+
+.panel{
+  margin-bottom:20px;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  background:var(--bg);
+  padding:16px;
+}
+
+.panel-title{
+  font-size:14px;
+  font-weight:600;
+  margin-bottom:16px;
+  padding-bottom:8px;
+  border-bottom:1px solid var(--border);
+}
+
+.hidden{
+  display:none!important;
+}
+
+/* === MODAL === */
+.modal{
+  position:fixed;
+  top:0;
+  left:0;
+  width:100%;
+  height:100%;
+  background:rgba(0,0,0,0.85);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  z-index:10000;
+}
+
+.modal-box{
+  background:var(--panel);
+  border:2px solid var(--border);
+  border-radius:12px;
+  max-width:600px;
+  width:90%;
+  max-height:80vh;
+  overflow-y:auto;
+  box-shadow:0 20px 60px rgba(0,0,0,0.5);
+}
+
+.modal-header{
+  padding:24px;
+  border-bottom:2px solid var(--border);
+  display:flex;
+  align-items:center;
+  gap:16px;
+}
+
+.modal-icon{
+  font-size:32px;
+}
+
+.modal-title h2{
+  font-size:20px;
+  margin-bottom:4px;
+}
+
+.modal-title p{
+  font-size:13px;
+  color:var(--text-muted);
+}
+
+.modal-body{
+  padding:24px;
+}
+
+.modal-footer{
+  padding:16px 24px;
+  border-top:2px solid var(--border);
+  display:flex;
+  gap:12px;
+  justify-content:flex-end;
+}
+
+.grid-selector{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:12px;
+}
+
+.grid-item{
+  padding:20px;
+  background:var(--bg);
+  border:2px solid var(--border);
+  border-radius:var(--radius);
+  cursor:pointer;
+  text-align:center;
+  transition:all 0.2s;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+}
+
+.grid-item:hover{
+  border-color:var(--brand);
+  background:var(--panel-hover);
+}
+
+.grid-item-preview{
+  width:100%;
+  height:90px;
+  background:var(--panel-hover);
+  border-radius:6px;
+  margin-bottom:8px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  overflow:hidden;
+}
+
+.grid-item-preview img{
+  max-width:100%;
+  max-height:100%;
+  object-fit:contain;
+}
+
+.grid-item-preview.grid-item-fallback{
+  font-size:28px;
+  color:var(--text-muted);
+}
+
+.grid-item-label{
+  font-size:11px;
+  color:var(--text-muted);
+}
+
+/* === STATUS === */
+.status{
+  position:fixed;
+  bottom:20px;
+  right:20px;
+  background:var(--panel);
+  border:2px solid var(--border);
+  padding:12px 20px;
+  border-radius:var(--radius);
+  display:flex;
+  align-items:center;
+  gap:8px;
+  font-size:13px;
+  box-shadow:var(--shadow);
+  z-index:999;
+}
+
+.status-dot{
+  width:8px;
+  height:8px;
+  border-radius:50%;
+  background:var(--success);
+}
+
+.status-dot.error{
+  background:var(--danger);
+}
+</style>
+</head>
+<body>
+
+<!-- SETUP MODAL -->
+<div class="modal" id="setupModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-icon">🚀</div>
+      <div class="modal-title">
+        <h2>Welcome to Kin:D Designer</h2>
+        <p>Enter your device ID to begin</p>
+      </div>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Device ID</label>
+        <input type="text" class="form-input" id="setupDeviceId" placeholder="e.g., familydisplay">
+      </div>
+      <p style="color:var(--text-muted);font-size:12px;margin-top:8px;">
+        This ID identifies your display device and must match the ID configured on your physical display.
+      </p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="completeSetup()" id="setupContinueBtn">Continue</button>
+    </div>
+  </div>
+</div>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="brand">
+    <span class="brand-logo">🎨</span>
+    <span class="brand-name">Kin:D Designer</span>
+    <span class="brand-tag">v4</span>
+  </div>
+  
+  <div class="device-badge">
+    Device:<strong id="deviceName">-</strong>
+  </div>
+  
+  <div class="header-actions">
+    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;">
+      <input type="checkbox" id="gridToggle" style="cursor:pointer;">
+      Grid
+    </label>
+    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;">
+      <input type="checkbox" id="snapToggle" checked style="cursor:pointer;">
+      Snap
+    </label>
+    <button class="btn" id="undoBtn">↶ Undo</button>
+    <button class="btn" id="redoBtn">↷ Redo</button>
+    <button class="btn" id="exportBtn">📥 Export JSON</button>
+    <button class="btn" id="pngBtn">🖼️ Export PNG</button>
+    <button class="btn btn-primary" id="saveBtn">💾 Save Layout</button>
+  </div>
+</div>
+
+<div class="container">
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    
+    <!-- DEVICE SETTINGS -->
+    <div class="section">
+      <div class="section-header" onclick="toggleSection(this)">
+        <div class="section-title">
+          <span class="section-icon">⚙️</span>
+          Device Settings
+        </div>
+        <span class="section-toggle"></span>
+      </div>
+      <div class="section-content">
+        <div class="form-group">
+          <label class="form-label">Device ID</label>
+          <input type="text" class="form-input" id="deviceIdInput" readonly>
+        </div>
+        <div class="form-group">
+          <label class="form-label">City</label>
+          <select class="form-select" id="citySelect">
+            <option value="Darwin">Darwin, NT</option>
+            <option value="Adelaide">Adelaide, SA</option>
+            <option value="Brisbane">Brisbane, QLD</option>
+            <option value="Canberra">Canberra, ACT</option>
+            <option value="Hobart">Hobart, TAS</option>
+            <option value="Melbourne">Melbourne, VIC</option>
+            <option value="Perth">Perth, WA</option>
+            <option value="Sydney">Sydney, NSW</option>
+          </select>
+          <p class="form-label" id="timezoneHint" style="margin-top:4px;color:var(--brand);"></p>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Weather Icon Theme</label>
+          <select class="form-select" id="iconThemeSelect">
+            <option value="happy-skies">Happy Skies</option>
+            <option value="playful-weather">Playful Weather</option>
+            <option value="soft-icons">Soft Icons</option>
+            <option value="flat-minimal">Flat Minimal</option>
+          </select>
+        </div>
+        <button class="btn" id="saveDeviceBtn" style="width:100%">Save Settings</button>
+      </div>
+    </div>
+    
+    <!-- QUICK ADD -->
+    <div class="section">
+      <div class="section-header" onclick="toggleSection(this)">
+        <div class="section-title">
+          <span class="section-icon">➕</span>
+          Quick Add
+        </div>
+        <span class="section-toggle"></span>
+      </div>
+      <div class="section-content">
+        <div class="quick-grid">
+          <div class="quick-btn" onclick="quickAddText()">
+            <div class="quick-icon">T</div>
+            <div class="quick-label">Text</div>
+          </div>
+          <div class="quick-btn" onclick="quickAddBox()">
+            <div class="quick-icon">▢</div>
+            <div class="quick-label">Box</div>
+          </div>
+          <div class="quick-btn" onclick="showSVGModal()" id="quickAddSvg">
+            <div class="quick-icon">★</div>
+            <div class="quick-label">SVG</div>
+          </div>
+          <div class="quick-btn" onclick="showIconModal()" id="quickAddIcon">
+            <div class="quick-icon">🌤</div>
+            <div class="quick-label">Weather</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- PRESETS -->
+    <div class="section">
+      <div class="section-header" onclick="toggleSection(this)">
+        <div class="section-title">
+          <span class="section-icon">🎨</span>
+          Layout Presets
+        </div>
+        <span class="section-toggle"></span>
+      </div>
+      <div class="section-content">
+        <div class="form-group">
+          <select class="form-select" id="presetSelect">
+            <option value="">-- Select Preset --</option>
+          </select>
+        </div>
+        <button class="btn" id="loadPresetBtn" style="width:100%" disabled>
+          Load Preset
+        </button>
+      </div>
+    </div>
+    
+    <!-- BACKGROUND -->
+    <div class="section collapsed">
+      <div class="section-header" onclick="toggleSection(this)">
+        <div class="section-title">
+          <span class="section-icon">🖼️</span>
+          Background
+        </div>
+        <span class="section-toggle"></span>
+      </div>
+      <div class="section-content">
+        <div class="form-group">
+          <label class="form-label">Pexels Category</label>
+          <select class="form-select" id="pexelsCategorySelect" onchange="loadPexelsBackground()">
+    <option value="abstract">Abstract</option>
+    <option value="geometric">Geometric</option>
+    <option value="paper-collage">Paper Collage</option>
+    <option value="kids-shapes">Kids Shapes</option>
+    <option value="minimal">Minimal</option>
+</select>
+        </div>
+        <button class="btn" onclick="loadPexelsBackground()" style="width:100%">🔄 Refresh Background</button>
+      </div>
+    </div>
+    
+  </div>
+  
+  <!-- CANVAS -->
+  <div class="canvas-area">
+    <div class="canvas-container">
+      <div class="canvas" id="canvas">
+        <!-- Elements will be added here -->
+      </div>
+      <svg class="grid-overlay" id="gridOverlay">
+        <!-- Grid lines will be drawn here -->
+      </svg>
+    </div>
+  </div>
+  
+  <!-- INSPECTOR -->
+  <div class="inspector">
+    <div id="inspectorEmpty" class="inspector-empty">
+      <div class="inspector-empty-icon">👆</div>
+      <p>Select an element to edit its properties</p>
+    </div>
+    
+    <div id="inspectorContent" class="hidden">
+      <!-- Transform Panel -->
+      <div class="panel">
+        <div class="panel-title">📐 Transform</div>
+        <div class="row">
+          <div>
+            <label class="form-label">X</label>
+            <input type="number" id="elX" class="form-input" value="0" onchange="updateElPosition()">
+          </div>
+          <div>
+            <label class="form-label">Y</label>
+            <input type="number" id="elY" class="form-input" value="0" onchange="updateElPosition()">
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label class="form-label">Width</label>
+            <input type="number" id="elW" class="form-input" value="100" onchange="updateElSize()">
+          </div>
+          <div>
+            <label class="form-label">Height</label>
+            <input type="number" id="elH" class="form-input" value="100" onchange="updateElSize()">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Opacity <span class="value-display" id="elOpacityValue">1.00</span></label>
+          <input type="range" id="elOpacity" min="0" max="1" step="0.1" value="1" oninput="updateElOpacity()">
+        </div>
+        <div class="row">
+          <button class="btn" onclick="deleteElement()">🗑️ Delete</button>
+          <button class="btn" onclick="duplicateElement()">📋 Duplicate</button>
+        </div>
+      </div>
+      
+      <!-- Text Panel -->
+      <div class="panel" id="textPanel" style="display:none">
+        <div class="panel-title">✏️ Text</div>
+        <div class="form-group">
+          <label class="form-label">Type</label>
+          <select class="form-select" id="textType" onchange="updateTextType()">
+            <option value="CITY">City Name</option>
+            <option value="DATE">Today's Date</option>
+            <option value="JOKE">Dad Joke</option>
+            <option value="WEATHER_MINMAX">Min/Max Temp</option>
+            <option value="WEATHER_DESC">Weather Short Forecast</option>
+            <option value="WEATHER_DESC_EXTENDED">Weather Forecast</option>
+            <option value="HUMIDITY">Humidity</option>
+            <option value="RAIN">Rain</option>
+            <option value="WIND">Wind</option>
+            <option value="TOMORROW_TEMP">Tomorrow's Min/Max</option>
+            <option value="TOMORROW_DESC">Tomorrow's Short Forecast</option>
+            <option value="TOMORROW_DESC_EXTENDED">Tomorrow's Forecast</option>
+            <option value="CUSTOM">Custom Message</option>
+          </select>
+        </div>
+        <div class="form-group" id="customTextGroup">
+          <label class="form-label">Content</label>
+          <input type="text" class="form-input" id="textContent" placeholder="Enter text" oninput="updateTextContent()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Font Size <span class="value-display" id="fontSizeValue">24px</span></label>
+          <input type="range" id="fontSize" min="10" max="120" value="24" oninput="updateTextStyle()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Color</label>
+          <input type="color" id="textColor" value="#ffffff" onchange="updateTextStyle()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Font Family</label>
+          <select class="form-select" id="fontFamily" onchange="updateTextStyle()"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Font Weight</label>
+          <select class="form-select" id="fontWeight" onchange="updateTextStyle()">
+            <option value="400">Normal</option>
+            <option value="600">Semi-Bold</option>
+            <option value="700">Bold</option>
+            <option value="900">Black</option>
+          </select>
+        </div>
+      
+        <div class="form-group">
+          <label class="form-label">Text Effect</label>
+          <select class="form-select" id="textShadowType" onchange="updateTextShadow()">
+            <option value="none">None</option>
+            <option value="shadow">Shadow</option>
+            <option value="glow">Glow</option>
+          </select>
+        </div>
+
+        <div id="textShadowControls" style="display: none;">
+          <div class="form-group">
+            <label class="form-label">Effect Color</label>
+            <input type="color" id="textShadowColor" class="form-input" value="#000000" onchange="updateTextShadow()">
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">Intensity <span class="value-display" id="textShadowIntensityValue">1</span></label>
+            <input type="range" id="textShadowIntensity" min="0" max="3" step="0.1" value="1" class="form-range" oninput="updateTextShadow()">
+          </div>
+        </div>
+</div>
+      
+      <!-- Box Panel -->
+      <div class="panel" id="boxPanel" style="display:none">
+        <div class="panel-title">▢ Box Style</div>
+        <div class="form-group">
+          <label class="form-label">Background</label>
+          <input type="color" id="boxBg" value="#ffffff" onchange="updateBoxStyle()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Border Color</label>
+          <input type="color" id="boxBorder" value="#000000" onchange="updateBoxStyle()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Border Radius <span class="value-display" id="borderRadiusValue">12px</span></label>
+          <input type="range" id="borderRadius" min="0" max="50" value="12" oninput="updateBoxStyle()">
+        </div>
+      </div>
+      
+      <!-- SVG Panel -->
+      <div class="panel" id="svgPanel" style="display:none">
+        <div class="panel-title">★ SVG</div>
+        <p style="color:var(--text-muted);font-size:12px;">
+          SVG elements are vector graphics that scale without pixelation.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SVG MODAL -->
+<div class="modal hidden" id="svgModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-icon">★</div>
+      <div class="modal-title">
+        <h2>Choose SVG</h2>
+        <p>Select a graphic to add</p>
+      </div>
+    </div>
+    <div class="modal-body">
+      <div class="grid-selector" id="svgGrid">
+        <!-- SVGs will be loaded here -->
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('svgModal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- WEATHER ICON MODAL -->
+<div class="modal hidden" id="iconModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-icon">🌤</div>
+      <div class="modal-title">
+        <h2>Add Weather Icon</h2>
+        <p>Icon updates automatically based on conditions</p>
+      </div>
+    </div>
+    <div class="modal-body">
+      <p style="color:var(--text-muted);font-size:13px;margin-bottom:16px;">
+        Weather icons show current conditions and use the theme selected in Device Settings.
+      </p>
+      <button class="btn btn-primary" onclick="addWeatherIcon()" style="width:100%">
+        Add Weather Icon
+      </button>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('iconModal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- STATUS -->
+<div class="status">
+  <span class="status-dot" id="statusDot"></span>
+  <span id="statusText">Ready</span>
+</div>
+
+<script>
+// ========================================================================
+// CONSTANTS & STATE
+// ========================================================================
+
+const GRID_SIZE = 20;
+const CANVAS_WIDTH = 800;
+const CANVAS_HEIGHT = 480;
+
+const FONT_OPTIONS = [
+  { value: 'Inter', label: 'Inter (Sans)' },
+  { value: 'Roboto', label: 'Roboto (Sans)' },
+  { value: 'Public Sans', label: 'Public Sans (Sans)' },
+  { value: 'Source Sans 3', label: 'Source Sans 3 (Sans)' },
+  { value: 'Space Grotesk', label: 'Space Grotesk (Display)' },
+  { value: 'Outfit', label: 'Outfit (Display)' },
+  { value: 'Plus Jakarta Sans', label: 'Plus Jakarta Sans (Sans)' },
+  { value: 'Atkinson Hyperlegible', label: 'Atkinson Hyperlegible (Readable)' },
+  { value: 'Manrope', label: 'Manrope (Sans)' },
+  { value: 'Noto Sans', label: 'Noto Sans (Sans)' },
+  { value: 'Merriweather', label: 'Merriweather (Serif)' }
+];
+
+const FONT_WHITELIST = new Set(FONT_OPTIONS.map(font => font.value));
+const DEFAULT_FONT_FAMILY = FONT_OPTIONS[0].value;
+
+// Australian cities with timezones
+const AUSTRALIAN_CITIES = {
+  'Darwin': { timezone: 'Australia/Darwin', display: 'Darwin, NT' },
+  'Adelaide': { timezone: 'Australia/Adelaide', display: 'Adelaide, SA' },
+  'Brisbane': { timezone: 'Australia/Brisbane', display: 'Brisbane, QLD' },
+  'Canberra': { timezone: 'Australia/Canberra', display: 'Canberra, ACT' },
+  'Hobart': { timezone: 'Australia/Hobart', display: 'Hobart, TAS' },
+  'Melbourne': { timezone: 'Australia/Melbourne', display: 'Melbourne, VIC' },
+  'Perth': { timezone: 'Australia/Perth', display: 'Perth, WA' },
+  'Sydney': { timezone: 'Australia/Sydney', display: 'Sydney, NSW' }
+};
+
+let deviceId = '';
+let deviceConfig = null;
+let currentLayout = null;
+let renderData = null;
+let selectedEl = null;
+let svgLibrary = [];
+let presets = [];
+let availableInfoTypes = [];
+
+function addInfoType(type) {
+  if (!type) return;
+  if (!availableInfoTypes.includes(type)) {
+    availableInfoTypes.push(type);
+  }
+}
+
+let isDragging = false;
+let isResizing = false;
+let resizeHandle = '';
+let dragStartX = 0;
+let dragStartY = 0;
+let elStartX = 0;
+let elStartY = 0;
+let elStartW = 0;
+let elStartH = 0;
+
+let snapEnabled = true;
+let undoStack = [];
+let redoStack = [];
+
+// DOM Elements
+const canvas = document.getElementById('canvas');
+const gridOverlay = document.getElementById('gridOverlay');
+const gridToggle = document.getElementById('gridToggle');
+const snapToggle = document.getElementById('snapToggle');
+const deviceIdInput = document.getElementById('deviceIdInput');
+const deviceName = document.getElementById('deviceName');
+const citySelect = document.getElementById('citySelect');
+const timezoneHint = document.getElementById('timezoneHint');
+const iconThemeSelect = document.getElementById('iconThemeSelect');
+
+// ========================================================================
+// INITIALIZATION
+// ========================================================================
+
+async function init() {
+  console.log('🎨 Initializing Kin:D Designer v4...');
+
+  drawGrid();
+  populateFontOptions();
+  setupEventListeners();
+  
+  // Always show setup modal on load
+  showSetupModal();
+}
+
+function populateFontOptions() {
+  const select = document.getElementById('fontFamily');
+  if (!select) return;
+
+  select.innerHTML = '';
+
+  FONT_OPTIONS.forEach(font => {
+    const option = document.createElement('option');
+    option.value = font.value;
+    option.textContent = font.label;
+    option.style.fontFamily = "'" + font.value + "', sans-serif";
+    select.appendChild(option);
+  });
+
+  select.value = DEFAULT_FONT_FAMILY;
+}
+
+function sanitizeFontFamily(fontFamily) {
+  if (!fontFamily) return DEFAULT_FONT_FAMILY;
+  const normalized = fontFamily.replace(/["']/g, '').trim();
+  return FONT_WHITELIST.has(normalized) ? normalized : DEFAULT_FONT_FAMILY;
+}
+
+function showSetupModal() {
+  document.getElementById('setupModal').classList.remove('hidden');
+  document.getElementById('setupDeviceId').focus();
+  
+  // Pre-fill if exists
+  const savedDeviceId = localStorage.getItem('kind_device_id');
+  if (savedDeviceId) {
+    document.getElementById('setupDeviceId').value = savedDeviceId;
+  }
+}
+
+async function completeSetup() {
+  const inputDeviceId = document.getElementById('setupDeviceId').value.trim();
+  
+  if (!inputDeviceId) {
+    alert('Please enter a device ID');
+    return;
+  }
+  
+  deviceId = inputDeviceId;
+  localStorage.setItem('kind_device_id', deviceId);
+  
+  deviceIdInput.value = deviceId;
+  deviceName.textContent = deviceId;
+  
+  document.getElementById('setupModal').classList.add('hidden');
+  
+  try {
+    // Load device config first
+    await loadDeviceConfig();
+    
+    // Then load other resources
+    await Promise.all([
+      loadSVGLibrary(),
+      loadPresets(),
+      fetchRenderData()
+    ]);
+    
+    // Load current layout if exists
+    if (renderData?.layout) {
+      await loadLayout(renderData.layout);
+    }
+    
+    // Load pexels background
+    await loadPexelsBackground();
+    
+    updateStatus('✓ Ready', 'success');
+    console.log('✓ Initialization complete');
+    
+  } catch (error) {
+    console.error('Initialization error:', error);
+    updateStatus('⚠️ Connection error', 'error');
+  }
+}
+
+// ========================================================================
+// DEVICE CONFIG
+// ========================================================================
+
+async function loadDeviceConfig() {
+  try {
+    const response = await fetch(`/v1/devices/${deviceId}/config`);
+    
+    if (response.ok) {
+      deviceConfig = await response.json();
+      console.log('Loaded device config:', deviceConfig);
+    } else {
+      // Create default config
+      deviceConfig = {
+        deviceId: deviceId,
+        location: {
+          city: 'Darwin',
+          timezone: 'Australia/Darwin'
+        },
+        preferences: {
+          iconTheme: 'happy-skies'
+        }
+      };
+      console.log('Created default device config');
+    }
+    
+    // Update UI
+    citySelect.value = deviceConfig.location.city;
+    updateTimezoneHint();
+    iconThemeSelect.value = deviceConfig.preferences.iconTheme || 'happy-skies';
+    
+  } catch (error) {
+    console.warn('Could not load device config:', error);
+    // Use defaults
+    deviceConfig = {
+      deviceId: deviceId,
+      location: {
+        city: 'Darwin',
+        timezone: 'Australia/Darwin'
+      },
+      preferences: {
+        iconTheme: 'happy-skies'
+      }
+    };
+  }
+}
+
+async function saveDeviceConfig() {
+  const city = citySelect.value;
+  const cityData = AUSTRALIAN_CITIES[city];
+  
+  deviceConfig = {
+    deviceId: deviceId,
+    location: {
+      city: city,
+      timezone: cityData.timezone
+    },
+    preferences: {
+      iconTheme: iconThemeSelect.value
+    }
+  };
+  
+  try {
+    const response = await fetch(`/v1/devices/${deviceId}/config`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(deviceConfig)
+    });
+    
+    if (response.ok) {
+      updateStatus('✓ Device settings saved', 'success');
+      
+      // Reload render data with new location
+      await fetchRenderData();
+      applyDynamicText();
+    } else {
+      throw new Error('Failed to save');
+    }
+  } catch (error) {
+    console.error('Save device config error:', error);
+    updateStatus('⚠️ Failed to save settings', 'error');
+  }
+}
+
+function updateTimezoneHint() {
+  const city = citySelect.value;
+  const cityData = AUSTRALIAN_CITIES[city];
+  timezoneHint.textContent = `Timezone: ${cityData.timezone}`;
+}
+
+// ========================================================================
+// PEXELS BACKGROUND
+// ========================================================================
+
+async function loadPexelsBackground() {
+  try {
+    const category = document.getElementById('pexelsCategorySelect').value;
+    const response = await fetch(`/v1/render_data?device=${deviceId}`);
+    
+    if (response.ok) {
+      const data = await response.json();
+      
+      // Use background from render data if available
+      if (data.bg_url) {
+        canvas.style.backgroundImage = `url(${data.bg_url})`;
+        console.log('✓ Loaded Pexels background:', data.bg_url);
+      }
+    }
+  } catch (error) {
+    console.error('Failed to load Pexels background:', error);
+  }
+}
+
+// ========================================================================
+// RENDER DATA
+// ========================================================================
+
+async function fetchRenderData() {
+  try {
+    const response = await fetch(`/v1/render_data?device=${deviceId}`);
+    if (!response.ok) throw new Error('Failed to fetch render data');
+    
+    renderData = await response.json();
+    console.log('Render data loaded:', renderData);
+    
+    // Build available info types
+    availableInfoTypes = ['CUSTOM'];
+
+    if (renderData.weather) {
+      addInfoType('TEMP');
+      addInfoType('CITY');
+      addInfoType('WEATHER_DESC');
+
+      if (renderData.weather.temp_min != null && renderData.weather.temp_max != null) {
+        addInfoType('WEATHER_MINMAX');
+      }
+
+      if (renderData.weather.desc_extended) {
+        addInfoType('WEATHER_DESC_EXTENDED');
+      }
+
+      if (renderData.weather.tomorrow) {
+        if (renderData.weather.tomorrow.desc) {
+          addInfoType('TOMORROW_DESC');
+        }
+        if (renderData.weather.tomorrow.temp_min != null && renderData.weather.tomorrow.temp_max != null) {
+          addInfoType('TOMORROW_TEMP');
+        }
+      }
+
+      if (renderData.weather.humidity != null) addInfoType('HUMIDITY');
+      if (renderData.weather.rain != null) addInfoType('RAIN');
+      if (renderData.weather.wind != null) addInfoType('WIND');
+    }
+
+    if (renderData.date) addInfoType('DATE');
+    if (renderData.dad_joke) addInfoType('JOKE');
+
+    updateInfoTypeDropdown();
+
+    applyDynamicText();
+
+    return renderData;
+    
+  } catch (error) {
+    console.error('Fetch render data error:', error);
+    throw error;
+  }
+}
+
+function updateInfoTypeDropdown() {
+  const select = document.getElementById('textType');
+  if (!select) return;
+  
+  const currentValue = select.value;
+  select.innerHTML = '';
+  
+  const typeLabels = {
+    
+    'CUSTOM': 'Custom Text',
+    'TEMP': 'Temperature',
+    'WEATHER_MINMAX': 'Min / Max Temp',
+    'CITY': 'City Name',
+    'WEATHER_DESC': 'Weather Description',
+    'WEATHER_DESC_EXTENDED': 'Weather Extended',
+    'TOMORROW_DESC': 'Tomorrow Forecast',
+    'TOMORROW_TEMP': 'Tomorrow Min/Max',
+    'DATE': 'Date',
+    'JOKE': 'Dad Joke',
+    'HUMIDITY': 'Humidity',
+    'RAIN': 'Rain',
+    'WIND': 'Wind'
+  };
+  
+  for (const type of availableInfoTypes) {
+    const option = document.createElement('option');
+    option.value = type;
+    option.textContent = typeLabels[type] || type;
+    select.appendChild(option);
+  }
+  
+  if (currentValue && availableInfoTypes.includes(currentValue)) {
+    select.value = currentValue;
+  }
+}
+
+function getDynamicText(type) {
+  const weather = renderData?.weather;
+  
+  switch (type) {
+    case 'TEMP':
+      return weather?.temp != null ? `${weather.temp}°C` : '--°C';
+    
+    case 'WEATHER_MINMAX':
+      if (weather?.temp_min != null && weather?.temp_max != null) {
+        return `${weather.temp_min}° / ${weather.temp_max}°`;
+      }
+      return '--° / --°';
+    
+    case 'CITY':
+      return weather?.city || deviceConfig?.location?.city || 'City';
+    
+    case 'WEATHER_DESC':
+      return weather?.desc || 'Sunny';
+    
+    case 'DATE':
+      return renderData?.date || '';
+    
+    case 'JOKE':
+      return renderData?.dad_joke || 'No joke today.';
+    
+    case 'WEATHER_DESC_EXTENDED':
+      return weather?.desc_extended || weather?.desc || 'Sunny, 28°C with clear skies';
+    
+    case 'TOMORROW_DESC':
+      return weather?.tomorrow?.desc || 'Partly cloudy, 24°-31°C with 40% chance of rain';
+    
+    case 'TOMORROW_TEMP':
+      if (weather?.tomorrow?.temp_min != null && weather?.tomorrow?.temp_max != null) {
+        return `${weather.tomorrow.temp_min}° / ${weather.tomorrow.temp_max}°`;
+      }
+      return '--° / --°';
+    
+    case 'HUMIDITY':
+      return weather?.humidity != null ? `Humidity: ${weather.humidity}%` : 'Humidity: --%';
+    
+    case 'RAIN':
+      return weather?.rain != null ? `Rain: ${weather.rain}mm` : 'Rain: --mm';
+    
+    case 'WIND':
+      return weather?.wind != null ? `Wind: ${weather.wind}km/h` : 'Wind: --km/h';
+    
+    default:
+      return '';
+  }
+}
+
+function applyDynamicText() {
+  canvas.querySelectorAll('.el.text, .el.icon').forEach(el => {
+    const type = el.dataset.type;
+    if (type && type !== 'CUSTOM') {
+      const text = getDynamicText(type);
+      const content = el.querySelector('.el-content');
+      if (content) content.textContent = text;
+    }
+  });
+}
+
+// ========================================================================
+// SVG & PRESETS
+// ========================================================================
+
+async function loadSVGLibrary() {
+  try {
+    const response = await fetch('/api/list-svgs');
+    if (response.ok) {
+      const data = await response.json();
+      svgLibrary = data.svgs || [];
+      console.log(`Loaded ${svgLibrary.length} SVGs`);
+      document.getElementById('quickAddSvg').disabled = false;
+    }
+  } catch (error) {
+    console.warn('Could not load SVG library:', error);
+  }
+}
+
+async function loadPresets() {
+  try {
+    const response = await fetch('/api/list-presets');
+    if (response.ok) {
+      const data = await response.json();
+      presets = data.presets || [];
+      
+      const select = document.getElementById('presetSelect');
+      select.innerHTML = '<option value="">-- Select Preset --</option>';
+      
+      presets.forEach(preset => {
+        const option = document.createElement('option');
+        option.value = preset;
+        option.textContent = preset.replace(/_/g, ' ');
+        select.appendChild(option);
+      });
+      
+      document.getElementById('loadPresetBtn').disabled = false;
+      console.log(`Loaded ${presets.length} presets`);
+    }
+  } catch (error) {
+    console.warn('Could not load presets:', error);
+  }
+}
+
+function showSVGModal() {
+  const modal = document.getElementById('svgModal');
+  const grid = document.getElementById('svgGrid');
+  
+  grid.innerHTML = '';
+  
+  if (svgLibrary.length === 0) {
+    const emptyState = document.createElement('div');
+    emptyState.style.gridColumn = '1 / -1';
+    emptyState.style.padding = '20px';
+    emptyState.style.textAlign = 'center';
+    emptyState.style.color = 'var(--text-muted)';
+    emptyState.textContent = 'No SVGs available yet';
+    grid.appendChild(emptyState);
+  }
+
+  svgLibrary.forEach(svg => {
+    const name = svg.name || svg;
+    const labelText = name.replace('.svg', '');
+    const previewUrl = svg.url || (renderData?.svg_base ? `${renderData.svg_base}/${name}` : `/designer/svgs/${name}`);
+
+    const item = document.createElement('div');
+    item.className = 'grid-item';
+    item.onclick = () => {
+      addSVGElement(name);
+      closeModal('svgModal');
+    };
+
+    const preview = document.createElement('div');
+    preview.className = 'grid-item-preview';
+
+    const img = document.createElement('img');
+    img.src = previewUrl;
+    img.alt = labelText;
+    img.onerror = () => {
+      preview.classList.add('grid-item-fallback');
+      preview.textContent = '★';
+      img.remove();
+    };
+    preview.appendChild(img);
+
+    const label = document.createElement('div');
+    label.className = 'grid-item-label';
+    label.textContent = labelText;
+
+    item.appendChild(preview);
+    item.appendChild(label);
+    grid.appendChild(item);
+  });
+
+  modal.classList.remove('hidden');
+}
+
+function showIconModal() {
+  document.getElementById('iconModal').classList.remove('hidden');
+}
+
+function closeModal(modalId) {
+  document.getElementById(modalId).classList.add('hidden');
+}
+
+// ========================================================================
+// ELEMENT CREATION
+// ========================================================================
+
+function quickAddText() {
+  addElement('text', 100, 100, 200, 50, {
+    text: 'Text',
+    type: 'CUSTOM',
+    fontSize: 24,
+    color: '#ffffff',
+    fontWeight: '600',
+    fontFamily: DEFAULT_FONT_FAMILY
+  });
+}
+
+function quickAddBox() {
+  addElement('box', 100, 100, 200, 150, {
+    background: 'rgba(255,255,255,0.2)',
+    borderColor: '#ffffff',
+    borderRadius: 12
+  });
+}
+
+function addSVGElement(svgName) {
+  addElement('svg-overlay', 100, 100, 120, 120, {
+    src: svgName
+  });
+}
+
+function addWeatherIcon() {
+  addElement('svg-overlay', 100, 100, 100, 100, {
+    src: 'weather-icon'
+  });
+  closeModal('iconModal');
+}
+
+function addElement(kind, x, y, w, h, options = {}) {
+  saveState();
+  
+  const el = document.createElement('div');
+  el.className = `el ${kind}`;
+  el.style.left = snap(x) + 'px';
+  el.style.top = snap(y) + 'px';
+  el.style.width = w + 'px';
+  el.style.height = h + 'px';
+  el.style.opacity = options.opacity || 1;
+  
+  // Set z-index based on kind
+  if (kind === 'text' || kind === 'icon') {
+    el.style.zIndex = 30;
+  } else if (kind === 'svg-overlay') {
+    el.style.zIndex = options.src === 'weather-icon' ? 35 : 20;
+  } else if (kind === 'box') {
+    el.style.zIndex = 15;
+  }
+  
+  if (kind === 'text' || kind === 'icon') {
+    const content = document.createElement('div');
+    content.className = 'el-content';
+    content.textContent = options.text || 'Text';
+    content.style.fontSize = (options.fontSize || 24) + 'px';
+    content.style.color = options.color || '#ffffff';
+    content.style.fontWeight = options.fontWeight || '400';
+    const fontFamily = sanitizeFontFamily(options.fontFamily);
+    content.style.fontFamily = "'" + fontFamily + "', sans-serif";
+    el.dataset.fontFamily = fontFamily;
+    el.appendChild(content);
+
+    el.dataset.type = options.type || 'CUSTOM';
+    
+    if (options.type && options.type !== 'CUSTOM') {
+      content.textContent = getDynamicText(options.type);
+    }
+    
+    // Apply text shadow if exists
+    if (options.textShadowType && options.textShadowType !== 'none') {
+      el.dataset.textShadowType = options.textShadowType;
+      el.dataset.textShadowColor = options.textShadowColor || '#000000';
+      el.dataset.textShadowIntensity = options.textShadowIntensity || 1;
+      applyTextShadowStyle(content, options.textShadowType, options.textShadowColor || '#000000', options.textShadowIntensity || 1);
+    }
+  } else if (kind === 'box') {
+    el.style.background = options.background || 'rgba(255,255,255,0.2)';
+    el.style.borderColor = options.borderColor || '#ffffff';
+    el.style.borderRadius = (options.borderRadius || 12) + 'px';
+  } else if (kind === 'svg-overlay' && options.src) {
+    el.dataset.src = options.src;
+    loadSVGIntoElement(el, options.src);
+  }
+  
+  canvas.appendChild(el);
+  selectElement(el);
+  
+  updateStatus('✓ Element added', 'success');
+}
+
+async function loadSVGIntoElement(el, src) {
+  try {
+    let url;
+    
+    if (src === 'weather-icon') {
+      // Use weather icon URL from render data
+      url = renderData?.weather?.icon_url;
+      if (!url) {
+        console.warn('No weather icon URL available');
+        return;
+      }
+    } else {
+      // Regular SVG
+      url = renderData?.svg_base ? `${renderData.svg_base}/${src}` : `/designer/svgs/${src}`;
+    }
+    
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    
+    const svgText = await response.text();
+    el.innerHTML = svgText;
+    
+    const svg = el.querySelector('svg');
+    if (svg) {
+      svg.style.width = '100%';
+      svg.style.height = '100%';
+      svg.style.objectFit = 'contain';
+    }
+  } catch (error) {
+    console.error('Failed to load SVG:', error);
+    el.innerHTML = '<div style="color:red;font-size:12px;">SVG Error</div>';
+  }
+}
+
+// ========================================================================
+// ELEMENT SELECTION & MANIPULATION
+// ========================================================================
+
+function selectElement(el) {
+  // Clear previous selection
+  if (selectedEl) {
+    selectedEl.classList.remove('selected');
+    clearResizeHandles(selectedEl);
+  }
+  
+  if (!el) {
+    selectedEl = null;
+    updateInspector();
+    return;
+  }
+  
+  selectedEl = el;
+  el.classList.add('selected');
+  addResizeHandles(el);
+  updateInspector();
+}
+
+function addResizeHandles(el) {
+  const handles = ['tl', 'tr', 'bl', 'br', 't', 'b', 'l', 'r'];
+  
+  handles.forEach(dir => {
+    const handle = document.createElement('div');
+    handle.className = `resize-handle ${dir}`;
+    handle.onmousedown = (e) => startResize(e, dir);
+    el.appendChild(handle);
+  });
+}
+
+function clearResizeHandles(el) {
+  el.querySelectorAll('.resize-handle').forEach(h => h.remove());
+}
+
+function updateInspector() {
+  const empty = document.getElementById('inspectorEmpty');
+  const content = document.getElementById('inspectorContent');
+  const textPanel = document.getElementById('textPanel');
+  const boxPanel = document.getElementById('boxPanel');
+  const svgPanel = document.getElementById('svgPanel');
+  
+  if (!selectedEl) {
+    empty.classList.remove('hidden');
+    content.classList.add('hidden');
+    return;
+  }
+  
+  empty.classList.add('hidden');
+  content.classList.remove('hidden');
+  
+  // Update transform values
+  document.getElementById('elX').value = parseInt(selectedEl.style.left);
+  document.getElementById('elY').value = parseInt(selectedEl.style.top);
+  document.getElementById('elW').value = parseInt(selectedEl.style.width);
+  document.getElementById('elH').value = parseInt(selectedEl.style.height);
+  document.getElementById('elOpacity').value = parseFloat(selectedEl.style.opacity || 1);
+  document.getElementById('elOpacityValue').textContent = parseFloat(selectedEl.style.opacity || 1).toFixed(2);
+  
+  // Show/hide panels
+  textPanel.style.display = 'none';
+  boxPanel.style.display = 'none';
+  svgPanel.style.display = 'none';
+  
+  if (selectedEl.classList.contains('text') || selectedEl.classList.contains('icon')) {
+    textPanel.style.display = 'block';
+    
+    const content = selectedEl.querySelector('.el-content');
+    const style = window.getComputedStyle(content);
+    
+    document.getElementById('textType').value = selectedEl.dataset.type || 'CUSTOM';
+    document.getElementById('textContent').value = content.textContent;
+    document.getElementById('fontSize').value = parseInt(style.fontSize);
+    document.getElementById('fontSizeValue').textContent = parseInt(style.fontSize) + 'px';
+    document.getElementById('textColor').value = rgbToHex(style.color);
+    document.getElementById('fontWeight').value = style.fontWeight;
+
+    const fontSelect = document.getElementById('fontFamily');
+    if (fontSelect) {
+      const currentFont = sanitizeFontFamily(selectedEl.dataset.fontFamily || extractPrimaryFont(style.fontFamily));
+      fontSelect.value = currentFont;
+      selectedEl.dataset.fontFamily = currentFont;
+    }
+
+    // Show/hide custom text group
+    const customGroup = document.getElementById('customTextGroup');
+    customGroup.style.display = selectedEl.dataset.type === 'CUSTOM' ? 'block' : 'none';
+    
+    // Text shadow controls
+    const textShadowType = selectedEl.dataset.textShadowType || 'none';
+    document.getElementById('textShadowType').value = textShadowType;
+    document.getElementById('textShadowColor').value = selectedEl.dataset.textShadowColor || '#000000';
+    document.getElementById('textShadowIntensity').value = selectedEl.dataset.textShadowIntensity || 1;
+    document.getElementById('textShadowIntensityValue').textContent = (selectedEl.dataset.textShadowIntensity || 1);
+    document.getElementById('textShadowControls').style.display = textShadowType === 'none' ? 'none' : 'block';
+    
+  } else if (selectedEl.classList.contains('box')) {
+    boxPanel.style.display = 'block';
+    
+    const style = window.getComputedStyle(selectedEl);
+    document.getElementById('boxBg').value = rgbToHex(style.backgroundColor);
+    document.getElementById('boxBorder').value = rgbToHex(style.borderColor);
+    document.getElementById('borderRadius').value = parseInt(style.borderRadius);
+    document.getElementById('borderRadiusValue').textContent = parseInt(style.borderRadius) + 'px';
+    
+  } else if (selectedEl.classList.contains('svg-overlay')) {
+    svgPanel.style.display = 'block';
+  }
+}
+
+function updateElPosition() {
+  if (!selectedEl) return;
+  selectedEl.style.left = parseInt(document.getElementById('elX').value) + 'px';
+  selectedEl.style.top = parseInt(document.getElementById('elY').value) + 'px';
+  saveState();
+}
+
+function updateElSize() {
+  if (!selectedEl) return;
+  selectedEl.style.width = parseInt(document.getElementById('elW').value) + 'px';
+  selectedEl.style.height = parseInt(document.getElementById('elH').value) + 'px';
+  saveState();
+}
+
+function updateElOpacity() {
+  if (!selectedEl) return;
+  const value = parseFloat(document.getElementById('elOpacity').value);
+  selectedEl.style.opacity = value;
+  document.getElementById('elOpacityValue').textContent = value.toFixed(2);
+  saveState();
+}
+
+function updateTextType() {
+  if (!selectedEl) return;
+  
+  const type = document.getElementById('textType').value;
+  selectedEl.dataset.type = type;
+  
+  const customGroup = document.getElementById('customTextGroup');
+  customGroup.style.display = type === 'CUSTOM' ? 'block' : 'none';
+  
+  const content = selectedEl.querySelector('.el-content');
+  if (type === 'CUSTOM') {
+    content.textContent = document.getElementById('textContent').value;
+  } else {
+    content.textContent = getDynamicText(type);
+  }
+  
+  saveState();
+}
+
+function updateTextContent() {
+  if (!selectedEl) return;
+  const content = selectedEl.querySelector('.el-content');
+  if (content) {
+    content.textContent = document.getElementById('textContent').value;
+  }
+  saveState();
+}
+
+function updateTextStyle() {
+  if (!selectedEl) return;
+  
+  const content = selectedEl.querySelector('.el-content');
+  if (!content) return;
+  
+  const fontSize = document.getElementById('fontSize').value;
+  const color = document.getElementById('textColor').value;
+  const weight = document.getElementById('fontWeight').value;
+  const fontSelect = document.getElementById('fontFamily');
+  const fontFamily = sanitizeFontFamily(fontSelect.value);
+  fontSelect.value = fontFamily;
+
+  content.style.fontSize = fontSize + 'px';
+  content.style.color = color;
+  content.style.fontWeight = weight;
+  content.style.fontFamily = "'" + fontFamily + "', sans-serif";
+  selectedEl.dataset.fontFamily = fontFamily;
+
+  document.getElementById('fontSizeValue').textContent = fontSize + 'px';
+
+  saveState();
+}
+
+function updateBoxStyle() {
+  if (!selectedEl) return;
+  
+  selectedEl.style.backgroundColor = document.getElementById('boxBg').value;
+  selectedEl.style.borderColor = document.getElementById('boxBorder').value;
+  
+  const radius = document.getElementById('borderRadius').value;
+  selectedEl.style.borderRadius = radius + 'px';
+  document.getElementById('borderRadiusValue').textContent = radius + 'px';
+  
+  saveState();
+}
+
+function deleteElement() {
+  if (!selectedEl) return;
+  saveState();
+  selectedEl.remove();
+  selectElement(null);
+  updateStatus('✓ Element deleted', 'success');
+}
+
+function duplicateElement() {
+  if (!selectedEl) return;
+  saveState();
+  
+  const clone = selectedEl.cloneNode(true);
+  clone.style.left = (parseInt(selectedEl.style.left) + 20) + 'px';
+  clone.style.top = (parseInt(selectedEl.style.top) + 20) + 'px';
+  clone.classList.remove('selected');
+  
+  canvas.appendChild(clone);
+  selectElement(clone);
+  
+  updateStatus('✓ Element duplicated', 'success');
+}
+
+// ========================================================================
+// DRAG & RESIZE
+// ========================================================================
+
+function startDrag(e, el) {
+  if (e.target.classList.contains('resize-handle')) return;
+  
+  if (selectedEl !== el) {
+    selectElement(el);
+  }
+  
+  isDragging = true;
+  dragStartX = e.clientX;
+  dragStartY = e.clientY;
+  elStartX = parseInt(selectedEl.style.left);
+  elStartY = parseInt(selectedEl.style.top);
+  
+  e.preventDefault();
+}
+
+function startResize(e, handle) {
+  e.stopPropagation();
+  
+  isResizing = true;
+  resizeHandle = handle;
+  dragStartX = e.clientX;
+  dragStartY = e.clientY;
+  elStartX = parseInt(selectedEl.style.left);
+  elStartY = parseInt(selectedEl.style.top);
+  elStartW = parseInt(selectedEl.style.width);
+  elStartH = parseInt(selectedEl.style.height);
+}
+
+function doDrag(e) {
+  if (!isDragging || !selectedEl) return;
+  
+  const dx = e.clientX - dragStartX;
+  const dy = e.clientY - dragStartY;
+  
+  selectedEl.style.left = snap(elStartX + dx) + 'px';
+  selectedEl.style.top = snap(elStartY + dy) + 'px';
+  
+  document.getElementById('elX').value = snap(elStartX + dx);
+  document.getElementById('elY').value = snap(elStartY + dy);
+}
+
+function doResize(e) {
+  if (!isResizing || !selectedEl) return;
+  
+  const dx = e.clientX - dragStartX;
+  const dy = e.clientY - dragStartY;
+  
+  let newX = elStartX, newY = elStartY, newW = elStartW, newH = elStartH;
+  
+  if (resizeHandle.includes('r')) newW = elStartW + dx;
+  if (resizeHandle.includes('b')) newH = elStartH + dy;
+  if (resizeHandle.includes('l')) {
+    newW = elStartW - dx;
+    newX = elStartX + dx;
+  }
+  if (resizeHandle.includes('t')) {
+    newH = elStartH - dy;
+    newY = elStartY + dy;
+  }
+  
+  newW = Math.max(20, snap(newW));
+  newH = Math.max(20, snap(newH));
+  
+  if (resizeHandle.includes('l')) {
+    newX = snap(elStartX + elStartW - newW);
+  } else {
+    newX = snap(newX);
+  }
+  
+  if (resizeHandle.includes('t')) {
+    newY = snap(elStartY + elStartH - newH);
+  } else {
+    newY = snap(newY);
+  }
+  
+  selectedEl.style.left = newX + 'px';
+  selectedEl.style.top = newY + 'px';
+  selectedEl.style.width = newW + 'px';
+  selectedEl.style.height = newH + 'px';
+  
+  document.getElementById('elX').value = newX;
+  document.getElementById('elY').value = newY;
+  document.getElementById('elW').value = newW;
+  document.getElementById('elH').value = newH;
+}
+
+function stopDragResize() {
+  if (isDragging || isResizing) {
+    saveState();
+  }
+  isDragging = false;
+  isResizing = false;
+}
+
+// ========================================================================
+// SAVE & LOAD
+// ========================================================================
+
+function toJSON() {
+  const elements = Array.from(canvas.querySelectorAll('.el')).map(el => {
+    const base = {
+      kind: el.classList.contains('text') ? 'text' :
+            el.classList.contains('icon') ? 'icon' :
+            el.classList.contains('box') ? 'box' :
+            el.classList.contains('svg-overlay') ? 'svg-overlay' : 'box',
+      x: parseInt(el.style.left),
+      y: parseInt(el.style.top),
+      width: parseInt(el.style.width),
+      height: parseInt(el.style.height),
+      opacity: parseFloat(el.style.opacity || 1),
+      zIndex: parseInt(el.style.zIndex || 10)
+    };
+    
+    if (base.kind === 'text' || base.kind === 'icon') {
+      const content = el.querySelector('.el-content');
+      const style = window.getComputedStyle(content);
+      
+      base.type = el.dataset.type || 'CUSTOM';
+      base.text = content.textContent;
+      base.fontSize = parseInt(style.fontSize);
+      base.color = rgbToHex(style.color);
+      base.fontWeight = style.fontWeight;
+      const savedFont = el.dataset.fontFamily || extractPrimaryFont(style.fontFamily);
+      base.fontFamily = sanitizeFontFamily(savedFont);
+
+      // Text shadow/glow
+      if (el.dataset.textShadowType && el.dataset.textShadowType !== 'none') {
+        base.textShadowType = el.dataset.textShadowType;
+        base.textShadowColor = el.dataset.textShadowColor || '#000000';
+        base.textShadowIntensity = parseFloat(el.dataset.textShadowIntensity || 1);
+      }
+}
+    
+    if (base.kind === 'box') {
+      const style = window.getComputedStyle(el);
+      base.background = rgbToHex(style.backgroundColor);
+      base.borderColor = rgbToHex(style.borderColor);
+      base.borderRadius = parseInt(style.borderRadius);
+    }
+    
+    if (base.kind === 'svg-overlay') {
+      base.src = el.dataset.src;
+    }
+    
+    return base;
+  });
+  
+  return {
+    name: 'Layout',
+    meta: {
+      pexelsCategory: document.getElementById('pexelsCategorySelect').value
+    },
+    elements: elements
+  };
+}
+
+async function saveLayout() {
+  const layout = toJSON();
+  
+  try {
+    const response = await fetch(`/v1/devices/${deviceId}/layouts/current`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(layout)
+    });
+    
+    if (response.ok) {
+      updateStatus('✓ Layout saved', 'success');
+      return true;
+    } else {
+      throw new Error('Save failed');
+    }
+  } catch (error) {
+    console.error('Save layout error:', error);
+    updateStatus('⚠️ Save failed', 'error');
+    return false;
+  }
+}
+
+async function exportPNG() {
+  const previousSelection = selectedEl;
+
+  if (previousSelection) {
+    previousSelection.classList.remove('selected');
+    clearResizeHandles(previousSelection);
+  }
+
+  try {
+    updateStatus('⏳ Rendering PNG...');
+
+    if (document.fonts && document.fonts.ready) {
+      try {
+        await document.fonts.ready;
+      } catch (fontError) {
+        console.warn('Font loading wait skipped:', fontError);
+      }
+    }
+
+    const renderedCanvas = await html2canvas(canvas, {
+      backgroundColor: null,
+      useCORS: true,
+      logging: false,
+      scale: 2
+    });
+
+    await new Promise((resolve, reject) => {
+      renderedCanvas.toBlob((blob) => {
+        if (!blob) {
+          reject(new Error('Failed to create PNG blob'));
+          return;
+        }
+
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${deviceId || 'layout'}_${Date.now()}.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        resolve();
+      }, 'image/png');
+    });
+
+    updateStatus('✓ PNG exported', 'success');
+  } catch (error) {
+    console.error('PNG export error:', error);
+    updateStatus('⚠️ Failed to export PNG', 'error');
+  } finally {
+    if (previousSelection) {
+      selectElement(previousSelection);
+    }
+  }
+}
+
+function exportJSON() {
+  const layout = toJSON();
+  const json = JSON.stringify(layout, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${deviceId}_layout_${Date.now()}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  
+  updateStatus('✓ JSON exported', 'success');
+}
+
+async function loadLayout(layout) {
+  // Clear canvas
+  canvas.querySelectorAll('.el').forEach(el => el.remove());
+  selectElement(null);
+  
+  // Load meta
+  if (layout.meta?.pexelsCategory) {
+    document.getElementById('pexelsCategorySelect').value = layout.meta.pexelsCategory;
+  }
+  
+  // Load elements
+  for (const elem of layout.elements || []) {
+    const options = { ...elem };
+    await addElement(elem.kind, elem.x, elem.y, elem.width, elem.height, options);
+  }
+
+  selectElement(null);
+  currentLayout = layout;
+
+  applyDynamicText();
+
+  updateStatus('✓ Layout loaded', 'success');
+}
+
+async function loadPreset() {
+  const presetName = document.getElementById('presetSelect').value;
+  if (!presetName) return;
+  
+  try {
+    const response = await fetch(`/presets/${presetName}.json`);
+    if (!response.ok) throw new Error('Preset not found');
+    
+    const layout = await response.json();
+    await loadLayout(layout);
+    
+  } catch (error) {
+    console.error('Load preset error:', error);
+    updateStatus('⚠️ Failed to load preset', 'error');
+  }
+}
+
+// ========================================================================
+// UNDO/REDO
+// ========================================================================
+
+function saveState() {
+  const state = toJSON();
+  undoStack.push(JSON.stringify(state));
+  redoStack = [];
+  
+  // Limit stack size
+  if (undoStack.length > 50) {
+    undoStack.shift();
+  }
+}
+
+async function undo() {
+  if (undoStack.length === 0) return;
+  
+  const currentState = toJSON();
+  redoStack.push(JSON.stringify(currentState));
+  
+  const prevState = undoStack.pop();
+  await loadLayout(JSON.parse(prevState));
+  
+  updateStatus('↶ Undo', 'success');
+}
+
+async function redo() {
+  if (redoStack.length === 0) return;
+  
+  const currentState = toJSON();
+  undoStack.push(JSON.stringify(currentState));
+  
+  const nextState = redoStack.pop();
+  await loadLayout(JSON.parse(nextState));
+  
+  updateStatus('↷ Redo', 'success');
+}
+
+// ========================================================================
+// UTILITIES
+// ========================================================================
+
+function snap(value) {
+  return snapEnabled ? Math.round(value / GRID_SIZE) * GRID_SIZE : value;
+}
+
+function rgbToHex(rgb) {
+  if (rgb.startsWith('#')) return rgb;
+
+  const match = rgb.match(/\d+/g);
+  if (!match) return '#ffffff';
+  
+  const r = parseInt(match[0]);
+  const g = parseInt(match[1]);
+  const b = parseInt(match[2]);
+  
+  return '#' + [r, g, b].map(x => {
+    const hex = x.toString(16);
+    return hex.length === 1 ? '0' + hex : hex;
+  }).join('');
+}
+
+function extractPrimaryFont(fontFamily) {
+  if (!fontFamily) return DEFAULT_FONT_FAMILY;
+  const primary = fontFamily.split(',')[0];
+  return sanitizeFontFamily(primary);
+}
+
+function drawGrid() {
+  gridOverlay.innerHTML = '';
+  
+  for (let x = 0; x <= CANVAS_WIDTH; x += GRID_SIZE) {
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', x);
+    line.setAttribute('y1', 0);
+    line.setAttribute('x2', x);
+    line.setAttribute('y2', CANVAS_HEIGHT);
+    gridOverlay.appendChild(line);
+  }
+  
+  for (let y = 0; y <= CANVAS_HEIGHT; y += GRID_SIZE) {
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', 0);
+    line.setAttribute('y1', y);
+    line.setAttribute('x2', CANVAS_WIDTH);
+    line.setAttribute('y2', y);
+    gridOverlay.appendChild(line);
+  }
+}
+
+function toggleSection(header) {
+  const section = header.parentElement;
+  section.classList.toggle('collapsed');
+}
+
+function updateStatus(message, type) {
+  const statusText = document.getElementById('statusText');
+  const statusDot = document.getElementById('statusDot');
+  
+  statusText.textContent = message;
+  
+  statusDot.className = 'status-dot';
+  if (type === 'error') {
+    statusDot.classList.add('error');
+  }
+  
+  if (type === 'success') {
+    setTimeout(() => {
+      statusText.textContent = 'Ready';
+      statusDot.className = 'status-dot';
+    }, 3000);
+  }
+}
+
+
+// ========================================================================
+// TEXT EFFECTS (Shadow/Glow)
+// ========================================================================
+function updateTextShadow() {
+  if (!selectedEl || (!selectedEl.classList.contains('text') && !selectedEl.classList.contains('icon'))) return;
+  
+  const type = document.getElementById('textShadowType').value;
+  const color = document.getElementById('textShadowColor').value;
+  const intensity = parseFloat(document.getElementById('textShadowIntensity').value);
+  const controls = document.getElementById('textShadowControls');
+  
+  // Show/hide controls
+  controls.style.display = type === 'none' ? 'none' : 'block';
+  
+  // Update intensity display
+  document.getElementById('textShadowIntensityValue').textContent = intensity.toFixed(1);
+  
+  // Store on element
+  selectedEl.dataset.textShadowType = type;
+  selectedEl.dataset.textShadowColor = color;
+  selectedEl.dataset.textShadowIntensity = intensity;
+  
+  // Apply visual effect
+  const content = selectedEl.querySelector('.el-content');
+  if (content) {
+    applyTextShadowStyle(content, type, color, intensity);
+  }
+  
+  saveState();
+}
+
+function applyTextShadowStyle(element, type, color, intensity) {
+  if (type === 'none') {
+    element.style.textShadow = 'none';
+    element.style.filter = 'none';
+    return;
+  }
+  const blur = Math.round(intensity * 4);
+  if (type === 'shadow') {
+    element.style.textShadow = `2px 2px ${blur}px ${color}`;
+    element.style.filter = 'none';
+  } else if (type === 'glow') {
+    element.style.textShadow = `
+      0 0 ${blur}px ${color},
+      0 0 ${blur * 2}px ${color},
+      0 0 ${blur * 3}px ${color}
+    `;
+    element.style.filter = 'none';
+  }
+}
+
+
+// ========================================================================
+// EVENT LISTENERS
+// ========================================================================
+
+function setupEventListeners() {
+  // Header controls
+  gridToggle.addEventListener('change', (e) => {
+    gridOverlay.classList.toggle('visible', e.target.checked);
+  });
+  
+  snapToggle.addEventListener('change', (e) => {
+    snapEnabled = e.target.checked;
+  });
+  
+  document.getElementById('saveBtn').addEventListener('click', saveLayout);
+  document.getElementById('exportBtn').addEventListener('click', exportJSON);
+  document.getElementById('pngBtn').addEventListener('click', exportPNG);
+  document.getElementById('undoBtn').addEventListener('click', undo);
+  document.getElementById('redoBtn').addEventListener('click', redo);
+  
+  // Device settings
+  citySelect.addEventListener('change', updateTimezoneHint);
+  document.getElementById('saveDeviceBtn').addEventListener('click', saveDeviceConfig);
+  
+  // Presets
+  document.getElementById('loadPresetBtn').addEventListener('click', loadPreset);
+  
+  // Setup modal
+  document.getElementById('setupDeviceId').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+      completeSetup();
+    }
+  });
+  
+  // Canvas interactions
+  canvas.addEventListener('mousedown', (e) => {
+    if (e.target === canvas) {
+      selectElement(null);
+      return;
+    }
+    
+    const el = e.target.closest('.el');
+    if (el) {
+      startDrag(e, el);
+    }
+  });
+  
+  document.addEventListener('mousemove', (e) => {
+    if (isDragging) doDrag(e);
+    if (isResizing) doResize(e);
+  });
+  
+  document.addEventListener('mouseup', stopDragResize);
+  
+  // Keyboard shortcuts
+  document.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT') return;
+    
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      if (selectedEl) deleteElement();
+    } else if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+      e.preventDefault();
+      undo();
+    } else if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
+      e.preventDefault();
+      redo();
+    } else if ((e.ctrlKey || e.metaKey) && e.key === 'd') {
+      e.preventDefault();
+      if (selectedEl) duplicateElement();
+    } else if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+      e.preventDefault();
+      saveLayout();
+    }
+  });
+}
+
+// ========================================================================
+// START
+// ========================================================================
+
+init();
+
+</script>
+</body>
+</html>
