@@ -179,7 +179,12 @@ def gcs_write_bytes(key: str, data: bytes, content_type: str = "image/png"):
 # ──────────────────────────────────────────────────────────────────────────────
 
 DEFAULT_DEVICE_CONFIG = {
-    "location": {"city": os.getenv("DEFAULT_CITY", "Darwin"), "timezone": os.getenv("DEFAULT_TZ", "Australia/Darwin")},
+    "location": {
+        "name": os.getenv("DEFAULT_CITY", "Darwin"),
+        "lat": float(os.getenv("DEFAULT_LAT", "-12.4634")),
+        "lon": float(os.getenv("DEFAULT_LON", "130.8456")),
+        "timezone": os.getenv("DEFAULT_TZ", "Australia/Darwin")
+    },
     "preferences": {"iconTheme": DEFAULT_ICON_THEME},
 }
 
@@ -239,25 +244,40 @@ def resolve_weather_icon_url(theme: str, code: str) -> str:
     path = f"assets/weather-icons/{theme}/{code}.svg"
     return make_public_url(f"gcs/{path}")
 
-async def get_weather(city: str) -> dict:
-    """Get weather from OpenWeather; returns normalized keys with true daily min/max."""
+async def get_weather(lat: float = None, lon: float = None, city: str = None) -> dict:
+    """Get weather from OpenWeather using lat/lon (preferred) or city name (fallback)."""
     api_key = os.getenv("OPENWEATHER_KEY")
 
     if ENABLE_OPENWEATHER and api_key:
         try:
             async with httpx.AsyncClient() as client:
-                # Get current weather
-                current_url = "https://api.openweathermap.org/data/2.5/weather"
-                params = {"q": city, "appid": api_key, "units": "metric"}
+                # Prefer lat/lon if provided
+                if lat is not None and lon is not None:
+                    # Get current weather using coordinates
+                    current_url = "https://api.openweathermap.org/data/2.5/weather"
+                    params = {"lat": lat, "lon": lon, "appid": api_key, "units": "metric"}
+                    logger.info(f"Fetching weather for lat={lat}, lon={lon}")
+                    
+                elif city:
+                    # Fallback to city name
+                    current_url = "https://api.openweathermap.org/data/2.5/weather"
+                    params = {"q": city, "appid": api_key, "units": "metric"}
+                    logger.info(f"Fetching weather for city={city}")
+                else:
+                    raise ValueError("Either lat/lon or city must be provided")
+                
                 r = await client.get(current_url, params=params, timeout=10)
 
                 if r.status_code == 200:
                     data = r.json()
-                    lat, lon = data["coord"]["lat"], data["coord"]["lon"]
                     
-                    # Get 5-day/3-hour forecast to calculate true daily min/max
+                    # Extract coordinates (will be accurate even if we used city name)
+                    actual_lat = data["coord"]["lat"]
+                    actual_lon = data["coord"]["lon"]
+                    
+                    # Get 5-day/3-hour forecast using coordinates
                     forecast_url = "https://api.openweathermap.org/data/2.5/forecast"
-                    forecast_params = {"lat": lat, "lon": lon, "appid": api_key, "units": "metric"}
+                    forecast_params = {"lat": actual_lat, "lon": actual_lon, "appid": api_key, "units": "metric"}
                     fr = await client.get(forecast_url, params=forecast_params, timeout=10)
 
                     # Calculate today's actual min/max from first 8 entries (24 hours)
@@ -267,12 +287,12 @@ async def get_weather(city: str) -> dict:
                     if fr.status_code == 200:
                         forecast = fr.json()
                         if forecast.get("list"):
-                            # Today's min/max from first 8 entries (24 hours / 3-hour intervals)
+                            # Today's min/max from first 8 entries
                             today_temps = [entry["main"]["temp"] for entry in forecast["list"][:8]]
                             today_min = round(min(today_temps)) if today_temps else None
                             today_max = round(max(today_temps)) if today_temps else None
                             
-                            # Tomorrow's forecast (entries 8-16, next 24 hours)
+                            # Tomorrow's forecast (entries 8-16)
                             if len(forecast["list"]) > 8:
                                 tomorrow_temps = [entry["main"]["temp"] for entry in forecast["list"][8:16]]
                                 tomorrow_entry = forecast["list"][8]
@@ -282,17 +302,16 @@ async def get_weather(city: str) -> dict:
                                     "desc": tomorrow_entry["weather"][0]["description"].title(),
                                 }
 
-                    # Use forecast min/max if available, otherwise fall back to current API
+                    # Use forecast min/max if available
                     temp_min = today_min if today_min is not None else round(data["main"]["temp_min"])
                     temp_max = today_max if today_max is not None else round(data["main"]["temp_max"])
                     
-                    # Build verbose weather description (without current temp for e-ink)
+                    # Build verbose weather description
                     desc = data["weather"][0]["description"]
                     humidity = data["main"]["humidity"]
                     wind_speed = round(data["wind"]["speed"] * 3.6)
                     rain_amount = data.get("rain", {}).get("1h", 0)
                     
-                    # Create weather reporter-style description for today
                     verbose_desc = f"Expecting {desc} with temperatures ranging from {temp_min}°C to {temp_max}°C. "
                     
                     if rain_amount > 0:
@@ -312,7 +331,7 @@ async def get_weather(city: str) -> dict:
                     else:
                         verbose_desc += "Relatively dry conditions."
                     
-                    # Build verbose description for tomorrow
+                    # Build tomorrow's verbose description
                     tomorrow_verbose = None
                     if tomorrow_data:
                         tmr_desc = tomorrow_data["desc"].lower()
@@ -330,8 +349,10 @@ async def get_weather(city: str) -> dict:
                         else:
                             tomorrow_verbose += "Clear conditions. "
                         
-                        # Add tomorrow's data to tomorrow_data dict
                         tomorrow_data["desc_extended"] = tomorrow_verbose
+
+                    # Get location name from response
+                    location_name = data.get("name", city or "Unknown")
 
                     return {
                         "humidity": humidity,
@@ -344,11 +365,14 @@ async def get_weather(city: str) -> dict:
                         "temp_max": temp_max,
                         "timezone_offset": data.get("timezone", 0),
                         "tomorrow": tomorrow_data,
+                        "lat": actual_lat,
+                        "lon": actual_lon,
+                        "location_name": location_name,
                     }
         except Exception as e:
             logger.warning(f"OpenWeather API failed: {e}")
 
-    # fallback sample
+    # Fallback sample data
     return {
         "temp": 32,
         "humidity": 65,
@@ -366,6 +390,9 @@ async def get_weather(city: str) -> dict:
             "desc": "Partly Cloudy",
             "desc_extended": "Tomorrow expecting partly cloudy with temperatures from 25°C to 35°C. Cloudy skies."
         },
+        "lat": -12.4634,
+        "lon": 130.8456,
+        "location_name": "Darwin",
     }
 
 async def get_joke() -> str:
@@ -426,20 +453,28 @@ def choose_pexels_background(selected_category: str = None) -> dict | None:
 
 async def build_render_data(device: str = "familydisplay") -> dict:
     device_config = get_device_config(device)
-    city = device_config.get("location", {}).get("city", "Darwin")
-    tz_name = device_config.get("location", {}).get("timezone", "Australia/Darwin")
+    
+    location = device_config.get("location", {})
+    location_name = location.get("name") or location.get("city", "Darwin")
+    lat = location.get("lat")
+    lon = location.get("lon")
+    tz_name = location.get("timezone", "Australia/Darwin")
     icon_theme = device_config.get("preferences", {}).get("iconTheme", DEFAULT_ICON_THEME)
 
-    logger.info(f"Building render data for {device}: {city} ({tz_name})")
+    logger.info(f"Building render data for {device}: {location_name} (lat={lat}, lon={lon})")
 
     # Load layout (with default fallback)
     layout = load_device_layout(device)
 
-    # weather
-    weather = await get_weather(f"{city},AU")
+    # Get weather using coordinates (or fallback to name)
+    if lat is not None and lon is not None:
+        weather = await get_weather(lat=lat, lon=lon)
+    else:
+        weather = await get_weather(city=f"{location_name},AU")
+    
     icon_code = weather.get("icon", "01d")
     weather["icon_url"] = resolve_weather_icon_url(icon_theme, icon_code)
-    weather["city"] = city
+    weather["city"] = location_name
 
     # local datetime
     try:
@@ -902,7 +937,6 @@ def list_devices():
         logger.warning(f"Could not list devices: {e}")
     return {"devices": sorted(seen)}
 
-
 @app.post("/v1/devices/{device_id}/layouts/init_from_default")
 def init_layout_from_default(device_id: str):
     """
@@ -950,6 +984,49 @@ def list_pexels_categories():
     categories = get_pexels_categories()
     return {"categories": categories}
 
+@app.get("/api/search-location")
+async def search_location(q: str):
+    """Search for locations using OpenWeather Geocoding API."""
+    api_key = os.getenv("OPENWEATHER_KEY")
+    
+    if not api_key:
+        raise HTTPException(status_code=503, detail="Weather API not configured")
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            # OpenWeather Geocoding API
+            url = "http://api.openweathermap.org/geo/1.0/direct"
+            params = {
+                "q": q,
+                "limit": 5,  # Return top 5 matches
+                "appid": api_key
+            }
+            
+            response = await client.get(url, params=params, timeout=10)
+            
+            if response.status_code == 200:
+                results = response.json()
+                
+                # Format results for frontend
+                locations = []
+                for loc in results:
+                    locations.append({
+                        "name": loc.get("name", ""),
+                        "state": loc.get("state", ""),
+                        "country": loc.get("country", ""),
+                        "lat": loc.get("lat"),
+                        "lon": loc.get("lon"),
+                        "display": f"{loc.get('name', '')}, {loc.get('state', '')}, {loc.get('country', '')}"
+                    })
+                
+                return {"locations": locations}
+            else:
+                raise HTTPException(status_code=response.status_code, detail="Search failed")
+                
+    except Exception as e:
+        logger.error(f"Location search error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/list-presets")
 def list_presets_api():
     """List available preset layouts from GCS (assets/layouts/*.json)."""
@@ -966,9 +1043,6 @@ def list_presets_api():
     except Exception as e:
         logger.error(f"Failed to list presets from GCS: {e}")
         return {"presets": []}
-
-from fastapi.responses import JSONResponse
-from fastapi import HTTPException
 
 @app.get("/presets/{name}.json")
 def get_preset_json(name: str):
