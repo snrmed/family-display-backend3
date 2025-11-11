@@ -764,25 +764,34 @@ async def render_html_to_png(render_path: str, context: dict) -> bytes:
 
     try:
         # Inject context data BEFORE page navigation using add_init_script
+        # Use __RENDER_DATA__ to match what base.html expects
         context_json = json.dumps(context)
         logger.info(f"📦 Preparing injection, size: {len(context_json)} bytes")
         
         await page.add_init_script(f"""
-            window.renderData = {context_json};
-            console.log('✅ renderData injected via init script');
+            window.__RENDER_DATA__ = {context_json};
+            window.renderData = {context_json};  // Also set old name for backwards compat
+            console.log('✅ __RENDER_DATA__ injected via init script');
+            console.log('Elements in data:', (window.__RENDER_DATA__.layout?.elements || []).length);
         """)
         
         logger.info("📝 Init script added, now navigating to page")
 
-        # Navigate to the page (renderData now exists before page loads)
-        response = await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+        # Navigate to the page (data now exists before page loads)
+        response = await page.goto(url, wait_until="networkidle", timeout=30000)
         
         if not response or response.status != 200:
             logger.error(f"Failed to load page. Status: {response.status if response else 'No response'}")
             raise RuntimeError(f"Page load failed with status {response.status if response else 'unknown'}")
 
-        # Wait for rendering
-        await page.wait_for_timeout(1000)
+        # Wait longer for SVGs and fonts to load
+        await page.wait_for_timeout(2000)
+        
+        # Debug: Check how many elements rendered
+        element_count = await page.evaluate("""
+            () => document.querySelectorAll('#canvas .el').length
+        """)
+        logger.info(f"📸 Rendered elements on page: {element_count}")
 
         # Take screenshot
         png_bytes = await page.screenshot(type="png")
