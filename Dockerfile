@@ -6,16 +6,23 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# System deps required by Playwright/Chromium + lean font set
+# Install all Chromium dependencies manually (avoiding playwright install-deps)
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
-      ca-certificates curl wget git \
-      fontconfig \
-      libnss3 libx11-6 libx11-xcb1 libxcb1 libxcomposite1 libxdamage1 libxext6 \
-      libxfixes3 libxrandr2 libgbm1 libgtk-3-0 libasound2 libatspi2.0-0 libdrm2 \
-      libxshmfence1 \
-      fonts-dejavu-core fonts-liberation fonts-noto-core fonts-roboto \
+      ca-certificates curl wget \
+      # Fonts
+      fontconfig fonts-liberation fonts-noto-core fonts-dejavu-core \
+      # Chromium core dependencies
+      libnss3 libnspr4 libdbus-1-3 libatk1.0-0 libatk-bridge2.0-0 libcups2 \
+      libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
+      libgbm1 libpango-1.0-0 libcairo2 libasound2 libatspi2.0-0 \
+      # X11 libraries
+      libx11-6 libx11-xcb1 libxcb1 libxcb-dri3-0 libxext6 libxshmfence1 \
+      # GTK/GLib
+      libgtk-3-0 libglib2.0-0 \
+      # Misc
+      libexpat1 libuuid1 \
     && rm -rf /var/lib/apt/lists/*
 
 # App root
@@ -25,10 +32,9 @@ WORKDIR /app
 COPY backend/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
-# Install Playwright Chromium into image
+# Install Playwright Chromium (browser only, no system deps)
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
-RUN python -m playwright install chromium && \
-    python -m playwright install-deps chromium
+RUN python -m playwright install chromium
 
 # Copy the rest of the project
 COPY . /app
