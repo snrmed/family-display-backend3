@@ -893,9 +893,8 @@ async def render_html_to_png(render_path: str, context: dict) -> bytes:
 
         # Inject the context data
         await page.evaluate(
-            f"""
-            window.renderData = {json.dumps(context)};
-        """
+            """(data) => { window.renderData = data; }""",
+            context
         )
 
         # Wait a bit for rendering
