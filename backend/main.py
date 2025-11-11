@@ -480,12 +480,16 @@ Maximum 30 words. No greetings or sign-offs. Make it engaging."""
 
     try:
         async with httpx.AsyncClient() as client:
+            logger.info(f"🤖 Calling DeepAI for {mood} {day} forecast")
+            
             response = await client.post(
                 'https://api.deepai.org/api/text-generator',
                 data={'text': prompt},
                 headers={'api-key': api_key},
                 timeout=15
             )
+            
+            logger.info(f"DeepAI response status: {response.status_code}")
             
             if response.status_code == 200:
                 result = response.json()
@@ -496,16 +500,25 @@ Maximum 30 words. No greetings or sign-offs. Make it engaging."""
                 forecast = ' '.join(words)
                 forecast = forecast.replace('Forecast:', '').replace('Weather:', '').strip()
                 
-                logger.info(f"Generated {mood} {day} forecast: {forecast}")
+                logger.info(f"✅ Generated {mood} {day} forecast: {forecast}")
                 return forecast[:100]
             else:
+                # Log the full error response
+                try:
+                    error_body = response.json()
+                    logger.error(f"DeepAI API error {response.status_code}: {error_body}")
+                except:
+                    logger.error(f"DeepAI API error {response.status_code}: {response.text[:200]}")
                 raise Exception(f"API error: {response.status_code}")
                 
     except Exception as e:
         logger.error(f"DeepAI forecast failed: {e}")
+        # Use fallback
         key = f"{mood}_{day}"
         template = fallback_examples.get(key, "{}°-{}°C with {}")
-        return template.format(temp_min, temp_max, conditions)[:100]
+        forecast = template.format(temp_min, temp_max, conditions)[:100]
+        logger.info(f"Generated {mood}_{day} forecast: {forecast}")
+        return forecast
 
 def get_pexels_categories() -> list:
     if not storage_enabled:
