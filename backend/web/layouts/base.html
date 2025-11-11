@@ -262,7 +262,21 @@ body {
         if (el.borderColor) div.style.border = '1px solid ' + el.borderColor;
         if (el.borderRadius || el.radius) div.style.borderRadius = (el.borderRadius || el.radius) + 'px';
 
-      } else if (kind === 'svg' || kind === 'svg-overlay' || kind === 'image') {
+      
+// Box visual effects (parity with Designer)
+if (el.boxShadowType && el.boxShadowType !== 'none') {
+  const color = el.boxShadowColor || '#000000';
+  const intensity = parseFloat(el.boxShadowIntensity || 1);
+  const blur = Math.round(intensity * 8);
+  const spread = Math.round(intensity * 2);
+  const offset = Math.round(intensity * 2);
+  if (el.boxShadowType === 'shadow') {
+    div.style.boxShadow = `${offset}px ${offset}px ${blur}px ${color}`;
+  } else if (el.boxShadowType === 'glow') {
+    div.style.boxShadow = `0 0 ${blur}px ${spread}px ${color}`;
+  }
+}
+} else if (kind === 'svg' || kind === 'svg-overlay' || kind === 'image') {
         let src = el.src || el.svgName || '';
         
         if (src === 'weather-icon') {
@@ -295,7 +309,22 @@ body {
           img.style.height = '100%';
           img.style.objectFit = 'contain';
           div.appendChild(img);
-        }
+        
+// SVG visual effects (parity with Designer)
+if (el.svgShadowType && el.svgShadowType !== 'none') {
+  const color = el.svgShadowColor || '#000000';
+  const intensity = parseFloat(el.svgShadowIntensity || 1);
+  const blur = Math.round(intensity * 4);
+  if (el.svgShadowType === 'shadow') {
+    div.style.filter = `drop-shadow(2px 2px ${blur}px ${color})`;
+  } else if (el.svgShadowType === 'glow') {
+    div.style.filter = `
+      drop-shadow(0 0 ${blur}px ${color})
+      drop-shadow(0 0 ${blur * 2}px ${color})
+    `;
+  }
+}
+}
       }
 
       canvas.appendChild(div);
