@@ -98,13 +98,28 @@ body {
       }
     }
   }
+
+  const moodForecasts = data?.mood_forecasts || {};
+  
   console.log('Data source:', dataSource);
 
   if (!data) {
     canvasEl.innerHTML = '<div style="padding:20px;color:red;">❌ Error: No render data</div>';
   }
 
-  function resolveDynamicText(type, data) {
+  // Handle mood forecast
+    if (type === 'FORECAST_MOOD' && forecastMood && forecastDay) {
+      const key = `${forecastMood}_${forecastDay}`;
+      const forecast = moodForecasts[key];
+      if (forecast) {
+        console.log(`Using mood forecast ${key}: ${forecast}`);
+        return forecast;
+      }
+      console.warn(`No mood forecast found for ${key}`);
+      return 'Mood forecast updating...';
+    }
+    
+  function resolveDynamicText(type, data, forecastMood, forecastDay) {
     if (data.dynamic_text && Object.prototype.hasOwnProperty.call(data.dynamic_text, type)) {
       return data.dynamic_text[type] ?? "";
     }
@@ -207,11 +222,18 @@ body {
           c.className = 'el-content';
           
           // Get text content
-          let txt = el.text || '';
-          if (el.type && el.type !== 'CUSTOM') {
-            txt = resolveDynamicText(el.type, data);
-          }
-          c.textContent = txt;
+          const type = el.type || 'CUSTOM';
+        
+        if (type === 'FORECAST_MOOD') {
+          const mood = el.forecastMood || 'upbeat';
+          const day = el.forecastDay || 'today';
+          content.textContent = resolveDynamicText(type, data, mood, day);
+          console.log(`Rendering mood forecast: ${mood} ${day}`);
+        } else if (type === 'CUSTOM') {
+          content.textContent = el.text || '';
+        } else {
+          content.textContent = resolveDynamicText(type, data);
+        }
           
           // Apply styles
           c.style.fontSize = (el.fontSize || 16) + 'px';
