@@ -421,7 +421,7 @@ async def get_joke() -> str:
 
 async def generate_mood_forecast(weather_data: dict, mood: str, day: str, location: str) -> str:
     """
-    Generate a mood-based weather forecast using Google Gemini Flash (free tier).
+    Generate a mood-based weather forecast using Groq (fastest free AI API).
     
     Args:
         weather_data: Dict containing temp_min, temp_max, desc, humidity, wind
@@ -432,7 +432,7 @@ async def generate_mood_forecast(weather_data: dict, mood: str, day: str, locati
     Returns:
         Generated forecast string (max 100 chars)
     """
-    api_key = os.getenv("GEMINI_API_KEY")
+    api_key = os.getenv("GROQ_API_KEY")
     
     # Fallback examples if API unavailable
     fallback_examples = {
@@ -455,12 +455,12 @@ async def generate_mood_forecast(weather_data: dict, mood: str, day: str, locati
     conditions = weather_data.get('desc', 'conditions')
     
     if not api_key:
-        logger.info("GEMINI_API_KEY not set, using fallback")
+        logger.info("GROQ_API_KEY not set, using fallback")
         key = f"{mood}_{day}"
         template = fallback_examples.get(key, "{}°-{}°C with {}")
         return template.format(temp_min, temp_max, conditions)[:100]
     
-    # Construct prompt for Gemini
+    # Construct prompt for Groq
     mood_instructions = {
         "upbeat": "enthusiastic and positive",
         "sarcastic": "witty and dry with subtle humor",
@@ -480,90 +480,94 @@ Weather: {weather_context}
 Requirements:
 - Maximum 25 words
 - Single sentence only
-- No greetings
-- Make it {mood_instructions.get(mood, 'casual')}"""
+- No greetings or preamble
+- Be {mood_instructions.get(mood, 'casual')}
+- Just the forecast sentence"""
 
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            logger.info(f"🤖 Calling Gemini Flash for {mood} {day} forecast")
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            logger.info(f"🚀 Calling Groq for {mood} {day} forecast")
             
-            # Gemini Flash API endpoint (free tier)
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key={api_key}"
+            # Groq API endpoint (OpenAI compatible)
+            url = "https://api.groq.com/openai/v1/chat/completions"
             
             payload = {
-                "contents": [{
-                    "parts": [{
-                        "text": prompt
-                    }]
-                }],
-                "generationConfig": {
-                    "temperature": 0.9,
-                    "maxOutputTokens": 60,
-                    "topP": 0.95,
-                }
+                "model": "llama-3.3-70b-versatile",  # Fast and smart
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                "temperature": 0.9,
+                "max_tokens": 60,
+                "top_p": 0.95
             }
             
-            response = await client.post(url, json=payload)
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            }
             
-            logger.info(f"Gemini response status: {response.status_code}")
+            response = await client.post(url, json=payload, headers=headers)
+            
+            logger.info(f"Groq response status: {response.status_code}")
             
             if response.status_code == 200:
                 result = response.json()
                 
-                # Extract text from Gemini response
-                candidates = result.get('candidates', [])
-                if candidates:
-                    content = candidates[0].get('content', {})
-                    parts = content.get('parts', [])
-                    if parts:
-                        generated_text = parts[0].get('text', '').strip()
-                        
-                        # Clean and limit
-                        words = generated_text.split()[:25]
-                        forecast = ' '.join(words)
-                        forecast = forecast.replace('Forecast:', '').replace('Weather:', '').strip()
-                        forecast = forecast.rstrip('.')  # Remove trailing period if present
-                        
-                        logger.info(f"✅ Generated {mood} {day} forecast: {forecast}")
-                        return forecast[:100]
+                # Extract text from Groq response (OpenAI format)
+                choices = result.get('choices', [])
+                if choices:
+                    message = choices[0].get('message', {})
+                    generated_text = message.get('content', '').strip()
+                    
+                    # Clean and limit
+                    words = generated_text.split()[:25]
+                    forecast = ' '.join(words)
+                    forecast = forecast.replace('Forecast:', '').replace('Weather:', '').strip()
+                    forecast = forecast.rstrip('.')  # Remove trailing period if present
+                    
+                    logger.info(f"✅ Generated {mood} {day} forecast: {forecast}")
+                    return forecast[:100]
                 
                 # If we couldn't extract text, use fallback
-                logger.warning("Could not extract text from Gemini response")
+                logger.warning("Could not extract text from Groq response")
                 raise Exception("No text in response")
                 
             else:
                 # Log the full error response
                 try:
                     error_body = response.json()
-                    logger.error(f"Gemini API error {response.status_code}: {error_body}")
+                    logger.error(f"Groq API error {response.status_code}: {error_body}")
                 except:
-                    logger.error(f"Gemini API error {response.status_code}: {response.text[:200]}")
+                    logger.error(f"Groq API error {response.status_code}: {response.text[:200]}")
                 raise Exception(f"API error: {response.status_code}")
                 
     except httpx.TimeoutException as e:
-        logger.error(f"Gemini timeout error: {str(e)}")
+        logger.error(f"Groq timeout error: {str(e)}")
         logger.error(traceback.format_exc())
         key = f"{mood}_{day}"
         template = fallback_examples.get(key, "{}°-{}°C with {}")
         forecast = template.format(temp_min, temp_max, conditions)[:100]
-        logger.info(f"Generated {mood}_{day} forecast: {forecast}")
+        logger.info(f"Generated {mood}_{day} forecast (fallback): {forecast}")
         return forecast
     except httpx.RequestError as e:
-        logger.error(f"Gemini request error: {str(e)}")
+        logger.error(f"Groq request error: {str(e)}")
         logger.error(traceback.format_exc())
         key = f"{mood}_{day}"
         template = fallback_examples.get(key, "{}°-{}°C with {}")
         forecast = template.format(temp_min, temp_max, conditions)[:100]
-        logger.info(f"Generated {mood}_{day} forecast: {forecast}")
+        logger.info(f"Generated {mood}_{day} forecast (fallback): {forecast}")
         return forecast
     except Exception as e:
-        logger.error(f"Gemini forecast failed: {type(e).__name__}: {str(e)}")
+        logger.error(f"Groq forecast failed: {type(e).__name__}: {str(e)}")
         logger.error(traceback.format_exc())
         # Use fallback
         key = f"{mood}_{day}"
         template = fallback_examples.get(key, "{}°-{}°C with {}")
         forecast = template.format(temp_min, temp_max, conditions)[:100]
-        logger.info(f"Generated {mood}_{day} forecast: {forecast}")
+        logger.info(f"Generated {mood}_{day} forecast (fallback): {forecast}")
         return forecast
 
 def get_pexels_categories() -> list:
