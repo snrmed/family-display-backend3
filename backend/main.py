@@ -3,6 +3,7 @@ import json
 import random
 import logging
 import traceback
+import asyncio
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 from pathlib import Path
@@ -420,7 +421,7 @@ async def get_joke() -> str:
 
 async def generate_mood_forecast(weather_data: dict, mood: str, day: str, location: str) -> str:
     """
-    Generate a mood-based weather forecast using DeepAI API.
+    Generate a mood-based weather forecast using Google Gemini Flash (free tier).
     
     Args:
         weather_data: Dict containing temp_min, temp_max, desc, humidity, wind
@@ -431,7 +432,7 @@ async def generate_mood_forecast(weather_data: dict, mood: str, day: str, locati
     Returns:
         Generated forecast string (max 100 chars)
     """
-    api_key = os.getenv("DEEPAI_API_KEY")
+    api_key = os.getenv("GEMINI_API_KEY")
     
     # Fallback examples if API unavailable
     fallback_examples = {
@@ -454,12 +455,12 @@ async def generate_mood_forecast(weather_data: dict, mood: str, day: str, locati
     conditions = weather_data.get('desc', 'conditions')
     
     if not api_key:
-        logger.info("DEEPAI_API_KEY not set, using fallback")
+        logger.info("GEMINI_API_KEY not set, using fallback")
         key = f"{mood}_{day}"
         template = fallback_examples.get(key, "{}°-{}°C with {}")
         return template.format(temp_min, temp_max, conditions)[:100]
     
-    # Construct prompt for DeepAI
+    # Construct prompt for Gemini
     mood_instructions = {
         "upbeat": "enthusiastic and positive",
         "sarcastic": "witty and dry with subtle humor",
@@ -472,47 +473,92 @@ async def generate_mood_forecast(weather_data: dict, mood: str, day: str, locati
     day_text = "today" if day == "today" else "tomorrow"
     weather_context = f"{conditions}, {temp_min}°-{temp_max}°C in {location}"
     
-    prompt = f"""Write a single-sentence weather forecast for {day_text} in a {mood_instructions.get(mood, 'casual')} style.
+    prompt = f"""Write ONE SHORT sentence for a weather forecast for {day_text} in a {mood_instructions.get(mood, 'casual')} style.
 
 Weather: {weather_context}
 
-Maximum 30 words. No greetings or sign-offs. Make it engaging."""
+Requirements:
+- Maximum 25 words
+- Single sentence only
+- No greetings
+- Make it {mood_instructions.get(mood, 'casual')}"""
 
     try:
-        async with httpx.AsyncClient() as client:
-            logger.info(f"🤖 Calling DeepAI for {mood} {day} forecast")
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            logger.info(f"🤖 Calling Gemini Flash for {mood} {day} forecast")
             
-            response = await client.post(
-                'https://api.deepai.org/api/text-generator',
-                data={'text': prompt},
-                headers={'api-key': api_key},
-                timeout=15
-            )
+            # Gemini Flash API endpoint (free tier)
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key={api_key}"
             
-            logger.info(f"DeepAI response status: {response.status_code}")
+            payload = {
+                "contents": [{
+                    "parts": [{
+                        "text": prompt
+                    }]
+                }],
+                "generationConfig": {
+                    "temperature": 0.9,
+                    "maxOutputTokens": 60,
+                    "topP": 0.95,
+                }
+            }
+            
+            response = await client.post(url, json=payload)
+            
+            logger.info(f"Gemini response status: {response.status_code}")
             
             if response.status_code == 200:
                 result = response.json()
-                generated_text = result.get('output', '').strip()
                 
-                # Clean and limit
-                words = generated_text.split()[:30]
-                forecast = ' '.join(words)
-                forecast = forecast.replace('Forecast:', '').replace('Weather:', '').strip()
+                # Extract text from Gemini response
+                candidates = result.get('candidates', [])
+                if candidates:
+                    content = candidates[0].get('content', {})
+                    parts = content.get('parts', [])
+                    if parts:
+                        generated_text = parts[0].get('text', '').strip()
+                        
+                        # Clean and limit
+                        words = generated_text.split()[:25]
+                        forecast = ' '.join(words)
+                        forecast = forecast.replace('Forecast:', '').replace('Weather:', '').strip()
+                        forecast = forecast.rstrip('.')  # Remove trailing period if present
+                        
+                        logger.info(f"✅ Generated {mood} {day} forecast: {forecast}")
+                        return forecast[:100]
                 
-                logger.info(f"✅ Generated {mood} {day} forecast: {forecast}")
-                return forecast[:100]
+                # If we couldn't extract text, use fallback
+                logger.warning("Could not extract text from Gemini response")
+                raise Exception("No text in response")
+                
             else:
                 # Log the full error response
                 try:
                     error_body = response.json()
-                    logger.error(f"DeepAI API error {response.status_code}: {error_body}")
+                    logger.error(f"Gemini API error {response.status_code}: {error_body}")
                 except:
-                    logger.error(f"DeepAI API error {response.status_code}: {response.text[:200]}")
+                    logger.error(f"Gemini API error {response.status_code}: {response.text[:200]}")
                 raise Exception(f"API error: {response.status_code}")
                 
+    except httpx.TimeoutException as e:
+        logger.error(f"Gemini timeout error: {str(e)}")
+        logger.error(traceback.format_exc())
+        key = f"{mood}_{day}"
+        template = fallback_examples.get(key, "{}°-{}°C with {}")
+        forecast = template.format(temp_min, temp_max, conditions)[:100]
+        logger.info(f"Generated {mood}_{day} forecast: {forecast}")
+        return forecast
+    except httpx.RequestError as e:
+        logger.error(f"Gemini request error: {str(e)}")
+        logger.error(traceback.format_exc())
+        key = f"{mood}_{day}"
+        template = fallback_examples.get(key, "{}°-{}°C with {}")
+        forecast = template.format(temp_min, temp_max, conditions)[:100]
+        logger.info(f"Generated {mood}_{day} forecast: {forecast}")
+        return forecast
     except Exception as e:
-        logger.error(f"DeepAI forecast failed: {e}")
+        logger.error(f"Gemini forecast failed: {type(e).__name__}: {str(e)}")
+        logger.error(traceback.format_exc())
         # Use fallback
         key = f"{mood}_{day}"
         template = fallback_examples.get(key, "{}°-{}°C with {}")
