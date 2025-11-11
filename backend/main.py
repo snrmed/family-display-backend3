@@ -774,7 +774,7 @@ async def render_html_to_png(render_path: str, context: dict) -> bytes:
         # Navigate to the page (renderData now exists before page loads)
         response = await page.goto(url, wait_until="domcontentloaded", timeout=30000)
         
-        if not response or response.status_code != 200:
+        if not response or response.status != 200:
             logger.error(f"Failed to load page. Status: {response.status if response else 'No response'}")
             raise RuntimeError(f"Page load failed with status {response.status if response else 'unknown'}")
 
