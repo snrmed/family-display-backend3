@@ -65,7 +65,6 @@ GCS_BUCKET = os.getenv("GCS_BUCKET", "family-display-packs")
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "adm_860510")
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "")
 ENABLE_RENDERING = os.getenv("ENABLE_RENDERING", "true").lower() == "true"
-ENABLE_PEXELS = os.getenv("ENABLE_PEXELS", "true").lower() == "true"
 ENABLE_OPENWEATHER = os.getenv("ENABLE_OPENWEATHER", "true").lower() == "true"
 ENABLE_JOKES_API = os.getenv("ENABLE_JOKES_API", "true").lower() == "true"
 DEFAULT_ICON_THEME = os.getenv("WEATHER_ICON_PACK", "happy-skies")
@@ -570,42 +569,176 @@ Requirements:
         logger.info(f"Generated {mood}_{day} forecast (fallback): {forecast}")
         return forecast
 
-def get_pexels_categories() -> list:
-    if not storage_enabled:
-        return ["abstract", "geometric", "minimal"]
-    try:
-        blobs = bucket.list_blobs(prefix="pexels/current/")
-        categories = set()
-        for blob in blobs:
-            fn = blob.name.split("/")[-1]
-            if "_" in fn:
-                categories.add(fn.split("_")[0])
-        out = sorted(categories)
-        return out or ["abstract", "geometric", "minimal"]
-    except Exception as e:
-        logger.warning(f"Could not list Pexels categories: {e}")
-        return ["abstract", "geometric", "minimal"]
+async def download_unsplash_theme_set(theme: str = "modern_minimal", images_per_theme: int = 9) -> int:
+    """
+    Download a set of images for a theme from Unsplash and store in GCS.
+    This is called by a scheduler/admin endpoint, not during regular renders.
+    
+    Returns: Number of images successfully downloaded
+    """
+    api_key = os.getenv("UNSPLASH_ACCESS_KEY")
+    
+    if not api_key or not storage_enabled:
+        logger.error("Cannot download: UNSPLASH_ACCESS_KEY or GCS not configured")
+        return 0
+    
+    # Theme subcategories
+    theme_subcategories = {
+        "modern_minimal": [
+            "minimal gradient", "abstract gradient", "pastel gradient",
+            "geometric minimal", "modern abstract", "color field",
+            "soft gradient background", "minimal shapes", "abstract waves"
+        ],
+        "playful_illustrations": [
+            "cute illustration", "kawaii pattern", "doodle pattern",
+            "cartoon pattern", "colorful shapes", "paper craft",
+            "kids illustration", "playful abstract", "flat illustration"
+        ],
+        "nature_abstraction": [
+            "abstract nature", "watercolor abstract", "organic shapes",
+            "botanical abstract", "marble texture", "ink water abstract",
+            "pastel nature", "abstract landscape", "zen minimalist"
+        ],
+        "retro_vibrant": [
+            "retro abstract", "70s pattern", "memphis design",
+            "pop art abstract", "vintage geometric", "retro gradient",
+            "bauhaus design", "mid century pattern", "graphic design poster"
+        ],
+        "textured_artistic": [
+            "abstract painting", "acrylic abstract", "collage art",
+            "artistic texture", "expressionist abstract", "contemporary art",
+            "mixed media art", "abstract expressionism", "modern painting"
+        ]
+    }
+    
+    subcategories = theme_subcategories.get(theme, theme_subcategories["modern_minimal"])
+    downloaded_count = 0
+    
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        for i, query in enumerate(subcategories[:images_per_theme]):
+            try:
+                # Get random image from Unsplash
+                response = await client.get(
+                    "https://api.unsplash.com/photos/random",
+                    params={
+                        "query": query,
+                        "orientation": "landscape",
+                        "client_id": api_key
+                    }
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    
+                    # Use Unsplash's custom size API for optimal 800x480 display
+                    # Request 800x480 with crop to fill (ensures perfect fit)
+                    base_url = data["urls"]["raw"]
+                    custom_url = f"{base_url}&w=800&h=480&fit=crop&crop=entropy"
+                    
+                    photo_id = data["id"]
+                    
+                    # Download image at custom size
+                    img_response = await client.get(custom_url)
+                    if img_response.status_code == 200:
+                        # Save to GCS: backgrounds/{theme}/{index}_{photo_id}.jpg
+                        blob_name = f"backgrounds/{theme}/{i}_{photo_id}.jpg"
+                        blob = bucket.blob(blob_name)
+                        blob.upload_from_string(
+                            img_response.content,
+                            content_type="image/jpeg"
+                        )
+                        
+                        downloaded_count += 1
+                        logger.info(f"  ✅ {i+1}/{images_per_theme}: {query} → {blob_name} (800x480)")
+                    
+                    # Respect rate limits (50/hour = ~72 seconds for 50)
+                    await asyncio.sleep(2)
+                    
+            except Exception as e:
+                logger.error(f"  ❌ Failed to download {query}: {e}")
+    
+    logger.info(f"🎉 Downloaded {downloaded_count}/{images_per_theme} images for {theme}")
+    return downloaded_count
 
-def choose_pexels_background(selected_category: str = None) -> dict | None:
+
+def choose_background_from_storage(selected_theme: str = None) -> dict | None:
+    """
+    Choose a random background from pre-downloaded images in GCS.
+    This is fast and doesn't call external APIs.
+    """
     if not storage_enabled:
         return None
+    
     try:
-        prefix = "pexels/current/"
+        # Default to modern_minimal if no theme specified
+        if not selected_theme:
+            selected_theme = "modern_minimal"
+        
+        # List all images for this theme
+        prefix = f"backgrounds/{selected_theme}/"
         blobs = list(bucket.list_blobs(prefix=prefix))
-        if selected_category:
-            blobs = [b for b in blobs if b.name.split("/")[-1].startswith(f"{selected_category}_")]
+        
+        # Filter for image files
+        blobs = [b for b in blobs if b.name.endswith(('.jpg', '.jpeg', '.png'))]
+        
         if blobs:
+            # Randomly select one
             chosen = random.choice(blobs)
             filename = chosen.name.split("/")[-1]
-            category = filename.split("_")[0] if "_" in filename else "unknown"
+            
+            logger.info(f"📸 Selected background: {selected_theme}/{filename}")
+            
             return {
                 "url": make_public_url(f"gcs/{chosen.name}"),
-                "category": category,
-                "filename": filename,
+                "theme": selected_theme,
+                "filename": filename
             }
+        else:
+            logger.warning(f"No images found for theme: {selected_theme}")
+            
     except Exception as e:
-        logger.warning(f"Could not choose Pexels background: {e}")
+        logger.warning(f"Could not choose background from storage: {e}")
+    
     return None
+
+
+def get_unsplash_themes() -> list:
+    """Return list of available Unsplash themes for the designer"""
+    return [
+        {
+            "id": "modern_minimal",
+            "name": "Modern Minimal",
+            "description": "Clean gradients and geometric shapes",
+            "mood": "Professional, calm, modern"
+        },
+        {
+            "id": "playful_illustrations",
+            "name": "Playful Illustrations", 
+            "description": "Fun, colorful, family-friendly",
+            "mood": "Cheerful, playful, engaging"
+        },
+        {
+            "id": "nature_abstraction",
+            "name": "Nature Abstraction",
+            "description": "Organic patterns and soft colors",
+            "mood": "Zen, peaceful, calming"
+        },
+        {
+            "id": "retro_vibrant",
+            "name": "Retro Vibrant",
+            "description": "Bold colors and vintage patterns",
+            "mood": "Energetic, fun, nostalgic"
+        },
+        {
+            "id": "textured_artistic",
+            "name": "Textured Artistic",
+            "description": "Gallery-worthy abstract art",
+            "mood": "Sophisticated, creative"
+        }
+    ]
+
+
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # RENDER DATA
@@ -688,19 +821,21 @@ async def build_render_data(device: str = "familydisplay") -> dict:
     # content
     dad_joke = await get_joke()
 
-    # background
-    selected_category = layout.get("meta", {}).get("pexelsCategory")
-    pexels_info = choose_pexels_background(selected_category) if (ENABLE_PEXELS and storage_enabled) else None
-    if pexels_info:
-        bg_url = pexels_info["url"]
+    # background - use pre-downloaded images from GCS storage
+    selected_theme = layout.get("meta", {}).get("unsplashTheme", "modern_minimal")
+    
+    # Get background from storage (fast, no API calls)
+    bg_info = choose_background_from_storage(selected_theme) if storage_enabled else None
+    
+    # Fallback to a default image if nothing in storage
+    if bg_info:
+        bg_url = bg_info["url"]
     else:
-        bg_url = make_public_url("gcs/pexels/current/abstract_0.jpg")
+        logger.warning(f"No backgrounds found for theme: {selected_theme}, using fallback")
+        bg_url = make_public_url("gcs/backgrounds/default.jpg")
 
-    # categories list
-    categories = get_pexels_categories() if ENABLE_PEXELS else []
-    if ENABLE_PEXELS:
-        pexels_info = pexels_info or {}
-        pexels_info["categories"] = categories
+    # themes list for designer
+    unsplash_themes = get_unsplash_themes()
 
     date_str = now.strftime("%a, %d %b")
 
@@ -792,14 +927,14 @@ async def build_render_data(device: str = "familydisplay") -> dict:
         "dad_joke": dad_joke,
         "date": date_str,
         "bg_url": bg_url,
-        "pexels": pexels_info,
+        "unsplash_themes": unsplash_themes,
         "svg_base": svg_base,
         "font_base": font_base,
         "icon_base": icon_base,
         "dynamic_text": dynamic_text,
         "device": device_config,
         "timestamp": now.isoformat(),
-        "mood_forecasts": mood_forecasts,  # ADD THIS LINE
+        "mood_forecasts": mood_forecasts,
     }
     return context
 # ──────────────────────────────────────────────────────────────────────────────
@@ -1189,11 +1324,58 @@ def list_svgs():
         logger.error(f"Failed to list SVGs: {e}")
         return {"svgs": []}
 
-@app.get("/api/list-pexels-categories")
-def list_pexels_categories():
-    """List available Pexels categories."""
-    categories = get_pexels_categories()
-    return {"categories": categories}
+@app.get("/api/list-unsplash-themes")
+def list_unsplash_themes():
+    """List available Unsplash theme sets."""
+    themes = get_unsplash_themes()
+    return {"themes": themes}
+
+@app.post("/admin/download-theme-backgrounds")
+async def admin_download_backgrounds(token: str = None, theme: str = "modern_minimal", count: int = 9):
+    """
+    Admin endpoint to download backgrounds for a theme from Unsplash to GCS.
+    Usage: POST /admin/download-theme-backgrounds?token=XXX&theme=modern_minimal&count=9
+    """
+    if token != ADMIN_TOKEN:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    try:
+        downloaded = await download_unsplash_theme_set(theme, count)
+        return {
+            "status": "success",
+            "theme": theme,
+            "downloaded": downloaded,
+            "total": count
+        }
+    except Exception as e:
+        logger.error(f"Failed to download backgrounds: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/admin/download-all-themes")
+async def admin_download_all_themes(token: str = None, count: int = 9):
+    """
+    Admin endpoint to download backgrounds for ALL themes.
+    Usage: POST /admin/download-all-themes?token=XXX&count=9
+    """
+    if token != ADMIN_TOKEN:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    themes = ["modern_minimal", "playful_illustrations", "nature_abstraction", "retro_vibrant", "textured_artistic"]
+    results = {}
+    
+    for theme in themes:
+        try:
+            downloaded = await download_unsplash_theme_set(theme, count)
+            results[theme] = {"downloaded": downloaded, "total": count}
+            logger.info(f"✅ Completed theme: {theme}")
+        except Exception as e:
+            results[theme] = {"error": str(e)}
+            logger.error(f"❌ Failed theme: {theme} - {e}")
+    
+    return {
+        "status": "completed",
+        "results": results
+    }
 
 @app.get("/api/search-location")
 async def search_location(q: str):
