@@ -865,20 +865,20 @@ async def render_html_to_png(render_path: str, context: dict) -> bytes:
     
     # Navigate to base.html without data parameter
     # Build a proper HTTP URL from the provided render_path
-path = render_path or "/layouts/base.html"
+    path = render_path or "/layouts/base.html"
 
-# If caller passed a full URL, use it as-is
-if path.startswith("http://") or path.startswith("https://"):
-    url = path
-else:
-    # Treat anything else as a served URL path (not a container file path)
-    # Normalize to the known route we expose for base.html
-    if path.endswith("base.html"):
-        path = "/layouts/base.html"
-    if not path.startswith("/"):
-        path = "/" + path
-    url = f"{public_base}{path}"
-    
+    # If caller passed a full URL, use it as-is
+    if path.startswith("http://") or path.startswith("https://"):
+        url = path
+    else:
+        # Treat anything else as a served URL path (not a container file path)
+        # Normalize to the known route we expose for base.html
+        if path.endswith("base.html"):
+            path = "/layouts/base.html"
+        if not path.startswith("/"):
+            path = "/" + path
+        url = f"{public_base}{path}"
+
     logger.info(f"🎨 Rendering via: {url}")
     logger.info(f"📊 Context data size: {len(json.dumps(context))} bytes")
     logger.info(f"📐 Layout elements: {len(context.get('layout', {}).get('elements', []))}")
@@ -886,33 +886,33 @@ else:
     try:
         # Navigate to the page first
         response = await page.goto(url, wait_until="domcontentloaded", timeout=30000)
-        
+
         if not response or response.status != 200:
             logger.error(f"Failed to load page. Status: {response.status if response else 'No response'}")
             raise RuntimeError(f"Page load failed with status {response.status if response else 'unknown'}")
-        
+
         # Inject the context data
-        await page.evaluate(f"""
+        await page.evaluate(
+            f"""
             window.renderData = {json.dumps(context)};
-        """)
-        
+        """
+        )
+
         # Wait a bit for rendering
         await page.wait_for_timeout(1000)
-        
+
         # Take screenshot
         png_bytes = await page.screenshot(type="png")
-        
-        await page.close()
-        
+
         logger.info("✅ Render complete")
         return png_bytes
-        
+
     except Exception as e:
         logger.error(f"Rendering error: {e}")
         logger.error(traceback.format_exc())
-        if page:
-            await page.close()
         raise
+    finally:
+        await page.close()
 
 # ──────────────────────────────────────────────────────────────────────────────
 # API ROUTES
