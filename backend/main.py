@@ -395,7 +395,7 @@ async def get_weather(lat: float = None, lon: float = None, city: str = None) ->
         "location_name": "Darwin",
     }
     
-    async def get_joke() -> str:
+async def get_joke() -> str:
     if ENABLE_JOKES_API:
         try:
             async with httpx.AsyncClient() as client:
@@ -405,7 +405,10 @@ async def get_weather(lat: float = None, lon: float = None, city: str = None) ->
                     timeout=5,
                 )
                 if r.status_code == 200:
-                    return r.json()["joke"]
+                    data = r.json()
+                    joke = data.get("joke", "").strip()
+                    if joke:
+                        return joke
         except Exception as e:
             logger.warning(f"Joke API failed: {e}")
     return random.choice(LOCAL_JOKES)
