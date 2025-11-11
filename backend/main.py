@@ -144,6 +144,13 @@ def gcs_write_json(key: str, data: dict):
     blob.upload_from_string(json.dumps(data, indent=2), content_type="application/json")
     logger.info(f"💾 Saved: {key}")
 
+def gcs_write_bytes(key: str, data: bytes, content_type: str = "image/png"):
+    if not storage_enabled:
+        raise RuntimeError("GCS not enabled")
+    blob = bucket.blob(key)
+    blob.upload_from_string(data, content_type=content_type)
+    logger.info(f"💾 Saved: {key}")
+
 # ============================================================================
 # DEVICE LAYOUT LOADING
 # ============================================================================
@@ -166,13 +173,6 @@ def load_device_layout(device_id: str) -> dict:
 
     # 3) Empty skeleton as last resort
     return {"name": "Default", "elements": []}
-
-def gcs_write_bytes(key: str, data: bytes, content_type: str = "image/png"):
-    if not storage_enabled:
-        raise RuntimeError("GCS not enabled")
-    blob = bucket.blob(key)
-    blob.upload_from_string(data, content_type=content_type)
-    logger.info(f"💾 Saved: {key}")
 
 # ──────────────────────────────────────────────────────────────────────────────
 # DEVICE CONFIGURATION
@@ -244,6 +244,44 @@ def resolve_weather_icon_url(theme: str, code: str) -> str:
     path = f"assets/weather-icons/{theme}/{code}.svg"
     return make_public_url(f"gcs/{path}")
 
+async def get_uv_index(lat: float, lon: float) -> dict:
+    """
+    Get UV index from OpenWeather One Call API.
+    Note: This requires One Call API access (may need subscription).
+    Returns dict with 'uvi' key or empty dict if unavailable.
+    """
+    api_key = os.getenv("OPENWEATHER_KEY")
+    
+    if not api_key:
+        return {}
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            # Try One Call API 3.0 (current weather + forecast)
+            url = "https://api.openweathermap.org/data/3.0/onecall"
+            params = {
+                "lat": lat,
+                "lon": lon,
+                "appid": api_key,
+                "exclude": "minutely,hourly,daily,alerts"  # Only get current
+            }
+            
+            response = await client.get(url, params=params, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                uvi = data.get("current", {}).get("uvi")
+                if uvi is not None:
+                    return {"uvi": round(uvi, 1)}
+            elif response.status_code == 401:
+                # One Call API not available, try legacy UV endpoint
+                logger.info("One Call API not available, UV index will be skipped")
+                
+    except Exception as e:
+        logger.debug(f"UV index fetch failed (this is optional): {e}")
+    
+    return {}
+
 async def get_weather(lat: float = None, lon: float = None, city: str = None) -> dict:
     """Get weather from OpenWeather using lat/lon (preferred) or city name (fallback)."""
     api_key = os.getenv("OPENWEATHER_KEY")
@@ -287,19 +325,52 @@ async def get_weather(lat: float = None, lon: float = None, city: str = None) ->
                     if fr.status_code == 200:
                         forecast = fr.json()
                         if forecast.get("list"):
-                            # Today's min/max from first 8 entries
-                            today_temps = [entry["main"]["temp"] for entry in forecast["list"][:8]]
+                            # Today's detailed forecast from first 8 entries (24 hours)
+                            today_entries = forecast["list"][:8]
+                            today_temps = [entry["main"]["temp"] for entry in today_entries]
                             today_min = round(min(today_temps)) if today_temps else None
                             today_max = round(max(today_temps)) if today_temps else None
                             
+                            # Today's additional data
+                            today_humidity = round(sum(e["main"]["humidity"] for e in today_entries) / len(today_entries))
+                            today_wind = round(sum(e["wind"]["speed"] for e in today_entries) / len(today_entries) * 3.6)
+                            
+                            # Today's rain timing
+                            today_rain_hours = []
+                            for entry in today_entries:
+                                if "rain" in entry and entry["rain"].get("3h", 0) > 0:
+                                    # Extract hour from dt_txt (e.g., "2025-11-10 15:00:00")
+                                    time_str = entry.get("dt_txt", "")
+                                    if time_str:
+                                        hour = int(time_str.split()[1].split(":")[0])
+                                        today_rain_hours.append(hour)
+                            
                             # Tomorrow's forecast (entries 8-16)
+                            tomorrow_data = None
                             if len(forecast["list"]) > 8:
-                                tomorrow_temps = [entry["main"]["temp"] for entry in forecast["list"][8:16]]
+                                tomorrow_entries = forecast["list"][8:16]
+                                tomorrow_temps = [entry["main"]["temp"] for entry in tomorrow_entries]
                                 tomorrow_entry = forecast["list"][8]
+                                
+                                tomorrow_humidity = round(sum(e["main"]["humidity"] for e in tomorrow_entries) / len(tomorrow_entries))
+                                tomorrow_wind = round(sum(e["wind"]["speed"] for e in tomorrow_entries) / len(tomorrow_entries) * 3.6)
+                                
+                                # Tomorrow's rain timing
+                                tomorrow_rain_hours = []
+                                for entry in tomorrow_entries:
+                                    if "rain" in entry and entry["rain"].get("3h", 0) > 0:
+                                        time_str = entry.get("dt_txt", "")
+                                        if time_str:
+                                            hour = int(time_str.split()[1].split(":")[0])
+                                            tomorrow_rain_hours.append(hour)
+                                
                                 tomorrow_data = {
                                     "temp_min": round(min(tomorrow_temps)) if tomorrow_temps else None,
                                     "temp_max": round(max(tomorrow_temps)) if tomorrow_temps else None,
                                     "desc": tomorrow_entry["weather"][0]["description"].title(),
+                                    "humidity": tomorrow_humidity,
+                                    "wind": tomorrow_wind,
+                                    "rain_hours": tomorrow_rain_hours,
                                 }
 
                     # Use forecast min/max if available
@@ -318,27 +389,17 @@ async def get_weather(lat: float = None, lon: float = None, city: str = None) ->
                         verbose_desc += f"Rainfall of {rain_amount}mm expected. "
                     elif "rain" in desc.lower() or "drizzle" in desc.lower():
                         verbose_desc += "Some rain expected throughout the day. "
-                    
-                    if wind_speed > 30:
-                        verbose_desc += f"Windy conditions with gusts up to {wind_speed} km/h. "
-                    elif wind_speed > 15:
-                        verbose_desc += f"Moderate winds around {wind_speed} km/h. "
-                    
-                    if humidity > 80:
-                        verbose_desc += "High humidity making it feel quite muggy."
-                    elif humidity > 60:
-                        verbose_desc += "Moderate humidity levels."
+                    elif "storm" in desc.lower() or "thunder" in desc.lower():
+                        verbose_desc += "Stormy conditions possible. "
+                    elif "cloud" in desc.lower():
+                        verbose_desc += "Cloudy skies throughout. "
                     else:
-                        verbose_desc += "Relatively dry conditions."
+                        verbose_desc += "Clear conditions expected. "
                     
-                    # Build tomorrow's verbose description
-                    tomorrow_verbose = None
+                    # Tomorrow's extended description
                     if tomorrow_data:
                         tmr_desc = tomorrow_data["desc"].lower()
-                        tmr_min = tomorrow_data["temp_min"]
-                        tmr_max = tomorrow_data["temp_max"]
-                        
-                        tomorrow_verbose = f"Tomorrow expecting {tmr_desc} with temperatures from {tmr_min}°C to {tmr_max}°C. "
+                        tomorrow_verbose = f"Tomorrow expecting {tomorrow_data['desc']} with temperatures from {tomorrow_data['temp_min']}°C to {tomorrow_data['temp_max']}°C. "
                         
                         if "rain" in tmr_desc or "drizzle" in tmr_desc or "shower" in tmr_desc:
                             tomorrow_verbose += "Rain expected. "
@@ -353,11 +414,15 @@ async def get_weather(lat: float = None, lon: float = None, city: str = None) ->
 
                     # Get location name from response
                     location_name = data.get("name", city or "Unknown")
+                    
+                    # Try to get UV index (optional, may not be available on all plans)
+                    uv_data = await get_uv_index(actual_lat, actual_lon)
+                    uvi = uv_data.get("uvi")
 
                     return {
-                        "humidity": humidity,
+                        "humidity": today_humidity if 'today_humidity' in locals() else humidity,
                         "rain": rain_amount,
-                        "wind": wind_speed,
+                        "wind": today_wind if 'today_wind' in locals() else wind_speed,
                         "icon": data["weather"][0]["icon"],
                         "desc": desc.title(),
                         "desc_extended": verbose_desc,
@@ -368,6 +433,8 @@ async def get_weather(lat: float = None, lon: float = None, city: str = None) ->
                         "lat": actual_lat,
                         "lon": actual_lon,
                         "location_name": location_name,
+                        "rain_hours": today_rain_hours if 'today_rain_hours' in locals() else [],
+                        "uvi": uvi,
                     }
         except Exception as e:
             logger.warning(f"OpenWeather API failed: {e}")
@@ -409,6 +476,162 @@ async def get_joke() -> str:
         except Exception as e:
             logger.warning(f"Joke API failed: {e}")
     return random.choice(LOCAL_JOKES)
+
+# ──────────────────────────────────────────────────────────────────────────────
+# MOOD FORECAST (DeepAI Integration)
+# ──────────────────────────────────────────────────────────────────────────────
+
+async def generate_mood_forecast(weather_data: dict, mood: str, day: str, location: str) -> str:
+    """
+    Generate a mood-based weather forecast using DeepAI API.
+    
+    Args:
+        weather_data: Dict containing temp_min, temp_max, desc, humidity, wind, rain_hours
+        mood: One of: "upbeat", "sarcastic", "poetic", "dad_joke", "enthusiastic", "grumpy"
+        day: "today" or "tomorrow"
+        location: City/suburb name
+    
+    Returns:
+        Generated forecast string (max 30 words)
+    """
+    api_key = os.getenv("DEEPAI_API_KEY")
+    
+    # Fallback examples if API unavailable
+    fallback_examples = {
+        'upbeat_today': "Sunshine and smiles ahead! {}°-{}°C with {} making it perfect for adventures!",
+        'upbeat_tomorrow': "Tomorrow's looking fantastic! {}°-{}°C with {} for a great day!",
+        'sarcastic_today': "Oh wonderful, another '{}' day. {}°-{}°C if you're wondering.",
+        'sarcastic_tomorrow': "Tomorrow: {}°-{}°C. Nature's way of keeping us guessing with {}.",
+        'poetic_today': "{} drift like whispered secrets. {}°-{}°C beneath shifting heavens.",
+        'poetic_tomorrow': "Tomorrow's canvas painted in {}°-{}°C hues, dancing with {}.",
+        'dad_joke_today': "What's {}°C and full of potential? Today! Why? Because it's not degree-pressing with {}!",
+        'dad_joke_tomorrow': "Tomorrow's forecast: {}°C with 100% chance of {} somewhere!",
+        'enthusiastic_today': "WOW! AMAZING day ahead folks! {}°-{}°C of PURE {} EXCELLENCE!",
+        'enthusiastic_tomorrow': "TOMORROW IS GOING TO BE INCREDIBLE! {}°-{}°C of SPECTACULAR {}!",
+        'grumpy_today': "Another day. {}°-{}°C with {}. Could be worse. Could be better. Whatever.",
+        'grumpy_tomorrow': "Tomorrow's {}°-{}°C. Don't expect miracles with {}. It's just weather."
+    }
+    
+    temp_min = weather_data.get('temp_min', '--')
+    temp_max = weather_data.get('temp_max', '--')
+    conditions = weather_data.get('desc', 'conditions')
+    humidity = weather_data.get('humidity')
+    wind = weather_data.get('wind')
+    rain_hours = weather_data.get('rain_hours', [])
+    uvi = weather_data.get('uvi')
+    
+    if not api_key:
+        logger.info("DEEPAI_API_KEY not set, using fallback examples")
+        key = f"{mood}_{day}"
+        template = fallback_examples.get(key, "Weather forecast: {}°-{}°C with {}")
+        result = template.format(temp_min, temp_max, conditions)
+        return result[:100]  # Ensure max length
+    
+    # Construct detailed prompt for DeepAI
+    mood_instructions = {
+        "upbeat": "enthusiastic and positive, focusing on the bright side",
+        "sarcastic": "witty and dry, with subtle humor about the weather",
+        "poetic": "flowery and artistic, using metaphors and imagery",
+        "dad_joke": "include a weather-related pun, playful and silly",
+        "enthusiastic": "over-the-top excited like a TV weather presenter, use caps",
+        "grumpy": "curmudgeonly and mildly complaining about conditions"
+    }
+    
+    day_text = "today" if day == "today" else "tomorrow"
+    
+    # Build detailed weather context
+    weather_context = f"{conditions}, {temp_min}°-{temp_max}°C"
+    
+    details = []
+    if humidity is not None:
+        details.append(f"{humidity}% humidity")
+    if wind is not None:
+        details.append(f"{wind}km/h winds")
+    if uvi is not None:
+        # UV Index interpretation
+        if uvi >= 11:
+            uv_desc = "extreme UV"
+        elif uvi >= 8:
+            uv_desc = "very high UV"
+        elif uvi >= 6:
+            uv_desc = "high UV"
+        elif uvi >= 3:
+            uv_desc = "moderate UV"
+        else:
+            uv_desc = "low UV"
+        details.append(f"UV index {uvi} ({uv_desc})")
+    
+    # Rain timing information
+    if rain_hours:
+        if len(rain_hours) == 1:
+            details.append(f"rain around {rain_hours[0]:02d}:00")
+        elif len(rain_hours) == 2:
+            details.append(f"rain around {rain_hours[0]:02d}:00 and {rain_hours[1]:02d}:00")
+        elif len(rain_hours) > 2:
+            # Group into morning/afternoon/evening
+            morning = [h for h in rain_hours if 6 <= h < 12]
+            afternoon = [h for h in rain_hours if 12 <= h < 18]
+            evening = [h for h in rain_hours if 18 <= h < 24]
+            
+            rain_periods = []
+            if morning:
+                rain_periods.append("morning")
+            if afternoon:
+                rain_periods.append("afternoon")
+            if evening:
+                rain_periods.append("evening")
+            
+            if rain_periods:
+                details.append(f"rain in the {' and '.join(rain_periods)}")
+    
+    if details:
+        weather_context += f" ({', '.join(details)})"
+    
+    prompt = f"""Generate a weather forecast for {location} for {day_text} in a {mood} tone.
+
+Weather: {weather_context}
+
+Style: {mood_instructions.get(mood, 'casual')}
+
+Maximum 30 words. Single focused statement suitable for e-ink display. Do NOT include greetings or sign-offs. Make it engaging and mention the most interesting weather details."""
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                'https://api.deepai.org/api/text-generator',
+                data={'text': prompt},
+                headers={'api-key': api_key},
+                timeout=15
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                generated_text = result.get('output', '').strip()
+                
+                # Clean up and limit to 30 words
+                words = generated_text.split()[:30]
+                forecast = ' '.join(words)
+                
+                # Remove common prefixes/suffixes
+                forecast = forecast.replace('Forecast:', '').replace('Weather:', '').strip()
+                
+                logger.info(f"Generated {mood} {day} forecast: {forecast}")
+                return forecast
+            else:
+                logger.warning(f"DeepAI API returned status {response.status_code}")
+                raise Exception(f"API error: {response.status_code}")
+                
+    except Exception as e:
+        logger.error(f"DeepAI forecast generation failed: {e}")
+        # Return fallback
+        key = f"{mood}_{day}"
+        template = fallback_examples.get(key, "Weather forecast: {}°-{}°C with {}")
+        result = template.format(temp_min, temp_max, conditions)
+        return result[:100]
+
+# ──────────────────────────────────────────────────────────────────────────────
+# PEXELS
+# ──────────────────────────────────────────────────────────────────────────────
 
 def get_pexels_categories() -> list:
     if not storage_enabled:
@@ -498,71 +721,83 @@ async def build_render_data(device: str = "familydisplay") -> dict:
 
     # categories list
     categories = get_pexels_categories() if ENABLE_PEXELS else []
-    if ENABLE_PEXELS:
-        pexels_info = pexels_info or {}
-        pexels_info["categories"] = categories
 
-    date_str = now.strftime("%a, %d %b")
+    # Format date
+    date_str = now.strftime("%A, %B %d, %Y")
 
-    # bases (proxied paths)
-    if storage_enabled:
-        svg_base = make_public_url("gcs/assets/svgs")
-        font_base = make_public_url("gcs/assets/fonts")
-        icon_base = make_public_url("gcs/assets/weather-icons")
-    else:
-        svg_base = make_public_url("designer/svgs")
-        font_base = make_public_url("designer/fonts")
-        icon_base = make_public_url("designer/weather-icons")
+    # ─────────────────────────────────────────────────────────────────────
+    # MOOD FORECASTS - Process layout elements
+    # ─────────────────────────────────────────────────────────────────────
+    mood_forecasts = {}
+    if layout and layout.get('elements'):
+        for element in layout['elements']:
+            if element.get('type') == 'FORECAST_MOOD':
+                mood = element.get('forecastMood', 'upbeat')
+                day = element.get('forecastDay', 'today')
+                key = f"{mood}_{day}"
+                
+                # Only generate once per unique mood/day combination
+                if key not in mood_forecasts:
+                    if day == 'today' and weather:
+                        weather_data = {
+                            'temp_min': weather.get('temp_min'),
+                            'temp_max': weather.get('temp_max'),
+                            'desc': weather.get('desc', 'conditions'),
+                            'humidity': weather.get('humidity'),
+                            'wind': weather.get('wind'),
+                            'rain_hours': weather.get('rain_hours', []),
+                            'uvi': weather.get('uvi')
+                        }
+                    elif day == 'tomorrow' and weather and weather.get('tomorrow'):
+                        weather_data = {
+                            'temp_min': weather['tomorrow'].get('temp_min'),
+                            'temp_max': weather['tomorrow'].get('temp_max'),
+                            'desc': weather['tomorrow'].get('desc', 'conditions'),
+                            'humidity': weather['tomorrow'].get('humidity'),
+                            'wind': weather['tomorrow'].get('wind'),
+                            'rain_hours': weather['tomorrow'].get('rain_hours', []),
+                            'uvi': None  # UV index typically only for current day
+                        }
+                    else:
+                        weather_data = {
+                            'temp_min': 22, 
+                            'temp_max': 28, 
+                            'desc': 'conditions',
+                            'humidity': 65,
+                            'wind': 15,
+                            'rain_hours': [],
+                            'uvi': None
+                        }
+                    
+                    forecast = await generate_mood_forecast(weather_data, mood, day, location_name)
+                    mood_forecasts[key] = forecast
+                    logger.info(f"Generated {key} forecast: {forecast}")
 
-    # dynamic_text map (keys match get_weather())
-    w = weather or {}
-    tomorrow = (w.get("tomorrow") or {}) if isinstance(w, dict) else {}
-
-    def _fmt_temp(val):
-        if val is None:
-            return ""
-        try:
-            return f"{round(float(val))}°C"
-        except Exception:
-            return f"{val}°C"
-
+    # ─────────────────────────────────────────────────────────────────────
+    # Build dynamic_text mapping
+    # ─────────────────────────────────────────────────────────────────────
+    w = weather
+    tomorrow = w.get("tomorrow", {})
+    
+    def _fmt_temp(t):
+        return f"{int(round(t))}°C" if t is not None else "--°C"
+    
     def _fmt_minmax(tmin, tmax):
-        if tmin is None and tmax is None:
-            return ""
-        tmin_s = "" if tmin is None else str(round(float(tmin)))
-        tmax_s = "" if tmax is None else str(round(float(tmax)))
-        if tmin_s and tmax_s:
-            return f"{tmin_s}/{tmax_s}°C"
-        return f"{tmin_s or tmax_s}°C"
-
-    def _fmt_speed(val):
-        if val is None:
-            return ""
-        try:
-            v = float(val)
-            return f"{round(v)} km/h"
-        except Exception:
-            return f"{val} km/h"
-
-    def _fmt_rain(val):
-        if val is None:
-            return ""
-        try:
-            v = float(val)
-            s = f"{v:.1f}" if v and abs(v) < 1 else f"{round(v)}"
-            return f"{s}mm"
-        except Exception:
-            return f"{val}mm"
-
+        if tmin is not None and tmax is not None:
+            return f"{int(round(tmin))}° / {int(round(tmax))}°"
+        return "--° / --°"
+    
+    def _fmt_speed(s):
+        return f"{int(round(s))} km/h" if s is not None else "-- km/h"
+    
+    def _fmt_rain(r):
+        return f"{r} mm" if r is not None else "-- mm"
+    
     def _icon_url():
-        if w.get("icon_url"):
-            return w["icon_url"]
-        icon = w.get("icon") or ""
-        return f"{icon_base}/{icon}.svg" if icon else ""
+        return w.get("icon_url", "")
 
     dynamic_text = {
-        "CITY": w.get("city") or "",
-        "WEATHER_CITY": w.get("city") or "",
+        "CITY": location_name,
         "DATE": date_str,
         "JOKE": dad_joke or "",
         "TEMP": _fmt_temp(w.get("temp")),
@@ -578,11 +813,20 @@ async def build_render_data(device: str = "familydisplay") -> dict:
         "RAIN": _fmt_rain(w.get("rain")),
         "WEATHER_NOTE": (w.get("note") or ""),
         "TOMORROW_DESC": (tomorrow.get("desc") or "").title() if isinstance(tomorrow, dict) else "",
+        "TOMORROW_DESC_EXTENDED": (tomorrow.get("desc_extended") or "").strip() if isinstance(tomorrow, dict) else "",
         "TOMORROW_TEMP": _fmt_minmax(tomorrow.get("temp_min"), tomorrow.get("temp_max")) if isinstance(tomorrow, dict) else "",
         "CUSTOM": "",
         "ENABLE_OPENWEATHER": "true" if os.getenv("ENABLE_OPENWEATHER", "true").lower() == "true" else "false",
         "OPENWEATHER_KEY": os.getenv("OPENWEATHER_KEY", ""),
     }
+
+    # Add mood forecasts to dynamic_text
+    for key, forecast in mood_forecasts.items():
+        dynamic_text[f"FORECAST_{key.upper()}"] = forecast
+
+    svg_base = make_public_url("gcs/assets/svgs")
+    font_base = make_public_url("fonts")
+    icon_base = make_public_url(f"gcs/assets/weather-icons/{icon_theme}")
 
     context = {
         "layout": layout,
@@ -597,6 +841,7 @@ async def build_render_data(device: str = "familydisplay") -> dict:
         "dynamic_text": dynamic_text,
         "device": device_config,
         "timestamp": now.isoformat(),
+        "mood_forecasts": mood_forecasts,  # Include for debugging
     }
     return context
 
@@ -630,49 +875,44 @@ async def render_html_to_png(render_path: str, context: dict) -> bytes:
         response = await page.goto(url, wait_until="domcontentloaded", timeout=30000)
         
         if not response or response.status != 200:
-            logger.error(f"Failed to load page. Status: {response.status if response else 'None'}")
+            logger.error(f"Failed to load page. Status: {response.status if response else 'No response'}")
             raise RuntimeError(f"Page load failed with status {response.status if response else 'unknown'}")
         
-        # Inject the data directly into the page (avoids URL length limits)
-        logger.info("💉 Injecting render data into page...")
+        # Inject the context data
         await page.evaluate(f"""
             window.renderData = {json.dumps(context)};
-            if (typeof renderLayout === 'function') {{
-                renderLayout(window.renderData);
-            }}
         """)
         
-        # Wait for fonts to load
-        await page.evaluate(
-            "document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()"
-        )
-        
-        # Wait for rendering to complete
-        await page.wait_for_timeout(300)
+        # Wait a bit for rendering
+        await page.wait_for_timeout(1000)
         
         # Take screenshot
-        png_bytes = await page.screenshot(type="png", full_page=True)
-        logger.info(f"✓ Screenshot captured: {len(png_bytes)} bytes")
+        png_bytes = await page.screenshot(type="png")
+        
+        await page.close()
+        
+        logger.info("✅ Render complete")
         return png_bytes
         
     except Exception as e:
-        logger.error(f"Rendering error: {e}", exc_info=True)
+        logger.error(f"Rendering error: {e}")
+        logger.error(traceback.format_exc())
+        if page:
+            await page.close()
         raise
-    finally:
-        await page.close()
-        
+
 # ──────────────────────────────────────────────────────────────────────────────
 # API ROUTES
 # ──────────────────────────────────────────────────────────────────────────────
 
 # Device Config
 @app.get("/v1/devices/{device_id}/config")
-def api_get_device_config(device_id: str):
+async def api_get_device_config(device_id: str):
     try:
         config = get_device_config(device_id)
         return JSONResponse(content=config)
     except Exception as e:
-        logger.error(f"Failed to get device config: {e}")
+        logger.error(f"Failed to get config: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/v1/devices/{device_id}/config")
@@ -682,12 +922,12 @@ async def api_save_device_config(device_id: str, request: Request):
         save_device_config(device_id, config)
         return {"status": "saved", "device_id": device_id}
     except Exception as e:
-        logger.error(f"Failed to save device config: {e}")
+        logger.error(f"Failed to save config: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# Layouts
+# Device Layout
 @app.get("/v1/devices/{device_id}/layouts/current")
-def api_get_layout(device_id: str):
+async def api_get_layout(device_id: str):
     try:
         layout_key = f"devices/{device_id}/layouts/current.json"
         layout = gcs_read_json(layout_key)
@@ -729,171 +969,16 @@ async def api_frame(device: str = "familydisplay"):
         render_path = Path(RENDER_PATH)
         if not render_path.exists():
             render_path = BASE_DIR / "web" / "layouts" / "base.html"
+        
         png_bytes = await render_html_to_png(str(render_path), data)
-
+        
         if storage_enabled:
             render_key = f"devices/{device}/renders/latest.png"
             gcs_write_bytes(render_key, png_bytes)
-
+        
         return Response(content=png_bytes, media_type="image/png")
     except Exception as e:
-        logger.error(f"Failed to render frame: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-# Debug Routes
-@app.get("/v1/debug/render_data")
-async def debug_render_data(device: str = "familydisplay"):
-    try:
-        data = await build_render_data(device)
-        return {
-            "success": True,
-            "device": device,
-            "data_keys": list(data.keys()),
-            "layout_name": data.get("layout", {}).get("name"),
-            "element_count": len(data.get("layout", {}).get("elements", [])),
-            "weather": data.get("weather"),
-            "dad_joke": data.get("dad_joke"),
-            "date": data.get("date"),
-            "bg_url": data.get("bg_url"),
-            "svg_base": data.get("svg_base"),
-            "font_base": data.get("font_base"),
-            "icon_base": data.get("icon_base"),
-            "dynamic_text": data.get("dynamic_text"),
-        }
-    except Exception as e:
-        logger.error(f"Debug render data error: {e}", exc_info=True)
-        return {"success": False, "error": str(e), "traceback": traceback.format_exc()}
-
-@app.get("/v1/debug/frame_url")
-async def debug_frame_url(device: str = "familydisplay"):
-    """Debug endpoint to see what URL would be generated for rendering."""
-    try:
-        data = await build_render_data(device)
-        raw_json = json.dumps(data)
-        encoded_data = quote(raw_json, safe="")
-        public_base = os.getenv("PUBLIC_BASE_URL", "").rstrip("/")
-        url = f"{public_base}/layouts/base.html?data={encoded_data}"
-        
-        return {
-            "success": True,
-            "url_length": len(url),
-            "data_size": len(raw_json),
-            "url_preview": url[:500] + "..." if len(url) > 500 else url,
-            "layout_loaded": bool(data.get("layout")),
-            "element_count": len(data.get("layout", {}).get("elements", [])),
-            "has_weather": bool(data.get("weather")),
-            "has_bg_url": bool(data.get("bg_url")),
-            "weather_icon_url": data.get("weather", {}).get("icon_url")
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }
-
-@app.get("/v1/debug/layout")
-def debug_layout(device: str = "familydisplay"):
-    try:
-        layout_key = f"devices/{device}/layouts/current.json"
-        layout = gcs_read_json(layout_key)
-        return {
-            "success": True,
-            "device": device,
-            "layout_key": layout_key,
-            "layout": layout,
-            "element_count": len(layout.get("elements", [])),
-        }
-    except Exception as e:
-        logger.error(f"Debug layout error: {e}", exc_info=True)
-        return {
-            "success": False,
-            "error": str(e),
-            "layout_key": f"devices/{device}/layouts/current.json",
-            "gcs_bucket": GCS_BUCKET,
-            "storage_enabled": storage_enabled,
-        }
-
-# ──────────────────────────────────────────────────────────────────────────────
-# DESIGNER ROUTE (LOADS HTML DIRECTLY FROM GCS)
-# ──────────────────────────────────────────────────────────────────────────────
-
-@app.get("/designer/", response_class=HTMLResponse)
-async def designer():
-    """Serve Designer HTML directly from GCS bucket."""
-    if not storage_enabled:
-        raise HTTPException(status_code=503, detail="Storage not configured")
-
-    designer_key = "web/designer/overlay_designer_v4_clean.html"
-    try:
-        html_content = gcs_read_text(designer_key)
-        logger.info(f"✅ Designer loaded from {designer_key}")
-        return HTMLResponse(content=html_content, media_type="text/html")
-    except FileNotFoundError:
-        raise HTTPException(
-            status_code=404,
-            detail={
-                "error": "Designer not found in bucket",
-                "expected_key": designer_key,
-                "bucket": GCS_BUCKET,
-            },
-        )
-    except Exception as e:
-        logger.error(f"Failed to load designer: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
-
-# ──────────────────────────────────────────────────────────────────────────────
-# STATIC MOUNTS (optional in-container dev)
-# ──────────────────────────────────────────────────────────────────────────────
-
-try:
-    presets_dir = resolve_static_dir("web/presets", "backend/web/presets")
-    if presets_dir and presets_dir.is_dir():
-        app.mount("/presets", StaticFiles(directory=str(presets_dir)), name="presets")
-        logger.info(f"✓ Mounted /presets from {presets_dir}")
-except Exception as e:
-    logger.warning(f"Could not mount /presets: {e}")
-
-try:
-    fonts_dir = resolve_static_dir("web/fonts", "backend/web/fonts")
-    if fonts_dir and fonts_dir.is_dir():
-        app.mount("/fonts", StaticFiles(directory=str(fonts_dir)), name="fonts")
-        logger.info(f"✓ Mounted /fonts from {fonts_dir}")
-except Exception as e:
-    logger.warning(f"Could not mount /fonts: {e}")
-
-# ──────────────────────────────────────────────────────────────────────────────
-# GCS ASSET PROXY
-# ──────────────────────────────────────────────────────────────────────────────
-
-@app.get("/gcs/{path:path}")
-async def gcs_proxy(path: str):
-    if not storage_enabled:
-        raise HTTPException(status_code=503, detail="GCS not enabled")
-    try:
-        blob = bucket.blob(path)
-        if not blob.exists():
-            raise HTTPException(status_code=404, detail="Asset not found")
-        data = blob.download_as_bytes()
-
-        if path.endswith(".svg"):
-            content_type = "image/svg+xml"
-        elif path.endswith(".json"):
-            content_type = "application/json"
-        elif path.endswith(".jpg") or path.endswith(".jpeg"):
-            content_type = "image/jpeg"
-        elif path.endswith(".png"):
-            content_type = "image/png"
-        elif path.endswith(".woff2"):
-            content_type = "font/woff2"
-        elif path.endswith(".css"):
-            content_type = "text/css"
-        else:
-            content_type = "application/octet-stream"
-
-        return Response(content=data, media_type=content_type)
-    except Exception as e:
-        logger.error(f"GCS proxy error: {e}")
+        logger.error(f"Frame render error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -905,7 +990,6 @@ async def admin_render_now(token: str = None, device: str = "familydisplay"):
     if token != ADMIN_TOKEN:
         raise HTTPException(status_code=401, detail="Invalid token")
     try:
-        # Use the same path resolution as /v1/frame
         data = await build_render_data(device)
         render_path = Path(RENDER_PATH)
         if not render_path.exists():
@@ -941,7 +1025,6 @@ def list_devices():
 def init_layout_from_default(device_id: str):
     """
     Copy assets/default.json → devices/<device_id>/layouts/current.json
-    (idempotent; overwrites existing file)
     """
     if not storage_enabled:
         raise HTTPException(status_code=503, detail="GCS not enabled")
@@ -994,20 +1077,13 @@ async def search_location(q: str):
     
     try:
         async with httpx.AsyncClient() as client:
-            # OpenWeather Geocoding API
             url = "http://api.openweathermap.org/geo/1.0/direct"
-            params = {
-                "q": q,
-                "limit": 5,  # Return top 5 matches
-                "appid": api_key
-            }
+            params = {"q": q, "limit": 5, "appid": api_key}
             
             response = await client.get(url, params=params, timeout=10)
             
             if response.status_code == 200:
                 results = response.json()
-                
-                # Format results for frontend
                 locations = []
                 for loc in results:
                     locations.append({
@@ -1018,53 +1094,116 @@ async def search_location(q: str):
                         "lon": loc.get("lon"),
                         "display": f"{loc.get('name', '')}, {loc.get('state', '')}, {loc.get('country', '')}"
                     })
-                
                 return {"locations": locations}
             else:
                 raise HTTPException(status_code=response.status_code, detail="Search failed")
-                
     except Exception as e:
         logger.error(f"Location search error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/list-presets")
 def list_presets_api():
-    """List available preset layouts from GCS (assets/layouts/*.json)."""
+    """List available preset layouts."""
     if not storage_enabled:
         return {"presets": []}
     try:
+        blobs = bucket.list_blobs(prefix="assets/layouts/")
         presets = []
-        for blob in bucket.list_blobs(prefix="assets/layouts/"):
-            name = blob.name.split("/")[-1]
-            if not name.endswith(".json"):
-                continue
-            presets.append(name[:-5])
-        return {"presets": sorted(presets)}
+        for blob in blobs:
+            filename = blob.name.split("/")[-1]
+            if filename.endswith(".json") and filename != "default.json":
+                presets.append(filename.replace(".json", ""))
+        return {"presets": presets}
     except Exception as e:
-        logger.error(f"Failed to list presets from GCS: {e}")
+        logger.error(f"Failed to list presets: {e}")
         return {"presets": []}
 
-@app.get("/presets/{name}.json")
-def get_preset_json(name: str):
-    """Serve preset JSONs stored in GCS (assets/layouts/<name>.json)."""
+# ──────────────────────────────────────────────────────────────────────────────
+# DESIGNER ROUTE
+# ──────────────────────────────────────────────────────────────────────────────
+
+@app.get("/designer/")
+async def serve_designer():
+    """Serve the designer HTML from GCS."""
     if not storage_enabled:
-        raise HTTPException(status_code=404, detail="storage disabled")
+        raise HTTPException(status_code=503, detail="Storage not configured")
 
+    designer_key = "web/designer/overlay_designer_v4_clean.html"
     try:
-        blob = bucket.blob(f"assets/layouts/{name}.json")
-        if not blob.exists():
-            raise HTTPException(status_code=404, detail="preset not found")
+        html_content = gcs_read_text(designer_key)
+        logger.info(f"✅ Designer loaded from {designer_key}")
+        return HTMLResponse(content=html_content, media_type="text/html")
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error": "Designer not found in bucket",
+                "expected_key": designer_key,
+                "bucket": GCS_BUCKET,
+            },
+        )
+    except Exception as e:
+        logger.error(f"Failed to load designer: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
-        text = blob.download_as_text()
-        return JSONResponse(content=json.loads(text))
+# ──────────────────────────────────────────────────────────────────────────────
+# STATIC MOUNTS
+# ──────────────────────────────────────────────────────────────────────────────
+
+try:
+    presets_dir = resolve_static_dir("web/presets", "backend/web/presets")
+    if presets_dir and presets_dir.is_dir():
+        app.mount("/presets", StaticFiles(directory=str(presets_dir)), name="presets")
+        logger.info(f"✓ Mounted /presets from {presets_dir}")
+except Exception as e:
+    logger.warning(f"Could not mount /presets: {e}")
+
+try:
+    fonts_dir = resolve_static_dir("web/fonts", "backend/web/fonts")
+    if fonts_dir and fonts_dir.is_dir():
+        app.mount("/fonts", StaticFiles(directory=str(fonts_dir)), name="fonts")
+        logger.info(f"✓ Mounted /fonts from {fonts_dir}")
+except Exception as e:
+    logger.warning(f"Could not mount /fonts: {e}")
+
+# ──────────────────────────────────────────────────────────────────────────────
+# GCS ASSET PROXY
+# ──────────────────────────────────────────────────────────────────────────────
+
+@app.get("/gcs/{path:path}")
+async def gcs_proxy(path: str):
+    if not storage_enabled:
+        raise HTTPException(status_code=503, detail="GCS not enabled")
+    try:
+        blob = bucket.blob(path)
+        if not blob.exists():
+            raise HTTPException(status_code=404, detail="Asset not found")
+        data = blob.download_as_bytes()
+
+        if path.endswith(".svg"):
+            content_type = "image/svg+xml"
+        elif path.endswith(".json"):
+            content_type = "application/json"
+        elif path.endswith(".jpg") or path.endswith(".jpeg"):
+            content_type = "image/jpeg"
+        elif path.endswith(".png"):
+            content_type = "image/png"
+        elif path.endswith(".woff2"):
+            content_type = "font/woff2"
+        elif path.endswith(".css"):
+            content_type = "text/css"
+        else:
+            content_type = "application/octet-stream"
+
+        return Response(content=data, media_type=content_type)
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception(f"Failed to load preset {name}: {e}")
-        raise HTTPException(status_code=500, detail="failed to load preset")
+        logger.error(f"GCS proxy error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ──────────────────────────────────────────────────────────────────────────────
-# MAIN
+# RUN
 # ──────────────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
