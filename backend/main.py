@@ -70,7 +70,7 @@ ENABLE_JOKES_API = os.getenv("ENABLE_JOKES_API", "true").lower() == "true"
 DEFAULT_ICON_THEME = os.getenv("WEATHER_ICON_PACK", "happy-skies")
 RENDER_WIDTH = int(os.getenv("RENDER_WIDTH", "800"))
 RENDER_HEIGHT = int(os.getenv("RENDER_HEIGHT", "480"))
-RENDER_PATH = os.getenv("RENDER_PATH", "backend/web/layouts/base.html")
+RENDER_PATH = os.getenv("RENDER_PATH", "/layouts/base.html")
 
 PROJECT_ROOT = BASE_DIR.parent
 STATIC_SEARCH_BASES = [Path.cwd(), BASE_DIR, PROJECT_ROOT]
@@ -864,7 +864,20 @@ async def render_html_to_png(render_path: str, context: dict) -> bytes:
         raise RuntimeError("PUBLIC_BASE_URL environment variable not configured")
     
     # Navigate to base.html without data parameter
-    url = f"{public_base}/layouts/base.html"
+    # Build a proper HTTP URL from the provided render_path
+path = render_path or "/layouts/base.html"
+
+# If caller passed a full URL, use it as-is
+if path.startswith("http://") or path.startswith("https://"):
+    url = path
+else:
+    # Treat anything else as a served URL path (not a container file path)
+    # Normalize to the known route we expose for base.html
+    if path.endswith("base.html"):
+        path = "/layouts/base.html"
+    if not path.startswith("/"):
+        path = "/" + path
+    url = f"{public_base}{path}"
     
     logger.info(f"🎨 Rendering via: {url}")
     logger.info(f"📊 Context data size: {len(json.dumps(context))} bytes")
@@ -966,11 +979,8 @@ async def api_frame(device: str = "familydisplay"):
         raise HTTPException(status_code=503, detail="Rendering disabled")
     try:
         data = await build_render_data(device)
-        render_path = Path(RENDER_PATH)
-        if not render_path.exists():
-            render_path = BASE_DIR / "web" / "layouts" / "base.html"
-        
-        png_bytes = await render_html_to_png(str(render_path), data)
+        render_path = os.getenv("RENDER_PATH", "/layouts/base.html")
+        png_bytes = await render_html_to_png(render_path, data)
         
         if storage_enabled:
             render_key = f"devices/{device}/renders/latest.png"
@@ -991,10 +1001,8 @@ async def admin_render_now(token: str = None, device: str = "familydisplay"):
         raise HTTPException(status_code=401, detail="Invalid token")
     try:
         data = await build_render_data(device)
-        render_path = Path(RENDER_PATH)
-        if not render_path.exists():
-            render_path = BASE_DIR / "web" / "layouts" / "base.html"
-        png_bytes = await render_html_to_png(str(render_path), data)
+        render_path = os.getenv("RENDER_PATH", "/layouts/base.html")
+        png_bytes = await render_html_to_png(render_path, data)
         if storage_enabled:
             render_key = f"devices/{device}/renders/latest.png"
             gcs_write_bytes(render_key, png_bytes)
