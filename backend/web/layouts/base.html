@@ -231,6 +231,21 @@
       }
     }
 
+    function applyBoxShadow(el, shadowType, shadowColor, shadowIntensity) {
+      if (!shadowType || shadowType === 'none') return;
+      
+      const intensity = parseFloat(shadowIntensity) || 1;
+      const blur = Math.round(intensity * 8);
+      const spread = Math.round(intensity * 2);
+      const offset = Math.round(intensity * 2);
+      
+      if (shadowType === 'shadow') {
+        el.style.boxShadow = `${offset}px ${offset}px ${blur}px ${shadowColor}`;
+      } else if (shadowType === 'glow') {
+        el.style.boxShadow = `0 0 ${blur}px ${spread}px ${shadowColor}`;
+      }
+    }
+
     async function renderElement(data) {
       const canvas = document.getElementById('canvas');
       const el = document.createElement('div');
@@ -291,6 +306,10 @@
         el.style.background = data.background || 'rgba(255,255,255,0.2)';
         el.style.border = '1px solid ' + (data.borderColor || '#ffffff');
         el.style.borderRadius = (data.borderRadius || 12) + 'px';
+        
+        if (data.boxShadowType && data.boxShadowType !== 'none') {
+          applyBoxShadow(el, data.boxShadowType, data.boxShadowColor || '#000000', data.boxShadowIntensity || 1);
+        }
         
       } else if (kind === 'svg-overlay' && data.src) {
         await inlineSvgInto(el, data.src);
