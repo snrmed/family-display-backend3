@@ -76,27 +76,40 @@
 </head>
 <body>
   <div id="canvas">
-    {% if bg_url %}
-    <img src="{{ bg_url }}" class="background-image" alt="Background">
-    {% endif %}
+    <!-- Elements will be added here by JavaScript -->
   </div>
 
   <script>
-    const layoutData = {{ layout | tojson }};
-    const dynamicText = {{ dynamic_text | tojson }};
-    const svgBase = "{{ svg_base }}";
-    const fontBase = "{{ font_base }}";
-    const iconBase = "{{ icon_base }}";
-    const weatherData = {{ weather | tojson }};
-    const moodForecasts = {{ mood_forecasts | tojson }};
+    // Data will be injected by Playwright via window.renderData
+    const renderData = window.renderData || {};
+    const layoutData = renderData.layout || { elements: [] };
+    const dynamicText = renderData.dynamic_text || {};
+    const weatherData = renderData.weather || {};
+    const moodForecasts = renderData.mood_forecasts || {};
+    const svgBase = renderData.svg_base || "";
+    const fontBase = renderData.font_base || "";
+    const iconBase = renderData.icon_base || "";
+    const bgUrl = renderData.bg_url || "";
 
     console.log('Render data loaded:', {
       layoutElements: layoutData.elements?.length || 0,
       dynamicText: Object.keys(dynamicText),
       moodForecasts: Object.keys(moodForecasts),
       svgBase,
-      iconBase
+      iconBase,
+      bgUrl
     });
+
+    // Add background image first
+    if (bgUrl) {
+      const canvas = document.getElementById('canvas');
+      const bgImg = document.createElement('img');
+      bgImg.src = bgUrl;
+      bgImg.className = 'background-image';
+      bgImg.alt = 'Background';
+      bgImg.onerror = () => console.error('Failed to load background:', bgUrl);
+      canvas.appendChild(bgImg);
+    }
 
     function resolveUrl(path) {
       if (!path) return '';
@@ -256,8 +269,8 @@
       
       el.style.left = (data.x || 0) + 'px';
       el.style.top = (data.y || 0) + 'px';
-      el.style.width = (data.w || 100) + 'px';
-      el.style.height = (data.h || 100) + 'px';
+      el.style.width = (data.w || data.width || 100) + 'px';
+      el.style.height = (data.h || data.height || 100) + 'px';
       el.style.opacity = data.opacity !== undefined ? data.opacity : 1;
       
       if (data.zIndex !== undefined) {
@@ -352,9 +365,18 @@
       console.log('Layout render complete');
     }
 
-    renderLayout().catch(error => {
-      console.error('Fatal render error:', error);
-    });
+    // Start rendering when page loads
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => {
+        renderLayout().catch(error => {
+          console.error('Fatal render error:', error);
+        });
+      });
+    } else {
+      renderLayout().catch(error => {
+        console.error('Fatal render error:', error);
+      });
+    }
   </script>
 </body>
 </html>
