@@ -410,6 +410,100 @@ async def get_weather(lat: float = None, lon: float = None, city: str = None) ->
             logger.warning(f"Joke API failed: {e}")
     return random.choice(LOCAL_JOKES)
 
+# ──────────────────────────────────────────────────────────────────────────────
+# MOOD FORECAST (DeepAI Integration)
+# ──────────────────────────────────────────────────────────────────────────────
+# Add this section after the get_joke() function in main.py
+
+async def generate_mood_forecast(weather_data: dict, mood: str, day: str, location: str) -> str:
+    """
+    Generate a mood-based weather forecast using DeepAI API.
+    
+    Args:
+        weather_data: Dict containing temp_min, temp_max, desc, humidity, wind
+        mood: One of: "upbeat", "sarcastic", "poetic", "dad_joke", "enthusiastic", "grumpy"
+        day: "today" or "tomorrow"
+        location: City/suburb name
+    
+    Returns:
+        Generated forecast string (max 100 chars)
+    """
+    api_key = os.getenv("DEEPAI_API_KEY")
+    
+    # Fallback examples if API unavailable
+    fallback_examples = {
+        'upbeat_today': "Sunshine ahead! {}°-{}°C with {} making it perfect!",
+        'upbeat_tomorrow': "Tomorrow looks great! {}°-{}°C with {}!",
+        'sarcastic_today': "Oh wonderful, another '{}' day. {}°-{}°C.",
+        'sarcastic_tomorrow': "Tomorrow: {}°-{}°C. Nature keeping us guessing with {}.",
+        'poetic_today': "{} drift like secrets. {}°-{}°C beneath shifting heavens.",
+        'poetic_tomorrow': "Tomorrow painted in {}°-{}°C hues, dancing with {}.",
+        'dad_joke_today': "What's {}°C and full of potential? Today! Not degree-pressing with {}!",
+        'dad_joke_tomorrow': "Tomorrow: {}°C with 100% chance of {} somewhere!",
+        'enthusiastic_today': "WOW! AMAZING day! {}°-{}°C of PURE {} EXCELLENCE!",
+        'enthusiastic_tomorrow': "TOMORROW WILL BE INCREDIBLE! {}°-{}°C of SPECTACULAR {}!",
+        'grumpy_today': "Another day. {}°-{}°C with {}. Whatever.",
+        'grumpy_tomorrow': "Tomorrow's {}°-{}°C. Don't expect miracles with {}."
+    }
+    
+    temp_min = weather_data.get('temp_min', '--')
+    temp_max = weather_data.get('temp_max', '--')
+    conditions = weather_data.get('desc', 'conditions')
+    
+    if not api_key:
+        logger.info("DEEPAI_API_KEY not set, using fallback")
+        key = f"{mood}_{day}"
+        template = fallback_examples.get(key, "{}°-{}°C with {}")
+        return template.format(temp_min, temp_max, conditions)[:100]
+    
+    # Construct prompt for DeepAI
+    mood_instructions = {
+        "upbeat": "enthusiastic and positive",
+        "sarcastic": "witty and dry with subtle humor",
+        "poetic": "flowery and artistic with metaphors",
+        "dad_joke": "include a weather pun, playful",
+        "enthusiastic": "over-the-top excited, use caps",
+        "grumpy": "curmudgeonly and mildly complaining"
+    }
+    
+    day_text = "today" if day == "today" else "tomorrow"
+    weather_context = f"{conditions}, {temp_min}°-{temp_max}°C in {location}"
+    
+    prompt = f"""Write a single-sentence weather forecast for {day_text} in a {mood_instructions.get(mood, 'casual')} style.
+
+Weather: {weather_context}
+
+Maximum 30 words. No greetings or sign-offs. Make it engaging."""
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                'https://api.deepai.org/api/text-generator',
+                data={'text': prompt},
+                headers={'api-key': api_key},
+                timeout=15
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                generated_text = result.get('output', '').strip()
+                
+                # Clean and limit
+                words = generated_text.split()[:30]
+                forecast = ' '.join(words)
+                forecast = forecast.replace('Forecast:', '').replace('Weather:', '').strip()
+                
+                logger.info(f"Generated {mood} {day} forecast: {forecast}")
+                return forecast[:100]
+            else:
+                raise Exception(f"API error: {response.status_code}")
+                
+    except Exception as e:
+        logger.error(f"DeepAI forecast failed: {e}")
+        key = f"{mood}_{day}"
+        template = fallback_examples.get(key, "{}°-{}°C with {}")
+        return template.format(temp_min, temp_max, conditions)[:100]
+
 def get_pexels_categories() -> list:
     if not storage_enabled:
         return ["abstract", "geometric", "minimal"]
@@ -474,6 +568,47 @@ async def build_render_data(device: str = "familydisplay") -> dict:
     icon_code = weather.get("icon", "01d")
     weather["icon_url"] = resolve_weather_icon_url(icon_theme, icon_code)
     weather["city"] = location_name
+
+    # Generate mood forecasts by scanning layout elements
+    mood_forecasts = {}
+    if layout and layout.get('elements'):
+        for element in layout['elements']:
+            if element.get('type') == 'FORECAST_MOOD':
+                mood = element.get('forecastMood', 'upbeat')
+                day = element.get('forecastDay', 'today')
+                key = f"{mood}_{day}"
+                
+                # Only generate once per unique mood/day combination
+                if key not in mood_forecasts:
+                    if day == 'today' and weather:
+                        weather_data = {
+                            'temp_min': weather.get('temp_min'),
+                            'temp_max': weather.get('temp_max'),
+                            'desc': weather.get('desc', 'conditions'),
+                            'humidity': weather.get('humidity'),
+                            'wind': weather.get('wind')
+                        }
+                    elif day == 'tomorrow' and weather and weather.get('tomorrow'):
+                        weather_data = {
+                            'temp_min': weather['tomorrow'].get('temp_min'),
+                            'temp_max': weather['tomorrow'].get('temp_max'),
+                            'desc': weather['tomorrow'].get('desc', 'conditions'),
+                            'humidity': weather['tomorrow'].get('humidity'),
+                            'wind': weather['tomorrow'].get('wind')
+                        }
+                    else:
+                        # Fallback weather data
+                        weather_data = {
+                            'temp_min': 22, 
+                            'temp_max': 28, 
+                            'desc': 'conditions',
+                            'humidity': 65,
+                            'wind': 15
+                        }
+                    
+                    forecast = await generate_mood_forecast(weather_data, mood, day, location_name)
+                    mood_forecasts[key] = forecast
+                    logger.info(f"Generated {key} forecast: {forecast}")
 
     # local datetime
     try:
@@ -596,9 +731,9 @@ async def build_render_data(device: str = "familydisplay") -> dict:
         "dynamic_text": dynamic_text,
         "device": device_config,
         "timestamp": now.isoformat(),
+        "mood_forecasts": mood_forecasts,  # ADD THIS LINE
     }
     return context
-
 # ──────────────────────────────────────────────────────────────────────────────
 # RENDER HTML → PNG
 # ──────────────────────────────────────────────────────────────────────────────
@@ -625,37 +760,36 @@ async def render_html_to_png(render_path: str, context: dict) -> bytes:
     logger.info(f"📐 Layout elements: {len(context.get('layout', {}).get('elements', []))}")
 
     try:
-        # Navigate to the page first
-        response = await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+        # Inject context data BEFORE page navigation using add_init_script
+        context_json = json.dumps(context)
+        logger.info(f"📦 Preparing injection, size: {len(context_json)} bytes")
         
-        if not response or response.status != 200:
-            logger.error(f"Failed to load page. Status: {response.status if response else 'None'}")
-            raise RuntimeError(f"Page load failed with status {response.status if response else 'unknown'}")
-        
-        # Inject the data directly into the page (avoids URL length limits)
-        logger.info("💉 Injecting render data into page...")
-        await page.evaluate(f"""
-            window.renderData = {json.dumps(context)};
-            if (typeof renderLayout === 'function') {{
-                renderLayout(window.renderData);
-            }}
+        await page.add_init_script(f"""
+            window.renderData = {context_json};
+            console.log('✅ renderData injected via init script');
         """)
         
-        # Wait for fonts to load
-        await page.evaluate(
-            "document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()"
-        )
+        logger.info("📝 Init script added, now navigating to page")
+
+        # Navigate to the page (renderData now exists before page loads)
+        response = await page.goto(url, wait_until="domcontentloaded", timeout=30000)
         
-        # Wait for rendering to complete
-        await page.wait_for_timeout(300)
-        
+        if not response or response.status_code != 200:
+            logger.error(f"Failed to load page. Status: {response.status if response else 'No response'}")
+            raise RuntimeError(f"Page load failed with status {response.status if response else 'unknown'}")
+
+        # Wait for rendering
+        await page.wait_for_timeout(1000)
+
         # Take screenshot
-        png_bytes = await page.screenshot(type="png", full_page=True)
-        logger.info(f"✓ Screenshot captured: {len(png_bytes)} bytes")
+        png_bytes = await page.screenshot(type="png")
+
+        logger.info("✅ Render complete")
         return png_bytes
-        
+
     except Exception as e:
-        logger.error(f"Rendering error: {e}", exc_info=True)
+        logger.error(f"Rendering error: {e}")
+        logger.error(traceback.format_exc())
         raise
     finally:
         await page.close()
