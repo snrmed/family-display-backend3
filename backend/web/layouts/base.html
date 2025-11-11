@@ -106,18 +106,6 @@ body {
   if (!data) {
     canvasEl.innerHTML = '<div style="padding:20px;color:red;">❌ Error: No render data</div>';
   }
-
-  // Handle mood forecast
-    if (type === 'FORECAST_MOOD' && forecastMood && forecastDay) {
-      const key = `${forecastMood}_${forecastDay}`;
-      const forecast = moodForecasts[key];
-      if (forecast) {
-        console.log(`Using mood forecast ${key}: ${forecast}`);
-        return forecast;
-      }
-      console.warn(`No mood forecast found for ${key}`);
-      return 'Mood forecast updating...';
-    }
     
   function resolveDynamicText(type, data, forecastMood, forecastDay) {
     if (data.dynamic_text && Object.prototype.hasOwnProperty.call(data.dynamic_text, type)) {
@@ -220,19 +208,38 @@ body {
         if (kind === 'text' || kind === 'icon') {
           const c = document.createElement('div');
           c.className = 'el-content';
-          
+
           // Get text content
           const type = el.type || 'CUSTOM';
-        
-        if (type === 'FORECAST_MOOD') {
-          const mood = el.forecastMood || 'upbeat';
-          const day = el.forecastDay || 'today';
-          content.textContent = resolveDynamicText(type, data, mood, day);
-          console.log(`Rendering mood forecast: ${mood} ${day}`);
-        } else if (type === 'CUSTOM') {
-          content.textContent = el.text || '';
-        } else {
-          content.textContent = resolveDynamicText(type, data);
+
+          if (type === 'FORECAST_MOOD') {
+            const mood = el.forecastMood || 'upbeat';
+            const day = el.forecastDay || 'today';
+            c.textContent = resolveDynamicText(type, data, mood, day);
+            console.log(`Rendering mood forecast: ${mood} ${day}`);
+          } else if (type === 'CUSTOM') {
+            c.textContent = el.text || '';
+          } else {
+            c.textContent = resolveDynamicText(type, data);
+          }
+
+  // Apply styles
+          c.style.fontSize = (el.fontSize || 16) + 'px';
+          c.style.color = el.color || '#000';
+          c.style.fontWeight = String(el.fontWeight || el.weight || 'normal');
+          c.style.width = '100%';
+          c.style.height = '100%';
+          c.style.display = 'flex';
+          c.style.alignItems = 'center';
+          c.style.justifyContent = 'center';
+          c.style.textAlign = 'center';
+
+          if (el.fontFamily) {
+            c.style.fontFamily = `"${el.fontFamily}", "Liberation Sans", "DejaVu Sans", sans-serif`;
+            console.log(`Element font: ${el.fontFamily} | Text: ${String(c.textContent || '').slice(0, 30)}...`);
+          }
+
+          div.appendChild(c);
         }
           
           // Apply styles
