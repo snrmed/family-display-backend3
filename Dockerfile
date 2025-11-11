@@ -15,7 +15,7 @@ RUN set -eux; \
       libnss3 libx11-6 libx11-xcb1 libxcb1 libxcomposite1 libxdamage1 libxext6 \
       libxfixes3 libxrandr2 libgbm1 libgtk-3-0 libasound2 libatspi2.0-0 libdrm2 \
       libxshmfence1 \
-      fonts-dejavu-core fonts-liberation fonts-noto-core \
+      fonts-dejavu-core fonts-liberation fonts-noto-core fonts-roboto \
     && rm -rf /var/lib/apt/lists/*
 
 # App root
@@ -27,7 +27,8 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 
 # Install Playwright Chromium into image
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
-RUN python -m playwright install --with-deps chromium
+RUN python -m playwright install chromium && \
+    python -m playwright install-deps chromium
 
 # Copy the rest of the project
 COPY . /app
