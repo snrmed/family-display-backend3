@@ -172,163 +172,141 @@ body {
   }
 
   async function renderLayout(data) {
-    const canvas = canvasEl || document.getElementById('canvas');
-    if (!canvas) throw new Error('Canvas element not found');
-    
-    canvas.innerHTML = '';
-    const layout = data.layout || {};
-    const elements = layout.elements || [];
-    const svg_base = data.svg_base || "";
-    
-    console.log('=== RENDER LAYOUT START ===');
-    console.log('Elements:', elements.length);
-    console.log('Font base:', data.font_base);
+  const canvas = canvasEl || document.getElementById('canvas');
+  if (!canvas) throw new Error('Canvas element not found');
+  
+  canvas.innerHTML = '';
+  const layout = data.layout || {};
+  const elements = layout.elements || [];
+  const svg_base = data.svg_base || "";
+  
+  console.log('=== RENDER LAYOUT START ===');
+  console.log('Elements:', elements.length);
+  console.log('Font base:', data.font_base);
 
-    // Background image
-    if (data.bg_url) {
-      const bg = document.createElement('img');
-      bg.src = data.bg_url;
-      bg.className = 'background-image';
-      canvas.appendChild(bg);
-    }
+  // Background image
+  if (data.bg_url) {
+    const bg = document.createElement('img');
+    bg.src = data.bg_url;
+    bg.className = 'background-image';
+    canvas.appendChild(bg);
+  }
 
-    // Render elements
-    for (const el of elements) {
-      try {
-        const div = document.createElement('div');
-        const kind = (el.kind || 'box').toLowerCase();
-        div.className = `el ${kind}`;
-        div.style.left = (el.x || 0) + 'px';
-        div.style.top = (el.y || 0) + 'px';
-        div.style.width = (el.w || el.width || 100) + 'px';
-        div.style.height = (el.h || el.height || 100) + 'px';
-        div.style.zIndex = el.zIndex || getLayerZIndex(el, kind);
-        if (el.opacity != null) div.style.opacity = el.opacity;
+  // Render elements
+  for (const el of elements) {
+    try {
+      const div = document.createElement('div');
+      const kind = (el.kind || 'box').toLowerCase();
+      div.className = `el ${kind}`;
+      div.style.left = (el.x || 0) + 'px';
+      div.style.top = (el.y || 0) + 'px';
+      div.style.width = (el.w || el.width || 100) + 'px';
+      div.style.height = (el.h || el.height || 100) + 'px';
+      div.style.zIndex = el.zIndex || getLayerZIndex(el, kind);
+      if (el.opacity != null) div.style.opacity = el.opacity;
 
-        if (kind === 'text' || kind === 'icon') {
-          const c = document.createElement('div');
-          c.className = 'el-content';
+      if (kind === 'text' || kind === 'icon') {
+        const c = document.createElement('div');
+        c.className = 'el-content';
 
-          // Get text content
-          const type = el.type || 'CUSTOM';
-
-          if (type === 'FORECAST_MOOD') {
-            const mood = el.forecastMood || 'upbeat';
-            const day = el.forecastDay || 'today';
-            c.textContent = resolveDynamicText(type, data, mood, day);
-            console.log(`Rendering mood forecast: ${mood} ${day}`);
-          } else if (type === 'CUSTOM') {
-            c.textContent = el.text || '';
-          } else {
-            c.textContent = resolveDynamicText(type, data);
-          }
-
-  // Apply styles
-          c.style.fontSize = (el.fontSize || 16) + 'px';
-          c.style.color = el.color || '#000';
-          c.style.fontWeight = String(el.fontWeight || el.weight || 'normal');
-          c.style.width = '100%';
-          c.style.height = '100%';
-          c.style.display = 'flex';
-          c.style.alignItems = 'center';
-          c.style.justifyContent = 'center';
-          c.style.textAlign = 'center';
-
-          if (el.fontFamily) {
-            c.style.fontFamily = `"${el.fontFamily}", "Liberation Sans", "DejaVu Sans", sans-serif`;
-            console.log(`Element font: ${el.fontFamily} | Text: ${String(c.textContent || '').slice(0, 30)}...`);
-          }
-
-          div.appendChild(c);
+        // Get text content
+        const type = el.type || 'CUSTOM';
+        if (type === 'FORECAST_MOOD') {
+          const mood = el.forecastMood || 'upbeat';
+          const day = el.forecastDay || 'today';
+          c.textContent = resolveDynamicText(type, data, mood, day);
+          console.log(`Rendering mood forecast: ${mood} ${day}`);
+        } else if (type === 'CUSTOM') {
+          c.textContent = el.text || '';
+        } else {
+          c.textContent = resolveDynamicText(type, data);
         }
-          
-          // Apply styles
-          c.style.fontSize = (el.fontSize || 16) + 'px';
-          c.style.color = el.color || '#000';
-          c.style.fontWeight = String(el.fontWeight || el.weight || 'normal');
-          c.style.width = '100%';
-          c.style.height = '100%';
-          c.style.display = 'flex';
-          c.style.alignItems = 'center';
-          c.style.justifyContent = 'center';
-          c.style.textAlign = 'center';
 
-          // CRITICAL FIX: Apply font family with actual font name FIRST
-          if (el.fontFamily) {
-            c.style.fontFamily = `"${el.fontFamily}", "Liberation Sans", "DejaVu Sans", sans-serif`;
-            console.log(`Element font: ${el.fontFamily} | Text: ${txt.substring(0, 30)}...`);
-          }
+        // Apply styles
+        c.style.fontSize = (el.fontSize || 16) + 'px';
+        c.style.color = el.color || '#000';
+        c.style.fontWeight = String(el.fontWeight || el.weight || 'normal');
+        c.style.width = '100%';
+        c.style.height = '100%';
+        c.style.display = 'flex';
+        c.style.alignItems = 'center';
+        c.style.justifyContent = 'center';
+        c.style.textAlign = 'center';
 
-          // Apply text shadow/glow
-          if (el.textShadowType && el.textShadowType !== 'none') {
-            const color = el.textShadowColor || '#000000';
-            const intensity = el.textShadowIntensity || 1;
-            const blur = Math.round(intensity * 4);
-            
-            if (el.textShadowType === 'shadow') {
-              c.style.textShadow = `2px 2px ${blur}px ${color}`;
-            } else if (el.textShadowType === 'glow') {
-              c.style.textShadow = `
-                0 0 ${blur}px ${color},
-                0 0 ${blur * 2}px ${color},
-                0 0 ${blur * 3}px ${color}
-              `;
-            }
-          }
+        if (el.fontFamily) {
+          c.style.fontFamily = `"${el.fontFamily}", "Liberation Sans", "DejaVu Sans", sans-serif`;
+          console.log(`Element font: ${el.fontFamily} | Text: ${String(c.textContent || '').slice(0, 30)}...`);
+        }
 
-          div.appendChild(c);
-          
-        } else if (kind === 'box') {
-          if (el.background || el.fill) {
-            div.style.background = el.background || el.fill;
-          }
-          if (el.borderColor) {
-            div.style.border = '1px solid ' + el.borderColor;
-          }
-          if (el.borderRadius || el.radius) {
-            div.style.borderRadius = (el.borderRadius || el.radius) + 'px';
-          }
-          
-        } else if (kind === 'svg' || kind === 'svg-overlay' || kind === 'image') {
-          let src = el.src || el.svgName || '';
-          
-          if (src === 'weather-icon') {
-            if (data.weather?.icon_url) {
-              src = data.weather.icon_url;
-              div.classList.add('weather-icon');
-            } else {
-              continue;
-            }
-          }
-          
-          // Resolve URL
-          let url = src;
-          if (!src.startsWith('http')) {
-            if (src.startsWith('/')) {
-              url = src;
-            } else if (svg_base) {
-              url = svg_base + '/' + src;
-            }
-          }
-          
-          if (url.endsWith('.svg')) {
-            await inlineSvgInto(div, url);
-          } else {
-            const img = document.createElement('img');
-            img.src = url;
-            img.style.width = '100%';
-            img.style.height = '100%';
-            img.style.objectFit = 'contain';
-            div.appendChild(img);
+        // Optional text shadow/glow
+        if (el.textShadowType && el.textShadowType !== 'none') {
+          const color = el.textShadowColor || '#000000';
+          const intensity = el.textShadowIntensity || 1;
+          const blur = Math.round(intensity * 4);
+
+          if (el.textShadowType === 'shadow') {
+            c.style.textShadow = `2px 2px ${blur}px ${color}`;
+          } else if (el.textShadowType === 'glow') {
+            c.style.textShadow = `
+              0 0 ${blur}px ${color},
+              0 0 ${blur * 2}px ${color},
+              0 0 ${blur * 3}px ${color}
+            `;
           }
         }
 
-        canvas.appendChild(div);
+        div.appendChild(c);
+
+      } else if (kind === 'box') {
+        if (el.background || el.fill) div.style.background = el.background || el.fill;
+        if (el.borderColor) div.style.border = '1px solid ' + el.borderColor;
+        if (el.borderRadius || el.radius) div.style.borderRadius = (el.borderRadius || el.radius) + 'px';
+
+      } else if (kind === 'svg' || kind === 'svg-overlay' || kind === 'image') {
+        let src = el.src || el.svgName || '';
         
-      } catch(e) {
-        console.error('Element render error', el, e);
+        if (src === 'weather-icon') {
+          if (data.weather?.icon_url) {
+            src = data.weather.icon_url;
+            div.classList.add('weather-icon');
+          } else {
+            // No icon available – skip this element
+            canvas.appendChild(div);
+            continue;
+          }
+        }
+
+        // Resolve URL
+        let url = src;
+        if (!src.startsWith('http')) {
+          if (src.startsWith('/')) {
+            url = src;
+          } else if (svg_base) {
+            url = svg_base.replace(/\/+$/, '') + '/' + src.replace(/^\/+/, '');
+          }
+        }
+
+        if (url.endsWith('.svg')) {
+          await inlineSvgInto(div, url);
+        } else {
+          const img = document.createElement('img');
+          img.src = url;
+          img.style.width = '100%';
+          img.style.height = '100%';
+          img.style.objectFit = 'contain';
+          div.appendChild(img);
+        }
       }
+
+      canvas.appendChild(div);
+
+    } catch (e) {
+      console.error('Element render error', el, e);
     }
+  }
+
+  console.log('✓ Render complete');
+}
     
     console.log('✓ Render complete');
   }
