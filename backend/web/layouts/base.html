@@ -1,162 +1,107 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Kin:D Frame Render</title>
-
-<!-- Font CSS loaded dynamically -->
-<link id="kin-fonts" rel="stylesheet" href="/gcs/assets/fonts/fonts.css" crossorigin="anonymous">
-
-<style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
-
-body {
-  width: 800px;
-  height: 480px;
-  overflow: hidden;
-  font-family: "Inter", "Liberation Sans", Arial, sans-serif;
-  background: #fff;
-}
-
-#canvas {
-  position: relative;
-  width: 800px;
-  height: 480px;
-  overflow: hidden;
-}
-
-.el {
-  position: absolute;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.el.text, .el.icon { 
-  z-index: 30; 
-  white-space: pre-wrap; 
-  word-wrap: break-word; 
-}
-
-.el.box { 
-  z-index: 15; 
-}
-
-.el.svg-overlay { 
-  z-index: 20; 
-}
-
-.el svg { 
-  width: 100%; 
-  height: 100%; 
-  object-fit: contain; 
-}
-
-.background-image {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 1;
-  object-fit: cover;
-}
-
-.el-content {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  user-select: none;
-}
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Kin:D Base Render</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #ffffff;
+      font-family: "DejaVu Sans", "Liberation Sans", Arial, sans-serif;
+    }
+    #root {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100vw;
+      height: 100vh;
+    }
+    #canvas {
+      position: relative;
+      width: 800px;
+      height: 480px;
+      overflow: hidden;
+      background: #ffffff;
+    }
+    .background-image {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+      object-fit: cover;
+    }
+    .el {
+      position: absolute;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10; /* default; will be overridden by getLayerZIndex */
+    }
+    .el .el-content {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      white-space: pre-wrap;
+    }
+  </style>
 </head>
 <body>
-  <div id="canvas"></div>
+  <div id="root">
+    <div id="canvas"></div>
+  </div>
 
   <script>
+  // DEBUG mode via ?debug=1
+  const DEBUG = /[?&]debug=1\b/.test(location.search);
+
+  // Add helpful debug styles
+  document.addEventListener('DOMContentLoaded', () => {
+    if (DEBUG) {
+      const s = document.createElement('style');
+      s.textContent = `
+        #canvas { background: #eeeeee !important; }
+        .el { outline: 1px dashed rgba(0,0,0,.25); }
+        .background-image { filter: saturate(0.95) brightness(0.99); }
+        .debug-watermark {
+          position: absolute;
+          top: 4px; left: 6px;
+          font-size: 12px;
+          color: rgba(0,0,0,0.6);
+          z-index: 99;
+          pointer-events: none;
+          user-select: none;
+          max-width: 70%;
+          white-space: pre-wrap;
+        }
+      `;
+      document.head.appendChild(s);
+    }
+  });
+
   console.log('=== BASE.HTML INITIALIZATION ===');
   const canvasEl = document.getElementById('canvas');
 
-  // Acquire data (injected or URL)
-  let data = null, dataSource = 'none';
-  if (window.renderData) { 
-    data = window.renderData; 
-    dataSource = 'injected'; 
-  } else {
-    const p = new URLSearchParams(location.search);
-    const enc = p.get('data');
-    if (enc) {
-      try { 
-        data = JSON.parse(decodeURIComponent(enc)); 
-        dataSource = 'url_parameter'; 
-      } catch(e) { 
-        console.error('❌ parse error', e); 
-      }
-    }
-  }
-
-  const moodForecasts = data?.mood_forecasts || {};
-  
-  console.log('Data source:', dataSource);
-
-  if (!data) {
-    canvasEl.innerHTML = '<div style="padding:20px;color:red;">❌ Error: No render data</div>';
-  }
-    
-  function resolveDynamicText(type, data, forecastMood, forecastDay) {
-    if (data.dynamic_text && Object.prototype.hasOwnProperty.call(data.dynamic_text, type)) {
-      return data.dynamic_text[type] ?? "";
-    }
-    
-    // Fallback for missing dynamic_text
-    switch (type) {
-      case "WEATHER_TEMP":
-      case "TEMP": 
-        return data.weather?.temp ? `${data.weather.temp}°` : "--°";
-      case "WEATHER_CITY":
-      case "CITY": 
-        return data.weather?.city || "Unknown";
-      case "WEATHER_DESC": 
-        return data.weather?.desc || "No data";
-      case "WEATHER_DESC_EXTENDED": 
-        return data.weather?.desc_extended || data.weather?.desc || "No data";
-      case "WEATHER_MINMAX":
-      case "MINMAX":
-        return (data.weather?.temp_min != null && data.weather?.temp_max != null)
-          ? `${data.weather.temp_min}° / ${data.weather.temp_max}°`
-          : "--° / --°";
-      case "DATE": 
-        return data.date || new Date().toLocaleDateString();
-      case "JOKE": 
-        return data.dad_joke || "No joke today!";
-      case "WEATHER_ICON": 
-        return (data.dynamic_text && data.dynamic_text.WEATHER_ICON) || "☀️";
-      case "CUSTOM":
-      default: 
-        return "";
-    }
-  }
-
   function getLayerZIndex(el, kind) {
-    if (kind === 'text' || kind === 'icon') {
-      return (el.type && el.type !== 'CUSTOM') ? 35 : 20;
-    }
+    // Keep text above boxes by default; SVG/images in the middle
+    if (kind === 'text' || kind === 'icon') return (el.type && el.type !== 'CUSTOM') ? 35 : 30;
+    if (kind === 'svg' || kind === 'svg-overlay' || kind === 'image') return 25;
     if (kind === 'box') return 15;
-    if (kind === 'svg' || kind === 'svg-overlay') {
-      return (el.src === 'weather-icon') ? 35 : 20;
-    }
     return 10;
   }
 
+  // Inline an external SVG (preserves vector quality)
   async function inlineSvgInto(elDiv, url) {
     try {
-      const r = await fetch(url);
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const svgText = await r.text();
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const svgText = await res.text();
       elDiv.innerHTML = svgText;
       const svgEl = elDiv.querySelector('svg');
       if (svgEl) {
@@ -171,206 +116,257 @@ body {
     }
   }
 
+  // Provide dynamic text resolution; mood variant accepts (type, data, mood, day)
+  function resolveDynamicText(type, data, forecastMood, forecastDay) {
+    // 1) First: if backend injected dynamic_text for the type, trust it.
+    if (data.dynamic_text && Object.prototype.hasOwnProperty.call(data.dynamic_text, type)) {
+      return data.dynamic_text[type] ?? "";
+    }
+
+    // 2) Special case: mood forecast
+    if (type === 'FORECAST_MOOD') {
+      const mood = String(forecastMood || 'neutral').toLowerCase();
+      const day  = String(forecastDay  || 'today').toLowerCase();
+      const key  = `${mood}_${day}`;
+      const mf   = (data.mood_forecasts && data.mood_forecasts[key]) || "";
+      if (mf) return mf;
+      // Fallback if backend didn't provide one
+      return `Feeling ${mood} ${day}.`;
+    }
+
+    // 3) Simple examples for common builtin types (harmless fallbacks)
+    if (type === 'DATE_TODAY') {
+      try {
+        const d = new Date(data.date?.iso || Date.now());
+        return d.toDateString();
+      } catch { return ''; }
+    }
+    if (type === 'WEATHER_SUMMARY') {
+      const w = data.weather || {};
+      const t = (w.temp_c != null) ? `${Math.round(w.temp_c)}°C` : '';
+      const descr = w.description ? ` ${w.description}` : '';
+      return (t || descr) ? (t + descr) : '';
+    }
+    if (type === 'DAD_JOKE') {
+      return data.dad_joke || '';
+    }
+
+    // 4) Default: return empty, so CUSTOM elements can provide their own text
+    return '';
+  }
+
   async function renderLayout(data) {
-  const canvas = canvasEl || document.getElementById('canvas');
-  if (!canvas) throw new Error('Canvas element not found');
-  
-  canvas.innerHTML = '';
-  const layout = data.layout || {};
-  const elements = layout.elements || [];
-  const svg_base = data.svg_base || "";
-  
-  console.log('=== RENDER LAYOUT START ===');
-  console.log('Elements:', elements.length);
-  console.log('Font base:', data.font_base);
+    const canvas = canvasEl || document.getElementById('canvas');
+    if (!canvas) throw new Error('Canvas element not found');
 
-  // Background image
-  if (data.bg_url) {
-    const bg = document.createElement('img');
-    bg.src = data.bg_url;
-    bg.className = 'background-image';
-    canvas.appendChild(bg);
-  }
+    canvas.innerHTML = '';
 
-  // Render elements
-  for (const el of elements) {
-    try {
-      const div = document.createElement('div');
-      const kind = (el.kind || 'box').toLowerCase();
-      div.className = `el ${kind}`;
-      div.style.left = (el.x || 0) + 'px';
-      div.style.top = (el.y || 0) + 'px';
-      div.style.width = (el.w || el.width || 100) + 'px';
-      div.style.height = (el.h || el.height || 100) + 'px';
-      div.style.zIndex = el.zIndex || getLayerZIndex(el, kind);
-      if (el.opacity != null) div.style.opacity = el.opacity;
-
-      if (kind === 'text' || kind === 'icon') {
-        const c = document.createElement('div');
-        c.className = 'el-content';
-
-        // Get text content
-        const type = el.type || 'CUSTOM';
-        if (type === 'FORECAST_MOOD') {
-          const mood = el.forecastMood || 'upbeat';
-          const day = el.forecastDay || 'today';
-          c.textContent = resolveDynamicText(type, data, mood, day);
-          console.log(`Rendering mood forecast: ${mood} ${day}`);
-        } else if (type === 'CUSTOM') {
-          c.textContent = el.text || '';
-        } else {
-          c.textContent = resolveDynamicText(type, data);
-        }
-
-        // Apply styles
-        c.style.fontSize = (el.fontSize || 16) + 'px';
-        c.style.color = el.color || '#000';
-        c.style.fontWeight = String(el.fontWeight || el.weight || 'normal');
-        c.style.width = '100%';
-        c.style.height = '100%';
-        c.style.display = 'flex';
-        c.style.alignItems = 'center';
-        c.style.justifyContent = 'center';
-        c.style.textAlign = 'center';
-
-        if (el.fontFamily) {
-          c.style.fontFamily = `"${el.fontFamily}", "Liberation Sans", "DejaVu Sans", sans-serif`;
-          console.log(`Element font: ${el.fontFamily} | Text: ${String(c.textContent || '').slice(0, 30)}...`);
-        }
-
-        // Optional text shadow/glow
-        if (el.textShadowType && el.textShadowType !== 'none') {
-          const color = el.textShadowColor || '#000000';
-          const intensity = el.textShadowIntensity || 1;
-          const blur = Math.round(intensity * 4);
-
-          if (el.textShadowType === 'shadow') {
-            c.style.textShadow = `2px 2px ${blur}px ${color}`;
-          } else if (el.textShadowType === 'glow') {
-            c.style.textShadow = `
-              0 0 ${blur}px ${color},
-              0 0 ${blur * 2}px ${color},
-              0 0 ${blur * 3}px ${color}
-            `;
-          }
-        }
-
-        div.appendChild(c);
-
-      } else if (kind === 'box') {
-        if (el.background || el.fill) div.style.background = el.background || el.fill;
-        if (el.borderColor) div.style.border = '1px solid ' + el.borderColor;
-        if (el.borderRadius || el.radius) div.style.borderRadius = (el.borderRadius || el.radius) + 'px';
-
-      
-// Box visual effects (parity with Designer)
-if (el.boxShadowType && el.boxShadowType !== 'none') {
-  const color = el.boxShadowColor || '#000000';
-  const intensity = parseFloat(el.boxShadowIntensity || 1);
-  const blur = Math.round(intensity * 8);
-  const spread = Math.round(intensity * 2);
-  const offset = Math.round(intensity * 2);
-  if (el.boxShadowType === 'shadow') {
-    div.style.boxShadow = `${offset}px ${offset}px ${blur}px ${color}`;
-  } else if (el.boxShadowType === 'glow') {
-    div.style.boxShadow = `0 0 ${blur}px ${spread}px ${color}`;
-  }
-}
-} else if (kind === 'svg' || kind === 'svg-overlay' || kind === 'image') {
-        let src = el.src || el.svgName || '';
-        
-        if (src === 'weather-icon') {
-          if (data.weather?.icon_url) {
-            src = data.weather.icon_url;
-            div.classList.add('weather-icon');
-          } else {
-            // No icon available – skip this element
-            canvas.appendChild(div);
-            continue;
-          }
-        }
-
-        // Resolve URL
-        let url = src;
-        if (!src.startsWith('http')) {
-          if (src.startsWith('/')) {
-            url = src;
-          } else if (svg_base) {
-            url = svg_base.replace(/\/+$/, '') + '/' + src.replace(/^\/+/, '');
-          }
-        }
-
-        if (url.endsWith('.svg')) {
-          await inlineSvgInto(div, url);
-        } else {
-          const img = document.createElement('img');
-          img.src = url;
-          img.style.width = '100%';
-          img.style.height = '100%';
-          img.style.objectFit = 'contain';
-          div.appendChild(img);
-        
-// SVG visual effects (parity with Designer)
-if (el.svgShadowType && el.svgShadowType !== 'none') {
-  const color = el.svgShadowColor || '#000000';
-  const intensity = parseFloat(el.svgShadowIntensity || 1);
-  const blur = Math.round(intensity * 4);
-  if (el.svgShadowType === 'shadow') {
-    div.style.filter = `drop-shadow(2px 2px ${blur}px ${color})`;
-  } else if (el.svgShadowType === 'glow') {
-    div.style.filter = `
-      drop-shadow(0 0 ${blur}px ${color})
-      drop-shadow(0 0 ${blur * 2}px ${color})
-    `;
-  }
-}
-}
-      }
-
-      canvas.appendChild(div);
-
-    } catch (e) {
-      console.error('Element render error', el, e);
-    }
-  }
-
-  console.log('✓ Render complete');
-}
-    
-    console.log('✓ Render complete');
-  }
-
-  // Main initialization
-  (async () => {
-    if (!data) return;
-    
-    // Load font CSS dynamically
-    const fb = data.font_base || '/gcs/assets/fonts';
-    const ts = data.timestamp || Date.now();
-    const fontUrl = `${fb.replace(/\/+$/, '')}/fonts.css?v=${ts}`;
-    
-    const link = document.getElementById('kin-fonts');
-    if (link) {
-      link.href = fontUrl;
-      console.log('📝 Loading fonts from:', fontUrl);
+    if (DEBUG) {
+      // Watermark basic info to ensure "something" renders on PNG
+      const wm = document.createElement('div');
+      wm.className = 'debug-watermark';
+      const loc = data?.location?.city || data?.weather?.city || 'Unknown';
+      const temp = (data?.weather?.temp_c != null) ? `${Math.round(data.weather.temp_c)}°C` : '';
+      wm.textContent = `DEBUG MODE\n${loc} ${temp}`.trim();
+      canvas.appendChild(wm);
     }
 
-    // Wait for fonts to load
-    try {
-      if (document.fonts && document.fonts.ready) {
-        console.log('⏳ Waiting for fonts...');
-        await document.fonts.ready;
-        console.log('✓ Fonts loaded');
-        await new Promise(r => setTimeout(r, 200));
-      }
-    } catch(e) {
-      console.warn('Font wait skipped:', e);
+    const layout   = data.layout || {};
+    const elements = layout.elements || [];
+    const svg_base = data.svg_base || "";
+
+    console.log('=== RENDER LAYOUT START ===');
+    console.log('Elements:', elements.length);
+    console.log('Font base:', data.font_base);
+
+    // Background image (if any)
+    if (data.bg_url) {
+      const bg = document.createElement('img');
+      bg.src = data.bg_url;
+      bg.className = 'background-image';
+      canvas.appendChild(bg);
     }
 
     // Render
-    await renderLayout(data);
-    document.documentElement.setAttribute('data-ready', '1');
-    console.log('✓ Ready');
+    for (const el of elements) {
+      try {
+        const div  = document.createElement('div');
+        const kind = (el.kind || 'box').toLowerCase();
+
+        div.className = `el ${kind}`;
+        div.style.left   = (el.x || 0) + 'px';
+        div.style.top    = (el.y || 0) + 'px';
+        div.style.width  = (el.w || el.width || 100) + 'px';
+        div.style.height = (el.h || el.height || 100) + 'px';
+        div.style.zIndex = el.zIndex || getLayerZIndex(el, kind);
+        if (el.opacity != null) div.style.opacity = el.opacity;
+
+        if (kind === 'text' || kind === 'icon') {
+          const c = document.createElement('div');
+          c.className = 'el-content';
+
+          const type = el.type || 'CUSTOM';
+          if (type === 'FORECAST_MOOD') {
+            const mood = el.forecastMood || 'upbeat';
+            const day  = el.forecastDay || 'today';
+            c.textContent = resolveDynamicText(type, data, mood, day);
+            console.log(`Rendering mood forecast: ${mood} ${day}`);
+          } else if (type === 'CUSTOM') {
+            c.textContent = el.text || '';
+          } else {
+            c.textContent = resolveDynamicText(type, data);
+          }
+
+          // Styles
+          c.style.fontSize   = (el.fontSize || 16) + 'px';
+          c.style.color      = el.color || '#000';
+          c.style.fontWeight = String(el.fontWeight || el.weight || 'normal');
+
+          // In DEBUG, guarantee visibility if color is white or unset
+          if (DEBUG && (!el.color || el.color === '#fff' || el.color === '#ffffff' || el.color.toLowerCase?.() === 'white')) {
+            c.style.color = '#111';
+          }
+
+          if (el.fontFamily) {
+            c.style.fontFamily = `"${el.fontFamily}", "Liberation Sans", "DejaVu Sans", sans-serif`;
+          }
+
+          // Optional text shadow/glow
+          if (el.textShadowType && el.textShadowType !== 'none') {
+            const color = el.textShadowColor || '#000000';
+            const intensity = el.textShadowIntensity || 1;
+            const blur = Math.round(intensity * 4);
+            if (el.textShadowType === 'shadow') {
+              c.style.textShadow = `2px 2px ${blur}px ${color}`;
+            } else if (el.textShadowType === 'glow') {
+              c.style.textShadow = `
+                0 0 ${blur}px ${color},
+                0 0 ${blur * 2}px ${color},
+                0 0 ${blur * 3}px ${color}
+              `;
+            }
+          }
+
+          div.appendChild(c);
+
+          // Log rects to help with off-canvas debugging
+          if (DEBUG) {
+            requestAnimationFrame(() => {
+              const r = div.getBoundingClientRect();
+              console.log('EL DEBUG → kind:', kind, 'type:', el.type, 'x,y,w,h:', el.x, el.y, el.w||el.width, el.h||el.height, 'rect:', r);
+            });
+          }
+
+        } else if (kind === 'box') {
+          if (el.background || el.fill) div.style.background = el.background || el.fill;
+          if (el.borderColor) div.style.border = '1px solid ' + el.borderColor;
+          if (el.borderRadius || el.radius) div.style.borderRadius = (el.borderRadius || el.radius) + 'px';
+
+          // Box visual effects (Designer parity)
+          if (el.boxShadowType && el.boxShadowType !== 'none') {
+            const color = el.boxShadowColor || '#000000';
+            const intensity = parseFloat(el.boxShadowIntensity || 1);
+            const blur = Math.round(intensity * 8);
+            const spread = Math.round(intensity * 2);
+            const offset = Math.round(intensity * 2);
+            if (el.boxShadowType === 'shadow') {
+              div.style.boxShadow = `${offset}px ${offset}px ${blur}px ${color}`;
+            } else if (el.boxShadowType === 'glow') {
+              div.style.boxShadow = `0 0 ${blur}px ${spread}px ${color}`;
+            }
+          }
+
+        } else if (kind === 'svg' || kind === 'svg-overlay' || kind === 'image') {
+          let src = el.src || el.svgName || '';
+
+          if (src === 'weather-icon') {
+            if (data.weather?.icon_url) {
+              src = data.weather.icon_url;
+              div.classList.add('weather-icon');
+            } else {
+              // No icon available – still append an empty box in debug
+              if (DEBUG) {
+                const note = document.createElement('div');
+                note.className = 'el-content';
+                note.style.fontSize = '12px';
+                note.textContent = '(no weather icon)';
+                div.appendChild(note);
+                canvas.appendChild(div);
+              }
+              continue;
+            }
+          }
+
+          // Resolve URL
+          let url = src;
+          if (!src.startsWith('http')) {
+            if (src.startsWith('/')) {
+              url = src;
+            } else if (svg_base) {
+              url = svg_base.replace(/\/+$/, '') + '/' + src.replace(/^\/+/, '');
+            }
+          }
+
+          if (url.endsWith('.svg')) {
+            await inlineSvgInto(div, url);
+          } else {
+            const img = document.createElement('img');
+            img.src = url;
+            img.style.width = '100%';
+            img.style.height = '100%';
+            img.style.objectFit = 'contain';
+            div.appendChild(img);
+          }
+
+          // SVG visual effects (Designer parity)
+          if (el.svgShadowType && el.svgShadowType !== 'none') {
+            const color = el.svgShadowColor || '#000000';
+            const intensity = parseFloat(el.svgShadowIntensity || 1);
+            const blur = Math.round(intensity * 4);
+            if (el.svgShadowType === 'shadow') {
+              div.style.filter = `drop-shadow(2px 2px ${blur}px ${color})`;
+            } else if (el.svgShadowType === 'glow') {
+              div.style.filter = `
+                drop-shadow(0 0 ${blur}px ${color})
+                drop-shadow(0 0 ${blur * 2}px ${color})
+              `;
+            }
+          }
+        }
+
+        canvas.appendChild(div);
+
+      } catch (e) {
+        console.error('Element render error', el, e);
+      }
+    }
+
+    console.log('✓ Render complete');
+  }
+
+  // Boot: the backend injects __RENDER_DATA__ via Playwright init script.
+  // If developing locally, you can paste a minimal object in the console:
+  // window.__RENDER_DATA__ = { layout: { elements:[{kind:'text', x:40, y:40, width:300, height:80, type:'CUSTOM', text:'Hello'}] } }
+  (async () => {
+    const data = (window.__RENDER_DATA__ || window.RENDER_DATA || {});
+    try {
+      await renderLayout(data);
+    } catch (e) {
+      console.error('renderLayout failed:', e);
+      if (DEBUG) {
+        const err = document.createElement('div');
+        err.style.position = 'absolute';
+        err.style.top = '10px';
+        err.style.right = '10px';
+        err.style.background = '#fdd';
+        err.style.color = '#900';
+        err.style.padding = '8px 10px';
+        err.style.fontSize = '12px';
+        err.style.zIndex = '999';
+        err.textContent = 'Render error: ' + String(e);
+        document.body.appendChild(err);
+      }
+    }
   })();
   </script>
 </body>
