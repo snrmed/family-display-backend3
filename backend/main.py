@@ -1,3 +1,4 @@
+from fastapi import Query
 import os
 import json
 import random
@@ -1728,3 +1729,59 @@ def get_preset_json(name: str):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=PORT)
+
+
+@app.post("/v1/frame_bg_reroll")
+async def frame_bg_reroll(
+    device: str = Query("familydisplay"),
+    theme: str | None = Query(None)
+):
+    """
+    Uses cached render_data.json for the device,
+    swaps only the background, renders a new PNG.
+    No external API calls.
+    """
+    key = f"devices/{device}/render_data.json"
+    render_data = gcs_read_json(key)
+    if not render_data:
+        # Fallback: build once to seed cache (this will call external APIs only this first time)
+        try:
+            render_data = await build_render_data(device=device)
+            if storage_enabled:
+                gcs_write_json(key, render_data)
+        except Exception:
+            raise HTTPException(status_code=404, detail="No cached render_data found for this device")
+
+    selected_theme = theme or (render_data.get("layout", {}).get("meta", {}) or {}).get("unsplashTheme") or "modern_minimal"
+
+    bg = choose_background_from_storage(selected_theme)
+    if not bg:
+        raise HTTPException(status_code=404, detail="No backgrounds available for selected theme")
+
+    render_data["bg_url"] = bg["url"]
+
+    render_path = Path(RENDER_PATH)
+    if not render_path.exists():
+        render_path = BASE_DIR / "web" / "layouts" / "base.html"
+
+    png_bytes = await render_html_to_png(str(render_path), render_data)
+
+    if storage_enabled:
+        gcs_write_bytes(f"devices/{device}/renders/latest.png", png_bytes)
+        gcs_write_json(key, render_data)
+
+    return Response(content=png_bytes, media_type="image/png")
+
+
+
+@app.get("/v1/render_data_save")
+async def render_data_save(device: str = Query("familydisplay")):
+    """
+    Build full render_data and also save to devices/<device>/render_data.json.
+    Use this if you want to seed/refresh the cached JSON explicitly.
+    """
+    render_data = await build_render_data(device=device)
+    if storage_enabled:
+        gcs_write_json(f"devices/{device}/render_data.json", render_data)
+    return render_data
+
