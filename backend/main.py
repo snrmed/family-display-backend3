@@ -634,6 +634,140 @@ Requirements:
     return None
 
 
+
+async def download_unsplash_theme_set(theme: str = "modern_minimal", images_per_theme: int = 9) -> int:
+    """
+    Download a set of images for a theme from Unsplash and store in GCS.
+    This is called by a scheduler/admin endpoint, not during regular renders.
+    
+    Returns: Number of images successfully downloaded
+    """
+    api_key = os.getenv("UNSPLASH_ACCESS_KEY")
+    
+    if not api_key or not storage_enabled:
+        logger.error("Cannot download: UNSPLASH_ACCESS_KEY or GCS not configured")
+        return 0
+    
+    # Theme subcategories
+    theme_subcategories = {
+        "modern_minimal": [
+            "minimal gradient", "abstract gradient", "pastel gradient",
+            "geometric minimal", "modern abstract", "color field",
+            "soft gradient background", "minimal shapes", "abstract waves"
+        ],
+        "playful_illustrations": [
+            "cute illustration", "kawaii pattern", "doodle pattern",
+            "cartoon pattern", "colorful shapes", "paper craft",
+            "kids illustration", "playful abstract", "flat illustration"
+        ],
+        "nature_abstraction": [
+            "abstract nature", "watercolor abstract", "organic shapes",
+            "botanical abstract", "marble texture", "ink water abstract",
+            "pastel nature", "abstract landscape", "zen minimalist"
+        ],
+        "retro_vibrant": [
+            "retro abstract", "70s pattern", "memphis design",
+            "pop art abstract", "vintage geometric", "retro gradient",
+            "bauhaus design", "mid century pattern", "graphic design poster"
+        ],
+        "textured_artistic": [
+            "abstract painting", "acrylic abstract", "collage art",
+            "artistic texture", "expressionist abstract", "contemporary art",
+            "mixed media art", "abstract expressionism", "modern painting"
+        ]
+    }
+    
+    subcategories = theme_subcategories.get(theme, theme_subcategories["modern_minimal"])
+    downloaded_count = 0
+    
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        for i, query in enumerate(subcategories[:images_per_theme]):
+            try:
+                # Get random image from Unsplash
+                response = await client.get(
+                    "https://api.unsplash.com/photos/random",
+                    params={
+                        "query": query,
+                        "orientation": "landscape",
+                        "client_id": api_key
+                    }
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    
+                    # Use Unsplash's custom size API for optimal 800x480 display
+                    # Request 800x480 with crop to fill (ensures perfect fit)
+                    base_url = data["urls"]["raw"]
+                    custom_url = f"{base_url}&w=800&h=480&fit=crop&crop=entropy"
+                    
+                    photo_id = data["id"]
+                    
+                    # Download image at custom size
+                    img_response = await client.get(custom_url)
+                    if img_response.status_code == 200:
+                        # Save to GCS: backgrounds/{theme}/{index}_{photo_id}.jpg
+                        blob_name = f"backgrounds/{theme}/{i}_{photo_id}.jpg"
+                        blob = bucket.blob(blob_name)
+                        blob.upload_from_string(
+                            img_response.content,
+                            content_type="image/jpeg"
+                        )
+                        
+                        downloaded_count += 1
+                        logger.info(f"  ✅ {i+1}/{images_per_theme}: {query} → {blob_name} (800x480)")
+                    
+                    # Respect rate limits (50/hour = ~72 seconds for 50)
+                    await asyncio.sleep(2)
+                    
+            except Exception as e:
+                logger.error(f"  ❌ Failed to download {query}: {e}")
+    
+    logger.info(f"🎉 Downloaded {downloaded_count}/{images_per_theme} images for {theme}")
+    return downloaded_count
+
+
+def choose_background_from_storage(selected_theme: str = None) -> dict | None:
+    """
+    Choose a random background from pre-downloaded images in GCS.
+    This is fast and doesn't call external APIs.
+    """
+    if not storage_enabled:
+        return None
+    
+    try:
+        # Default to modern_minimal if no theme specified
+        if not selected_theme:
+            selected_theme = "modern_minimal"
+        
+        # List all images for this theme
+        prefix = f"backgrounds/{selected_theme}/"
+        blobs = list(bucket.list_blobs(prefix=prefix))
+        
+        # Filter for image files
+        blobs = [b for b in blobs if b.name.endswith(('.jpg', '.jpeg', '.png'))]
+        
+        if blobs:
+            # Randomly select one
+            chosen = random.choice(blobs)
+            filename = chosen.name.split("/")[-1]
+            
+            logger.info(f"📸 Selected background: {selected_theme}/{filename}")
+            
+            return {
+                "url": make_public_url(f"gcs/{chosen.name}"),
+                "theme": selected_theme,
+                "filename": filename
+            }
+        else:
+            logger.warning(f"No images found for theme: {selected_theme}")
+            
+    except Exception as e:
+        logger.warning(f"Could not choose background from storage: {e}")
+    
+    return None
+
+
 def get_unsplash_themes() -> list:
     """Return list of available Unsplash themes for the designer"""
     return [
