@@ -82,6 +82,54 @@ LOCAL_JOKES = [
     "Why did the scarecrow win an award? He was outstanding in his field!",
 ]
 
+TODO_PRESETS = {
+    "kids_morning": {
+        "name": "Kids Morning Routine",
+        "items": [
+            {"emoji": "🛏️", "time": "7:00am", "task": "Make bed"},
+            {"emoji": "🪥", "time": "7:15am", "task": "Brush teeth"},
+            {"emoji": "🥣", "time": "7:30am", "task": "Eat breakfast"},
+            {"emoji": "🎒", "time": "8:00am", "task": "Pack school bag"}
+        ]
+    },
+    "kids_afternoon": {
+        "name": "After School Tasks",
+        "items": [
+            {"emoji": "👕", "time": "3:30pm", "task": "Change clothes"},
+            {"emoji": "📚", "time": "4:00pm", "task": "Homework time"},
+            {"emoji": "🧹", "time": "5:00pm", "task": "Tidy room"},
+            {"emoji": "🐱", "time": "5:30pm", "task": "Feed pets"}
+        ]
+    },
+    "kids_chores": {
+        "name": "Weekly Chores",
+        "items": [
+            {"emoji": "🗑️", "time": "", "task": "Take out bins"},
+            {"emoji": "🧺", "time": "", "task": "Put laundry away"},
+            {"emoji": "🧽", "time": "", "task": "Wipe table after dinner"},
+            {"emoji": "🌱", "time": "", "task": "Water plants"}
+        ]
+    },
+    "family_weekly": {
+        "name": "Family Reminders",
+        "items": [
+            {"emoji": "📚", "time": "Mon", "task": "Library books due"},
+            {"emoji": "🗑️", "time": "Wed", "task": "Bin night"},
+            {"emoji": "🎹", "time": "Fri", "task": "Piano lesson"},
+            {"emoji": "⚽", "time": "Sat", "task": "Soccer game"}
+        ]
+    },
+    "homework": {
+        "name": "Homework Checklist",
+        "items": [
+            {"emoji": "📖", "time": "", "task": "Reading"},
+            {"emoji": "✏️", "time": "", "task": "Math worksheet"},
+            {"emoji": "🔤", "time": "", "task": "Spelling practice"},
+            {"emoji": "🎨", "time": "", "task": "Art project"}
+        ]
+    }
+}
+
 # ──────────────────────────────────────────────────────────────────────────────
 # GOOGLE CLOUD STORAGE
 # ──────────────────────────────────────────────────────────────────────────────
@@ -737,7 +785,160 @@ def get_unsplash_themes() -> list:
         }
     ]
 
+def render_todo_element(elem: dict, context: dict) -> str:
+    """Render todo list with multiple layout options"""
+    import html as html_lib
+    
+    layout = elem.get('layout', 'kids')
+    title = elem.get('title', 'TODAY\'S MISSIONS 🎯')
+    items = elem.get('items', [])
+    show_time = elem.get('showTime', True)
+    show_emoji = elem.get('showEmoji', True)
+    
+    # Text styling
+    font_size = elem.get('fontSize', 16)
+    font_family = elem.get('fontFamily', 'Inter')
+    font_weight = elem.get('fontWeight', '400')
+    color = elem.get('color', '#000000')
+    
+    # Text effects
+    shadow_type = elem.get('textShadowType', 'none')
+    shadow_color = elem.get('textShadowColor', '#000000')
+    shadow_intensity = elem.get('textShadowIntensity', 1.0)
+    
+    # Build text shadow CSS
+    text_shadow = ''
+    if shadow_type == 'shadow':
+        blur = int(shadow_intensity * 4)
+        text_shadow = f'text-shadow: 2px 2px {blur}px {shadow_color};'
+    elif shadow_type == 'glow':
+        blur = int(shadow_intensity * 4)
+        text_shadow = f'text-shadow: 0 0 {blur}px {shadow_color}, 0 0 {blur*2}px {shadow_color};'
+    
+    base_style = f'''
+        font-size: {font_size}px;
+        font-family: "{font_family}", sans-serif;
+        font-weight: {font_weight};
+        color: {color};
+        {text_shadow}
+    '''
+    
+    if layout == 'kids':
+        return render_todo_kids_style(title, items, show_time, show_emoji, base_style, html_lib)
+    elif layout == 'compact_horizontal':
+        return render_todo_compact_horizontal(title, items, show_time, show_emoji, base_style, html_lib)
+    elif layout == 'compact_vertical':
+        return render_todo_compact_vertical(title, items, show_time, show_emoji, base_style, html_lib)
+    elif layout == 'single_line':
+        return render_todo_single_line(title, items, show_time, show_emoji, base_style, html_lib)
+    
+    return '<div>Todo element</div>'
 
+
+def render_todo_kids_style(title, items, show_time, show_emoji, style, html_lib):
+    """Kids style - large emojis, vertical layout"""
+    html = f'<div class="todo-list todo-kids" style="{style}">'
+    html += f'<div class="todo-title">{html_lib.escape(title)}</div>'
+    
+    for item in items:
+        emoji = item.get('emoji', '⭐') if show_emoji else ''
+        task = item.get('task', '')
+        time_str = item.get('time', '')
+        
+        html += '<div class="todo-item">'
+        if emoji:
+            html += f'<div class="todo-emoji">{emoji}</div>'
+        html += f'<div class="todo-task">{html_lib.escape(task).upper()}</div>'
+        
+        if show_time and time_str:
+            html += f'<div class="todo-time">⏰ {html_lib.escape(time_str)}</div>'
+        
+        html += '</div>'
+    
+    html += '</div>'
+    return html
+
+
+def render_todo_compact_horizontal(title, items, show_time, show_emoji, style, html_lib):
+    """Compact horizontal layout - 3 lines"""
+    html = f'<div class="todo-list todo-compact-h" style="{style}">'
+    html += f'<div class="todo-title">{html_lib.escape(title)}</div>'
+    
+    # Split items into rows (3 items per row)
+    rows = [items[i:i+3] for i in range(0, len(items), 3)]
+    
+    for row in rows:
+        html += '<div class="todo-row">'
+        for i, item in enumerate(row):
+            emoji = item.get('emoji', '⭐') if show_emoji else ''
+            task = item.get('task', '')
+            time_str = item.get('time', '')
+            
+            # Add separator between items
+            if i > 0:
+                html += ' • '
+            
+            html += f'{emoji} {html_lib.escape(task)}'
+            if show_time and time_str:
+                html += f' <span class="time">{html_lib.escape(time_str)}</span>'
+        html += '</div>'
+    
+    html += '</div>'
+    return html
+
+
+def render_todo_compact_vertical(title, items, show_time, show_emoji, style, html_lib):
+    """Compact vertical layout - 3 lines"""
+    html = f'<div class="todo-list todo-compact-v" style="{style}">'
+    html += f'<div class="todo-title">{html_lib.escape(title)}</div>'
+    
+    # Split items into columns
+    cols = [items[i:i+2] for i in range(0, len(items), 2)]
+    
+    for col in cols:
+        html += '<div class="todo-row">'
+        for i, item in enumerate(col):
+            emoji = item.get('emoji', '⭐') if show_emoji else ''
+            task = item.get('task', '')
+            time_str = item.get('time', '')
+            
+            if i > 0:
+                html += ' • '
+            
+            if show_time and time_str:
+                html += f'{html_lib.escape(time_str)} '
+            html += f'{emoji} {html_lib.escape(task)}'
+        html += '</div>'
+    
+    html += '</div>'
+    return html
+
+
+def render_todo_single_line(title, items, show_time, show_emoji, style, html_lib):
+    """Ultra compact single line"""
+    html = f'<div class="todo-list todo-single" style="{style}">'
+    html += f'<span class="todo-title">{html_lib.escape(title)}</span> '
+    
+    for i, item in enumerate(items):
+        emoji = item.get('emoji', '⭐') if show_emoji else ''
+        task = item.get('task', '')[:10]  # Truncate long tasks
+        time_str = item.get('time', '')
+        
+        if i > 0:
+            html += ' • '
+        
+        html += f'{emoji} {html_lib.escape(task)}'
+        if show_time and time_str:
+            html += f' {html_lib.escape(time_str)}'
+    
+    html += '</div>'
+    return html
+
+
+@app.get("/api/todo-presets")
+def get_todo_presets():
+    """Return available todo presets for designer"""
+    return {"presets": TODO_PRESETS}
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -935,6 +1136,7 @@ async def build_render_data(device: str = "familydisplay") -> dict:
         "device": device_config,
         "timestamp": now.isoformat(),
         "mood_forecasts": mood_forecasts,
+        "todo_presets": TODO_PRESETS,
     }
     return context
 # ──────────────────────────────────────────────────────────────────────────────
