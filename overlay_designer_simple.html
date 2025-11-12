@@ -149,7 +149,7 @@ body{
 }
 
 .section.collapsed .section-toggle::before{
-  content:'â–º';
+  content:'►';
 }
 
 .section-header{
@@ -186,7 +186,7 @@ body{
 }
 
 .section-toggle::before{
-  content:'â–¼';
+  content:'▼';
 }
 
 .section-content{
@@ -640,7 +640,7 @@ body{
 <div class="modal" id="setupModal">
   <div class="modal-box">
     <div class="modal-header">
-      <div class="modal-icon">ðŸš€</div>
+      <div class="modal-icon">🚀</div>
       <div class="modal-title">
         <h2>Welcome to Kin:D - Let's make a smile</h2>
         <p>Enter your device ID to begin</p>
@@ -663,7 +663,7 @@ body{
 
 <div class="header">
   <div class="brand">
-    <span class="brand-logo">ðŸŽ¨</span>
+    <span class="brand-logo">🎨</span>
     <span class="brand-name">Kin:D</span>
     <span class="brand-tag">make a smile</span>
   </div>
@@ -681,11 +681,11 @@ body{
       <input type="checkbox" id="snapToggle" style="cursor:pointer;">
       Snap
     </label>
-    <button class="btn" id="undoBtn">â†©ï¸ Undo</button>
-    <button class="btn" id="redoBtn">â†ªï¸ Redo</button>
-    <button class="btn" id="exportBtn">ðŸ“¦ Export JSON</button>
-    <button class="btn" id="pngBtn">ðŸ–¼ï¸ Export PNG</button>
-    <button class="btn btn-primary" id="saveBtn">ðŸ’¾ Save Layout</button>
+    <button class="btn" id="undoBtn">↩️ Undo</button>
+    <button class="btn" id="redoBtn">↪️ Redo</button>
+    <button class="btn" id="exportBtn">📦 Export JSON</button>
+    <button class="btn" id="pngBtn">🖼️ Export PNG</button>
+    <button class="btn btn-primary" id="saveBtn">💾 Save Layout</button>
   </div>
 </div>
 
@@ -695,7 +695,7 @@ body{
     <div class="section">
       <div class="section-header" onclick="toggleSection(this)">
         <div class="section-title">
-          <span class="section-icon">âš™ï¸</span>
+          <span class="section-icon">⚙️</span>
           Device Settings
         </div>
         <span class="section-toggle"></span>
@@ -726,10 +726,10 @@ body{
             <img id="iconThemePreview" src="" alt="" style="width:20px;height:20px;margin-left:8px;vertical-align:middle;display:none;">
           </label>
           <select class="form-select" id="iconThemeSelect" onchange="updateIconThemePreview()">
-            <option value="happy-skies">ðŸ˜Š Happy Skies</option>
-            <option value="soft-skies">ðŸŒˆ Soft Skies</option>
-            <option value="sunny-day">â˜€ï¸ Sunny Day</option>
-            <option value="blue-sky-pro">ðŸŒ€ Blue Sky Pro</option>
+            <option value="happy-skies">😊 Happy Skies</option>
+            <option value="soft-skies">🌈 Soft Skies</option>
+            <option value="sunny-day">☀️ Sunny Day</option>
+            <option value="blue-sky-pro">🌀 Blue Sky Pro</option>
           </select>
         </div>
         <button class="btn" id="saveDeviceBtn" style="width:100%">Save Settings</button>
@@ -739,7 +739,7 @@ body{
     <div class="section">
       <div class="section-header" onclick="toggleSection(this)">
         <div class="section-title">
-          <span class="section-icon">âž•</span>
+          <span class="section-icon">➕</span>
           Quick Add
         </div>
         <span class="section-toggle"></span>
@@ -751,19 +751,19 @@ body{
             <div class="quick-label">Text</div>
           </div>
           <div class="quick-btn" onclick="quickAddBox()">
-            <div class="quick-icon">â¬›</div>
+            <div class="quick-icon">⬛</div>
             <div class="quick-label">Box</div>
           </div>
           <div class="quick-btn" onclick="showSVGModal()" id="quickAddSvg">
-            <div class="quick-icon">â­</div>
+            <div class="quick-icon">⭐</div>
             <div class="quick-label">SVG</div>
           </div>
           <div class="quick-btn" onclick="showIconModal()" id="quickAddIcon">
-            <div class="quick-icon">ðŸŒ§ï¸</div>
+            <div class="quick-icon">🌧️</div>
             <div class="quick-label">Weather</div>
           </div>
           <div class="quick-btn" onclick="addTodoElement()">
-            <div class="quick-icon">ðŸ“</div>
+            <div class="quick-icon">📝</div>
             <div class="quick-label">Todo</div>
           </div>
         </div>
@@ -773,7 +773,7 @@ body{
     <div class="section">
       <div class="section-header" onclick="toggleSection(this)">
         <div class="section-title">
-          <span class="section-icon">ðŸŽ¨</span>
+          <span class="section-icon">🎨</span>
           Layout Presets
         </div>
         <span class="section-toggle"></span>
@@ -793,7 +793,7 @@ body{
     <div class="section collapsed">
       <div class="section-header" onclick="toggleSection(this)">
         <div class="section-title">
-          <span class="section-icon">ðŸ–¼ï¸</span>
+          <span class="section-icon">🖼️</span>
           Background
         </div>
         <span class="section-toggle"></span>
@@ -802,17 +802,17 @@ body{
         <div class="form-group">
           <label class="form-label">Background Theme</label>
           <select class="form-select" id="unsplashThemeSelect" onchange="loadUnsplashBackground()">
-            <option value="modern_minimal">ðŸŽ¨ Modern Minimal</option>
-            <option value="playful_illustrations">ðŸŽŠ Playful Illustrations</option>
-            <option value="nature_abstraction">ðŸŒ¿ Nature Abstraction</option>
-            <option value="retro_vibrant">ðŸ‘¾ Retro Vibrant</option>
-            <option value="textured_artistic">ðŸ–Œï¸ Textured Artistic</option>
+            <option value="modern_minimal">🎨 Modern Minimal</option>
+            <option value="playful_illustrations">🎊 Playful Illustrations</option>
+            <option value="nature_abstraction">🌿 Nature Abstraction</option>
+            <option value="retro_vibrant">👾 Retro Vibrant</option>
+            <option value="textured_artistic">🖌️ Textured Artistic</option>
           </select>
           <small class="hint" style="display:block; margin-top:4px; opacity:0.7; font-size:11px;">
             Each theme has 9 variations. Backgrounds change randomly on each render.
           </small>
         </div>
-        <button class="btn" onclick="loadUnsplashBackground()" style="width:100%">ðŸ”„ Refresh Background</button>
+        <button class="btn" onclick="loadUnsplashBackground()" style="width:100%">🔄 Refresh Background</button>
       </div>
     </div>
     
@@ -829,13 +829,13 @@ body{
   
   <div class="inspector">
     <div id="inspectorEmpty" class="inspector-empty">
-      <div class="inspector-empty-icon">ðŸ‘†</div>
+      <div class="inspector-empty-icon">👆</div>
       <p>Select an element to edit its properties</p>
     </div>
     
     <div id="inspectorContent" class="hidden">
       <div class="panel">
-        <div class="panel-title">ðŸ“ Transform</div>
+        <div class="panel-title">📍 Transform</div>
         <div class="row">
           <div>
             <label class="form-label">X</label>
@@ -861,13 +861,13 @@ body{
           <input type="range" id="elOpacity" min="0" max="1" step="0.1" value="1" oninput="updateElOpacity()">
         </div>
         <div class="row">
-          <button class="btn" onclick="deleteElement()">ðŸ—‘ï¸ Delete</button>
-          <button class="btn" onclick="duplicateElement()">ðŸ“‹ Duplicate</button>
+          <button class="btn" onclick="deleteElement()">🗑️ Delete</button>
+          <button class="btn" onclick="duplicateElement()">📋 Duplicate</button>
         </div>
       </div>
       
       <div class="panel" id="textPanel" style="display:none">
-        <div class="panel-title">âœï¸ Text</div>
+        <div class="panel-title">✍️ Text</div>
         <div class="form-group">
           <label class="form-label">Type</label>
           <select class="form-select" id="textType" onchange="updateTextType()">
@@ -954,7 +954,7 @@ body{
 </div>
       
       <div class="panel" id="boxPanel" style="display:none">
-        <div class="panel-title">â¬› Box Style</div>
+        <div class="panel-title">⬛ Box Style</div>
         <div class="form-group">
           <label class="form-label">Background</label>
           <input type="color" id="boxBg" value="#ffffff" onchange="updateBoxStyle()">
@@ -991,7 +991,7 @@ body{
       </div>
       
       <div class="panel" id="svgPanel" style="display:none">
-        <div class="panel-title">â­ SVG</div>
+        <div class="panel-title">⭐ SVG</div>
         <p style="color:var(--text-muted);font-size:12px;">
           SVG elements are vector graphics that scale without pixelation.
         </p>
@@ -1019,15 +1019,15 @@ body{
       </div>
     </div>
     <div class="panel" id="todoPanel" style="display:none">
-        <div class="panel-title">ðŸ“ Todo List</div>
+        <div class="panel-title">📝 Todo List</div>
         
         <div class="form-group">
           <label class="form-label">Layout Style</label>
           <select class="form-select" id="todoLayout" onchange="updateTodoFromPanel()">
-            <option value="kids">ðŸŽ¯ Kids Style (Full)</option>
-            <option value="compact_horizontal">ðŸ“œ Compact Horizontal</option>
-            <option value="compact_vertical">ðŸ“‹ Compact Vertical</option>
-            <option value="single_line">âž– Single Line</option>
+            <option value="kids">🎯 Kids Style (Full)</option>
+            <option value="compact_horizontal">📜 Compact Horizontal</option>
+            <option value="compact_vertical">📋 Compact Vertical</option>
+            <option value="single_line">➖ Single Line</option>
           </select>
         </div>
         
@@ -1036,23 +1036,23 @@ body{
           <div style="display:flex; flex-direction:column; gap:6px; margin:8px 0;">
             <label style="display:flex; align-items:center; gap:8px;">
               <input type="radio" name="preset-radio" class="preset-toggle" value="kids_morning"> 
-              ðŸŒ„ Morning Routine
+              🌄 Morning Routine
             </label>
             <label style="display:flex; align-items:center; gap:8px;">
               <input type="radio" name="preset-radio" class="preset-toggle" value="kids_afternoon"> 
-              ðŸ  After School
+              🏠 After School
             </label>
             <label style="display:flex; align-items:center; gap:8px;">
               <input type="radio" name="preset-radio" class="preset-toggle" value="kids_chores"> 
-              ðŸ§¹ Weekly Chores
+              🧹 Weekly Chores
             </label>
             <label style="display:flex; align-items:center; gap:8px;">
               <input type="radio" name="preset-radio" class="preset-toggle" value="family_weekly"> 
-              ðŸ‘¨â€ðŸ‘©â€ðŸ‘§â€ðŸ‘¦ Family Reminders
+              👨‍👩‍👧‍👦 Family Reminders
             </label>
             <label style="display:flex; align-items:center; gap:8px;">
               <input type="radio" name="preset-radio" class="preset-toggle" value="homework"> 
-              ðŸ“š Homework
+              📚 Homework
             </label>
           </div>
           <button class="btn" onclick="loadSelectedPresets()" style="width:100%; margin-top:8px;">
@@ -1090,7 +1090,7 @@ body{
         
         <div class="form-group">
           <label class="form-label">Title</label>
-          <input type="text" class="form-input" id="todoTitle" placeholder="TODAY'S MISSIONS ðŸŽ¯" 
+          <input type="text" class="form-input" id="todoTitle" placeholder="TODAY'S MISSIONS 🎯" 
                  onchange="updateTodoFromPanel()">
         </div>
         
@@ -1155,9 +1155,9 @@ body{
       
       <template id="todoItemTemplate">
         <div class="todo-item-row" style="display:flex; gap:6px; align-items:center; padding:6px; background:var(--panel-hover); border-radius:6px; margin-bottom:6px; border:1px solid var(--border);">
-          <button type="button" class="drag-handle" style="cursor:move; background:none; border:none; color:var(--text-muted); font-size:16px; padding:0 2px;">â ¿</button>
+          <button type="button" class="drag-handle" style="cursor:move; background:none; border:none; color:var(--text-muted); font-size:16px; padding:0 2px;">⠿</button>
           
-          <input type="text" class="emoji-input" placeholder="ðŸŽ¯" maxlength="2" 
+          <input type="text" class="emoji-input" placeholder="🎯" maxlength="2" 
                  style="width:40px; font-size:18px; text-align:center; border:1px solid var(--border); border-radius:4px; padding:4px; background:var(--bg); color:var(--text);"
                  onchange="updateTodoFromPanel()">
           
@@ -1201,7 +1201,7 @@ body{
           </div>
           
           <button type="button" class="btn-delete" onclick="removeTodoItemRow(this); updateTodoFromPanel();" 
-                  style="background:none; border:none; cursor:pointer; font-size:18px; opacity:0.6;">ðŸ—‘ï¸</button>
+                  style="background:none; border:none; cursor:pointer; font-size:18px; opacity:0.6;">🗑️</button>
         </div>
       </template>
   </div>
@@ -1210,7 +1210,7 @@ body{
 <div class="modal hidden" id="svgModal">
   <div class="modal-box">
     <div class="modal-header">
-      <div class="modal-icon">â­</div>
+      <div class="modal-icon">⭐</div>
       <div class="modal-title">
         <h2>Choose SVG</h2>
         <p>Select a graphic to add</p>
@@ -1229,7 +1229,7 @@ body{
 <div class="modal hidden" id="iconModal">
   <div class="modal-box">
     <div class="modal-header">
-      <div class="modal-icon">ðŸŒ§ï¸</div>
+      <div class="modal-icon">🌧️</div>
       <div class="modal-title">
         <h2>Add Weather Icon</h2>
         <p>Icon updates automatically based on conditions</p>
@@ -1265,34 +1265,34 @@ const CANVAS_HEIGHT = 480;
 
 const FONT_OPTIONS = [
   // Core Kin:D Set
-  { value: 'Inter', label: 'Kin:D Clear â€” (Professional Default)' },
-  { value: 'Nunito', label: 'Kin:D Smile â€” (Rounded & Friendly)' },
-  { value: 'Figtree', label: 'Kin:D Play â€” (Bright & Modern)' },
-  { value: 'Atkinson Hyperlegible', label: 'Kin:D Focus â€” (Ultra Readable)' },
-  { value: 'Lexend', label: 'Kin:D Calm â€” (Soft & Open)' },
-  { value: 'Merriweather', label: 'Kin:D Cozy â€” (Bookish Serif)' },
+  { value: 'Inter', label: 'Kin:D Clear — (Professional Default)' },
+  { value: 'Nunito', label: 'Kin:D Smile — (Rounded & Friendly)' },
+  { value: 'Figtree', label: 'Kin:D Play — (Bright & Modern)' },
+  { value: 'Atkinson Hyperlegible', label: 'Kin:D Focus — (Ultra Readable)' },
+  { value: 'Lexend', label: 'Kin:D Calm — (Soft & Open)' },
+  { value: 'Merriweather', label: 'Kin:D Cozy — (Bookish Serif)' },
 
   // Optional Creative Add-ons
-  { value: 'Baloo 2', label: 'Kin:D Joy â€” (Big, Playful Headlines)' },
-  { value: 'Patrick Hand', label: 'Kin:D Scribble â€” (Handwritten & Personal)' },
-  { value: 'Caveat', label: 'Kin:D Whisper â€” (Natural Cursive Notes)' },
-  { value: 'Playfair Display', label: 'Kin:D Tale â€” (Elegant Storybook Serif)' },
-  { value: 'DM Serif Display', label: 'Kin:D Grace â€” (Refined & Classic)' }
+  { value: 'Baloo 2', label: 'Kin:D Joy — (Big, Playful Headlines)' },
+  { value: 'Patrick Hand', label: 'Kin:D Scribble — (Handwritten & Personal)' },
+  { value: 'Caveat', label: 'Kin:D Whisper — (Natural Cursive Notes)' },
+  { value: 'Playfair Display', label: 'Kin:D Tale — (Elegant Storybook Serif)' },
+  { value: 'DM Serif Display', label: 'Kin:D Grace — (Refined & Classic)' }
 ];
 
 const MOOD_FORECAST_EXAMPLES = {
-  'upbeat_today': "Sunshine and smiles ahead! 22-28Â°C with blue skies making it perfect for adventures!",
-  'upbeat_tomorrow': "Tomorrow's looking fantastic! 20-26Â°C with lovely conditions for a great day!",
-  'sarcastic_today': "Oh wonderful, another 'partly cloudy' day. 18-24Â°C if you're wondering.",
-  'sarcastic_tomorrow': "Tomorrow: 19-25Â°C. Nature's way of keeping us guessing, as usual.",
-  'poetic_today': "Clouds drift like whispered secrets. 21-27Â°C beneath shifting heavens.",
-  'poetic_tomorrow': "Tomorrow's canvas painted in 20-26Â°C hues, dancing between sun and shadow.",
-  'dad_joke_today': "What's 23Â°C and full of potential? Today! Why? Because it's not degree-pressing!",
-  'dad_joke_tomorrow': "Tomorrow's forecast: 22Â°C with a 100% chance of it being tue-sday somewhere!",
-  'enthusiastic_today': "WOW! AMAZING day ahead folks! 24-30Â°C of PURE WEATHER EXCELLENCE!",
-  'enthusiastic_tomorrow': "TOMORROW IS GOING TO BE INCREDIBLE! 23-29Â°C of SPECTACULAR CONDITIONS!",
-  'grumpy_today': "Another day. 19-25Â°C. Could be worse. Could be better. Whatever.",
-  'grumpy_tomorrow': "Tomorrow's 20-26Â°C. Don't expect miracles. It's just weather."
+  'upbeat_today': "Sunshine and smiles ahead! 22-28°C with blue skies making it perfect for adventures!",
+  'upbeat_tomorrow': "Tomorrow's looking fantastic! 20-26°C with lovely conditions for a great day!",
+  'sarcastic_today': "Oh wonderful, another 'partly cloudy' day. 18-24°C if you're wondering.",
+  'sarcastic_tomorrow': "Tomorrow: 19-25°C. Nature's way of keeping us guessing, as usual.",
+  'poetic_today': "Clouds drift like whispered secrets. 21-27°C beneath shifting heavens.",
+  'poetic_tomorrow': "Tomorrow's canvas painted in 20-26°C hues, dancing between sun and shadow.",
+  'dad_joke_today': "What's 23°C and full of potential? Today! Why? Because it's not degree-pressing!",
+  'dad_joke_tomorrow': "Tomorrow's forecast: 22°C with a 100% chance of it being tue-sday somewhere!",
+  'enthusiastic_today': "WOW! AMAZING day ahead folks! 24-30°C of PURE WEATHER EXCELLENCE!",
+  'enthusiastic_tomorrow': "TOMORROW IS GOING TO BE INCREDIBLE! 23-29°C of SPECTACULAR CONDITIONS!",
+  'grumpy_today': "Another day. 19-25°C. Could be worse. Could be better. Whatever.",
+  'grumpy_tomorrow': "Tomorrow's 20-26°C. Don't expect miracles. It's just weather."
 };
 
 const FONT_WHITELIST = new Set(FONT_OPTIONS.map(font => font.value));
@@ -1316,46 +1316,46 @@ const TODO_PRESETS = {
   kids_morning: {
     name: "Kids Morning Routine",
     items: [
-      { emoji: "ðŸ›Œï¸", time: "7:00am", task: "Make bed", days: ["weekdays"] },
-      { emoji: "ðŸ¦·", time: "7:15am", task: "Brush teeth", days: ["all"] },
-      { emoji: "ðŸ¥", time: "7:30am", task: "Eat breakfast", days: ["all"] },
-      { emoji: "ðŸŽ’", time: "8:00am", task: "Pack school bag", days: ["weekdays"] }
+      { emoji: "🛌️", time: "7:00am", task: "Make bed", days: ["weekdays"] },
+      { emoji: "🦷", time: "7:15am", task: "Brush teeth", days: ["all"] },
+      { emoji: "🥐", time: "7:30am", task: "Eat breakfast", days: ["all"] },
+      { emoji: "🎒", time: "8:00am", task: "Pack school bag", days: ["weekdays"] }
     ]
   },
   kids_afternoon: {
     name: "After School Tasks",
     items: [
-      { emoji: "ðŸ‘•", time: "3:30pm", task: "Change clothes", days: ["weekdays"] },
-      { emoji: "ðŸ“š", time: "4:00pm", task: "Homework time", days: ["weekdays"] },
-      { emoji: "ðŸ§¹", time: "5:00pm", task: "Tidy room", days: ["all"] },
-      { emoji: "ðŸ¾", time: "5:30pm", task: "Feed pets", days: ["all"] }
+      { emoji: "👕", time: "3:30pm", task: "Change clothes", days: ["weekdays"] },
+      { emoji: "📚", time: "4:00pm", task: "Homework time", days: ["weekdays"] },
+      { emoji: "🧹", time: "5:00pm", task: "Tidy room", days: ["all"] },
+      { emoji: "🐾", time: "5:30pm", task: "Feed pets", days: ["all"] }
     ]
   },
   kids_chores: {
     name: "Weekly Chores",
     items: [
-      { emoji: "ðŸ—‘ï¸", time: "6:00pm", task: "Take out bins", days: ["mon", "thu"] },
-      { emoji: "ðŸ§º", time: "", task: "Put laundry away", days: ["wed", "sat"] },
-      { emoji: "ðŸ§½", time: "", task: "Wipe table after dinner", days: ["all"] },
-      { emoji: "ðŸŒ±", time: "", task: "Water plants", days: ["sun"] }
+      { emoji: "🗑️", time: "6:00pm", task: "Take out bins", days: ["mon", "thu"] },
+      { emoji: "🧺", time: "", task: "Put laundry away", days: ["wed", "sat"] },
+      { emoji: "🧽", time: "", task: "Wipe table after dinner", days: ["all"] },
+      { emoji: "🌱", time: "", task: "Water plants", days: ["sun"] }
     ]
   },
   family_weekly: {
     name: "Family Reminders",
     items: [
-      { emoji: "ðŸ“š", time: "", task: "Library books due", days: ["mon"] },
-      { emoji: "ðŸ—‘ï¸", time: "6:00pm", task: "Bin night", days: ["wed"] },
-      { emoji: "ðŸŽ¹", time: "4:00pm", task: "Piano lesson", days: ["fri"] },
-      { emoji: "âš½", time: "9:00am", task: "Soccer game", days: ["sat"] }
+      { emoji: "📚", time: "", task: "Library books due", days: ["mon"] },
+      { emoji: "🗑️", time: "6:00pm", task: "Bin night", days: ["wed"] },
+      { emoji: "🎹", time: "4:00pm", task: "Piano lesson", days: ["fri"] },
+      { emoji: "⚽", time: "9:00am", task: "Soccer game", days: ["sat"] }
     ]
   },
   homework: {
     name: "Homework Checklist",
     items: [
-      { emoji: "ðŸ“–", time: "", task: "Reading", days: ["weekdays"] },
-      { emoji: "âœï¸", time: "", task: "Math worksheet", days: ["weekdays"] },
-      { emoji: "ðŸ”¥", time: "", task: "Spelling practice", days: ["weekdays"] },
-      { emoji: "ðŸŽ¨", time: "", task: "Art project", days: ["weekends"] }
+      { emoji: "📖", time: "", task: "Reading", days: ["weekdays"] },
+      { emoji: "✍️", time: "", task: "Math worksheet", days: ["weekdays"] },
+      { emoji: "🔥", time: "", task: "Spelling practice", days: ["weekdays"] },
+      { emoji: "🎨", time: "", task: "Art project", days: ["weekends"] }
     ]
   }
 };
@@ -1426,7 +1426,7 @@ function displayLocationResults(locations) {
     name.textContent = loc.name;
     const details = document.createElement('div');
     details.className = 'location-result-details';
-    details.textContent = `${loc.state ? loc.state + ', ' : ''}${loc.country} Â· ${loc.lat.toFixed(4)}, ${loc.lon.toFixed(4)}`;
+    details.textContent = `${loc.state ? loc.state + ', ' : ''}${loc.country} · ${loc.lat.toFixed(4)}, ${loc.lon.toFixed(4)}`;
     item.appendChild(name);
     item.appendChild(details);
     resultsDiv.appendChild(item);
@@ -1437,7 +1437,7 @@ function selectLocation(loc) {
   selectedLocation = loc;
   document.getElementById('locationSearch').value = loc.name;
   const detailsEl = document.getElementById('locationDetails');
-  detailsEl.textContent = `${loc.state ? loc.state + ', ' : ''}${loc.country} Â· ${loc.lat.toFixed(4)}, ${loc.lon.toFixed(4)}`;
+  detailsEl.textContent = `${loc.state ? loc.state + ', ' : ''}${loc.country} · ${loc.lat.toFixed(4)}, ${loc.lon.toFixed(4)}`;
   document.getElementById('locationResults').style.display = 'none';
   console.log('Selected location:', loc);
 }
@@ -1494,7 +1494,7 @@ const TYPE_LABELS = {
 // ========================================================================
 
 async function init() {
-  console.log('ðŸŽ¨ Initializing Kin:D Designer v4...');
+  console.log('🎨 Initializing Kin:D Designer v4...');
 
   drawGrid();
   populateFontOptions();
@@ -1577,12 +1577,12 @@ async function completeSetup() {
     // Load unsplash background
     await loadUnsplashBackground();
     
-    updateStatus('âœ“ Ready', 'success');
-    console.log('âœ“ Initialization complete');
+    updateStatus('✓ Ready', 'success');
+    console.log('✓ Initialization complete');
     
   } catch (error) {
     console.error('Initialization error:', error);
-    updateStatus('âš ï¸ Connection error', 'error');
+    updateStatus('⚠️ Connection error', 'error');
   }
 }
 
@@ -1631,13 +1631,13 @@ async function saveDeviceConfig() {
       body: JSON.stringify(deviceConfig)
     });
     if (response.ok) {
-      updateStatus('âœ“ Device settings saved', 'success');
+      updateStatus('✓ Device settings saved', 'success');
       await fetchRenderData();
       applyDynamicText();
     } else { throw new Error('Failed to save'); }
   } catch (error) {
     console.error('Save device config error:', error);
-    updateStatus('âš ï¸ Failed to save settings', 'error');
+    updateStatus('⚠️ Failed to save settings', 'error');
   }
 }
 
@@ -1656,7 +1656,7 @@ async function loadUnsplashBackground() {
       // Use background from render data if available
       if (data.bg_url) {
         canvas.style.backgroundImage = `url(${data.bg_url})`;
-        console.log('âœ“ Loaded background:', theme, data.bg_url);
+        console.log('✓ Loaded background:', theme, data.bg_url);
       }
     }
   } catch (error) {
@@ -1680,7 +1680,7 @@ async function fetchRenderData() {
 availableInfoTypes = ['CUSTOM', 'FORECAST_MOOD'];
 
 if (renderData.weather) {
-  // addInfoType('TEMP');  // â€   REMOVE this line
+  // addInfoType('TEMP');  // †  REMOVE this line
   addInfoType('CITY');
   addInfoType('WEATHER_DESC');
 
@@ -1759,13 +1759,13 @@ function getDynamicText(type, forecastMood, forecastDay) {
   
   switch (type) {
     case 'TEMP':
-      return weather?.temp != null ? `${weather.temp}Â°C` : '--Â°C';
+      return weather?.temp != null ? `${weather.temp}°C` : '--°C';
     
     case 'WEATHER_MINMAX':
       if (weather?.temp_min != null && weather?.temp_max != null) {
-        return `${weather.temp_min}Â° / ${weather.temp_max}Â°`;
+        return `${weather.temp_min}° / ${weather.temp_max}°`;
       }
-      return '--Â° / --Â°';
+      return '--° / --°';
     
     case 'CITY':
       return weather?.city || deviceConfig?.location?.city || 'City';
@@ -1780,19 +1780,19 @@ function getDynamicText(type, forecastMood, forecastDay) {
       return renderData?.dad_joke || 'No joke today.';
     
     case 'WEATHER_DESC_EXTENDED':
-      return weather?.desc_extended || weather?.desc || 'Sunny, 28Â°C with clear skies';
+      return weather?.desc_extended || weather?.desc || 'Sunny, 28°C with clear skies';
 
     case 'TOMORROW_DESC_EXTENDED':
       return weather?.tomorrow?.desc_extended || weather?.tomorrow?.desc || '';
 
     case 'TOMORROW_DESC':
-      return weather?.tomorrow?.desc || 'Partly cloudy, 24Â°-31Â°C with 40% chance of rain';
+      return weather?.tomorrow?.desc || 'Partly cloudy, 24°-31°C with 40% chance of rain';
     
     case 'TOMORROW_TEMP':
       if (weather?.tomorrow?.temp_min != null && weather?.tomorrow?.temp_max != null) {
-        return `${weather.tomorrow.temp_min}Â° / ${weather.tomorrow.temp_max}Â°`;
+        return `${weather.tomorrow.temp_min}° / ${weather.tomorrow.temp_max}°`;
       }
-      return '--Â° / --Â°';
+      return '--° / --°';
     
     case 'HUMIDITY':
       return weather?.humidity != null ? `Humidity: ${weather.humidity}%` : 'Humidity: --%';
@@ -1900,7 +1900,7 @@ function showSVGModal() {
     img.alt = labelText;
     img.onerror = () => {
       preview.classList.add('grid-item-fallback');
-      preview.textContent = 'â­';
+      preview.textContent = '⭐';
       img.remove();
     };
     preview.appendChild(img);
@@ -2039,7 +2039,7 @@ function addElement(kind, x, y, w, h, options = {}) {
   canvas.appendChild(el);
   selectElement(el);
   
-  updateStatus('âœ“ Element added', 'success');
+  updateStatus('✓ Element added', 'success');
 }
 
 async function loadSVGIntoElement(el, src) {
@@ -2398,7 +2398,7 @@ function deleteElement() {
   saveState();
   selectedEl.remove();
   selectElement(null);
-  updateStatus('âœ“ Element deleted', 'success');
+  updateStatus('✓ Element deleted', 'success');
 }
 
 function duplicateElement() {
@@ -2413,7 +2413,7 @@ function duplicateElement() {
   canvas.appendChild(clone);
   selectElement(clone);
   
-  updateStatus('âœ“ Element duplicated', 'success');
+  updateStatus('✓ Element duplicated', 'success');
 }
 
 // ========================================================================
@@ -2598,7 +2598,7 @@ function toJSON() {
     
     if (base.kind === 'todo') {
       base.layout = el.dataset.layout || 'kids';
-      base.title = el.dataset.title || 'TODAY\'S MISSIONS ðŸŽ¯';
+      base.title = el.dataset.title || 'TODAY\'S MISSIONS 🎯';
       base.showTime = el.dataset.showTime !== 'false';      base.fontSize = parseInt(el.dataset.fontSize || '16');
       base.fontFamily = el.dataset.fontFamily || 'Inter';
       base.fontWeight = el.dataset.fontWeight || '400';
@@ -2637,14 +2637,14 @@ async function saveLayout() {
     });
     
     if (response.ok) {
-      updateStatus('âœ“ Layout saved', 'success');
+      updateStatus('✓ Layout saved', 'success');
       return true;
     } else {
       throw new Error('Save failed');
     }
   } catch (error) {
     console.error('Save layout error:', error);
-    updateStatus('âš ï¸ Save failed', 'error');
+    updateStatus('⚠️ Save failed', 'error');
     return false;
   }
 }
@@ -2658,7 +2658,7 @@ async function exportPNG() {
   }
 
   try {
-    updateStatus('â³ Rendering PNG...');
+    updateStatus('⏳ Rendering PNG...');
 
     if (document.fonts && document.fonts.ready) {
       try {
@@ -2694,10 +2694,10 @@ async function exportPNG() {
       }, 'image/png');
     });
 
-    updateStatus('âœ“ PNG exported', 'success');
+    updateStatus('✓ PNG exported', 'success');
   } catch (error) {
     console.error('PNG export error:', error);
-    updateStatus('âš ï¸ Failed to export PNG', 'error');
+    updateStatus('⚠️ Failed to export PNG', 'error');
   } finally {
     if (previousSelection) {
       selectElement(previousSelection);
@@ -2719,7 +2719,7 @@ function exportJSON() {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
   
-  updateStatus('âœ“ JSON exported', 'success');
+  updateStatus('✓ JSON exported', 'success');
 }
 
 async function loadLayout(layout) {
@@ -2767,7 +2767,7 @@ async function loadLayout(layout) {
       
       el.dataset.kind = 'todo';
       el.dataset.layout = elem.layout || 'kids';
-      el.dataset.title = elem.title || 'TODAY\'S MISSIONS ðŸŽ¯';
+      el.dataset.title = elem.title || 'TODAY\'S MISSIONS 🎯';
       el.dataset.showTime = elem.showTime !== false;      el.dataset.fontSize = elem.fontSize || 16;
       el.dataset.fontFamily = elem.fontFamily || 'Inter';
       el.dataset.fontWeight = elem.fontWeight || '400';
@@ -2780,7 +2780,7 @@ async function loadLayout(layout) {
       const preview = document.createElement('div');
       preview.className = 'el-content todo-preview';
       const count = (elem.items || []).length;
-      preview.innerHTML = `ðŸ“ ${elem.title}<br><small>${count} items</small>`;
+      preview.innerHTML = `📝 ${elem.title}<br><small>${count} items</small>`;
       preview.style.fontSize = '16px';
       preview.style.color = '#000';
       preview.style.textAlign = 'center';
@@ -2801,7 +2801,7 @@ async function loadLayout(layout) {
 
   applyDynamicText();
 
-  updateStatus('âœ“ Layout loaded', 'success');
+  updateStatus('✓ Layout loaded', 'success');
 }
 
 async function loadPreset() {
@@ -2817,7 +2817,7 @@ async function loadPreset() {
     
   } catch (error) {
     console.error('Load preset error:', error);
-    updateStatus('âš ï¸ Failed to load preset', 'error');
+    updateStatus('⚠️ Failed to load preset', 'error');
   }
 }
 
@@ -2845,7 +2845,7 @@ async function undo() {
   const prevState = undoStack.pop();
   await loadLayout(JSON.parse(prevState));
   
-  updateStatus('â†©ï¸ Undo', 'success');
+  updateStatus('↩️ Undo', 'success');
 }
 
 async function redo() {
@@ -2857,7 +2857,7 @@ async function redo() {
   const nextState = redoStack.pop();
   await loadLayout(JSON.parse(nextState));
   
-  updateStatus('â†ªï¸ Redo', 'success');
+  updateStatus('↪️ Redo', 'success');
 }
 
 // ========================================================================
@@ -3198,7 +3198,7 @@ function addTodoElement() {
   // Default todo config
   el.dataset.kind = 'todo';
   el.dataset.layout = 'kids';
-  el.dataset.title = 'TODAY\'S MISSIONS ðŸŽ¯';
+  el.dataset.title = 'TODAY\'S MISSIONS 🎯';
   el.dataset.showTime = 'true';  el.dataset.fontSize = '16';
   el.dataset.fontFamily = 'Inter';
   el.dataset.fontWeight = '400';
@@ -3212,7 +3212,7 @@ function addTodoElement() {
   // Add preview
   const preview = document.createElement('div');
   preview.className = 'el-content todo-preview';
-  preview.innerHTML = 'ðŸ“ Todo List<br><small>Select to edit</small>';
+  preview.innerHTML = '📝 Todo List<br><small>Select to edit</small>';
   preview.style.fontSize = '16px';
   preview.style.color = '#000';
   preview.style.textAlign = 'center';
@@ -3223,7 +3223,7 @@ function addTodoElement() {
   canvas.appendChild(el);
   selectElement(el);
   
-  updateStatus('âœ… Todo list added', 'success');
+  updateStatus('✅ Todo list added', 'success');
 }
 
 function toggleDay(button) {
@@ -3325,7 +3325,7 @@ function getTodoItems() {
   return items;
 }
 
-function addTodoItemRow(emoji = 'â­', time = '', task = '', days = ['all']) {
+function addTodoItemRow(emoji = '⭐', time = '', task = '', days = ['all']) {
   const template = document.getElementById('todoItemTemplate');
   const clone = template.content.cloneNode(true);
   
@@ -3382,7 +3382,7 @@ function loadSelectedPresets() {
   if (selectedPresets.length === 1) {
     document.getElementById('todoTitle').value = TODO_PRESETS[selectedPresets[0]].name;
   } else {
-    document.getElementById('todoTitle').value = "TODAY'S TASKS ðŸŽ¯";
+    document.getElementById('todoTitle').value = "TODAY'S TASKS 🎯";
   }
   
   updateTodoFromPanel();
@@ -3410,13 +3410,13 @@ function updateTodoFromPanel() {
   const preview = selectedEl.querySelector('.todo-preview');
   if (preview) {
     const count = items.length;
-    preview.innerHTML = `ðŸ“ ${selectedEl.dataset.title}<br><small>${count} items</small>`;
+    preview.innerHTML = `📝 ${selectedEl.dataset.title}<br><small>${count} items</small>`;
   }
 }
 
 function loadTodoIntoPanel(el) {
   document.getElementById('todoLayout').value = el.dataset.layout || 'kids';
-  document.getElementById('todoTitle').value = el.dataset.title || 'TODAY\'S MISSIONS ðŸŽ¯';
+  document.getElementById('todoTitle').value = el.dataset.title || 'TODAY\'S MISSIONS 🎯';
   document.getElementById('todoShowTime').checked = el.dataset.showTime !== 'false';
   document.getElementById('todoFontSize').value = el.dataset.fontSize || '16';
   document.getElementById('todoFontSizeValue').textContent = (el.dataset.fontSize || '16') + 'px';
@@ -3690,7 +3690,7 @@ function loadTodoIntoPanel(el) {
           text += (item.emoji || '') + ' ' + (item.task || 'Task');
           return text;
         });
-        html += taskTexts.join(' â€¢ ');
+        html += taskTexts.join(' • ');
       }
       html += '</div>';
     }
