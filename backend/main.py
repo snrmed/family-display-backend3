@@ -1322,7 +1322,12 @@ async def api_save_layout(device_id: str, request: Request):
 async def api_render_data(device: str = "familydisplay"):
     try:
         data = await build_render_data(device)
+        
+        if storage_enabled:
+            gcs_write_json(f"devices/{device}/render_data.json", render_data)
+        
         return JSONResponse(content=data)
+        
     except Exception as e:
         logger.error(f"Failed to build render data: {e}")
         raise HTTPException(status_code=500, detail=str(e))
