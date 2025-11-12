@@ -23,9 +23,9 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Kin:D Family Display Backend v4")
 
-# ──────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Health / Ready + Base Layout Route
-# ──────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 @app.get("/")
 def ok():
@@ -56,9 +56,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ──────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # CONFIGURATION
-# ──────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 PORT = int(os.getenv("PORT", "8080"))
 GCS_BUCKET = os.getenv("GCS_BUCKET", "family-display-packs")
@@ -86,53 +86,53 @@ TODO_PRESETS = {
     "kids_morning": {
         "name": "Kids Morning Routine",
         "items": [
-            {"emoji": "🛏️", "time": "7:00am", "task": "Make bed", "days": ["weekdays"]},
-            {"emoji": "🪥", "time": "7:15am", "task": "Brush teeth", "days": ["all"]},
-            {"emoji": "🥣", "time": "7:30am", "task": "Eat breakfast", "days": ["all"]},
-            {"emoji": "🎒", "time": "8:00am", "task": "Pack school bag", "days": ["weekdays"]}
+            {"emoji": "ðŸ›ï¸", "time": "7:00am", "task": "Make bed", "days": ["weekdays"]},
+            {"emoji": "ðŸª¥", "time": "7:15am", "task": "Brush teeth", "days": ["all"]},
+            {"emoji": "ðŸ¥£", "time": "7:30am", "task": "Eat breakfast", "days": ["all"]},
+            {"emoji": "ðŸŽ’", "time": "8:00am", "task": "Pack school bag", "days": ["weekdays"]}
         ]
     },
     "kids_afternoon": {
         "name": "After School Tasks",
         "items": [
-            {"emoji": "👕", "time": "3:30pm", "task": "Change clothes", "days": ["weekdays"]},
-            {"emoji": "📚", "time": "4:00pm", "task": "Homework time", "days": ["weekdays"]},
-            {"emoji": "🧹", "time": "5:00pm", "task": "Tidy room", "days": ["all"]},
-            {"emoji": "🐱", "time": "5:30pm", "task": "Feed pets", "days": ["all"]}
+            {"emoji": "ðŸ‘•", "time": "3:30pm", "task": "Change clothes", "days": ["weekdays"]},
+            {"emoji": "ðŸ“š", "time": "4:00pm", "task": "Homework time", "days": ["weekdays"]},
+            {"emoji": "ðŸ§¹", "time": "5:00pm", "task": "Tidy room", "days": ["all"]},
+            {"emoji": "ðŸ±", "time": "5:30pm", "task": "Feed pets", "days": ["all"]}
         ]
     },
     "kids_chores": {
         "name": "Weekly Chores",
         "items": [
-            {"emoji": "🗑️", "time": "6:00pm", "task": "Take out bins", "days": ["mon", "thu"]},
-            {"emoji": "🧺", "time": "", "task": "Put laundry away", "days": ["wed", "sat"]},
-            {"emoji": "🧽", "time": "", "task": "Wipe table after dinner", "days": ["all"]},
-            {"emoji": "🌱", "time": "", "task": "Water plants", "days": ["sun"]}
+            {"emoji": "ðŸ—‘ï¸", "time": "6:00pm", "task": "Take out bins", "days": ["mon", "thu"]},
+            {"emoji": "ðŸ§º", "time": "", "task": "Put laundry away", "days": ["wed", "sat"]},
+            {"emoji": "ðŸ§½", "time": "", "task": "Wipe table after dinner", "days": ["all"]},
+            {"emoji": "ðŸŒ±", "time": "", "task": "Water plants", "days": ["sun"]}
         ]
     },
     "family_weekly": {
         "name": "Family Reminders",
         "items": [
-            {"emoji": "📚", "time": "", "task": "Library books due", "days": ["mon"]},
-            {"emoji": "🗑️", "time": "6:00pm", "task": "Bin night", "days": ["wed"]},
-            {"emoji": "🎹", "time": "4:00pm", "task": "Piano lesson", "days": ["fri"]},
-            {"emoji": "⚽", "time": "9:00am", "task": "Soccer game", "days": ["sat"]}
+            {"emoji": "ðŸ“š", "time": "", "task": "Library books due", "days": ["mon"]},
+            {"emoji": "ðŸ—‘ï¸", "time": "6:00pm", "task": "Bin night", "days": ["wed"]},
+            {"emoji": "ðŸŽ¹", "time": "4:00pm", "task": "Piano lesson", "days": ["fri"]},
+            {"emoji": "âš½", "time": "9:00am", "task": "Soccer game", "days": ["sat"]}
         ]
     },
     "homework": {
         "name": "Homework Checklist",
         "items": [
-            {"emoji": "📖", "time": "", "task": "Reading", "days": ["weekdays"]},
-            {"emoji": "✏️", "time": "", "task": "Math worksheet", "days": ["weekdays"]},
-            {"emoji": "🔤", "time": "", "task": "Spelling practice", "days": ["weekdays"]},
-            {"emoji": "🎨", "time": "", "task": "Art project", "days": ["weekends"]}
+            {"emoji": "ðŸ“–", "time": "", "task": "Reading", "days": ["weekdays"]},
+            {"emoji": "âœï¸", "time": "", "task": "Math worksheet", "days": ["weekdays"]},
+            {"emoji": "ðŸ”¤", "time": "", "task": "Spelling practice", "days": ["weekdays"]},
+            {"emoji": "ðŸŽ¨", "time": "", "task": "Art project", "days": ["weekends"]}
         ]
     }
 }
 
-# ──────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # GOOGLE CLOUD STORAGE
-# ──────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 storage_enabled = False
 bucket = None
@@ -142,13 +142,13 @@ try:
     storage_client = storage.Client()
     bucket = storage_client.bucket(GCS_BUCKET)
     storage_enabled = True
-    logger.info(f"✅ GCS connected: {GCS_BUCKET}")
+    logger.info(f"âœ… GCS connected: {GCS_BUCKET}")
 except Exception as e:
-    logger.warning(f"⚠️ GCS disabled: {e}")
+    logger.warning(f"âš ï¸ GCS disabled: {e}")
 
-# ──────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # UTILITIES
-# ──────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def make_public_url(path: str) -> str:
     """Return a proxied/public URL for an object path."""
@@ -190,7 +190,7 @@ def gcs_write_json(key: str, data: dict):
         raise RuntimeError("GCS not enabled")
     blob = bucket.blob(key)
     blob.upload_from_string(json.dumps(data, indent=2), content_type="application/json")
-    logger.info(f"💾 Saved: {key}")
+    logger.info(f"ðŸ’¾ Saved: {key}")
 
 # ============================================================================
 # DEVICE LAYOUT LOADING
@@ -220,11 +220,11 @@ def gcs_write_bytes(key: str, data: bytes, content_type: str = "image/png"):
         raise RuntimeError("GCS not enabled")
     blob = bucket.blob(key)
     blob.upload_from_string(data, content_type=content_type)
-    logger.info(f"💾 Saved: {key}")
+    logger.info(f"ðŸ’¾ Saved: {key}")
 
-# ──────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # DEVICE CONFIGURATION
-# ──────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 DEFAULT_DEVICE_CONFIG = {
     "location": {
@@ -242,7 +242,7 @@ def get_device_config(device_id: str = "familydisplay") -> dict:
     try:
         config_key = f"devices/{device_id}/config.json"
         config = gcs_read_json(config_key)
-        logger.info(f"✅ Loaded config for {device_id}")
+        logger.info(f"âœ… Loaded config for {device_id}")
         return config
     except Exception:
         logger.info(f"Using default config for {device_id}")
@@ -253,11 +253,11 @@ def save_device_config(device_id: str, config: dict):
         raise RuntimeError("GCS not enabled")
     config_key = f"devices/{device_id}/config.json"
     gcs_write_json(config_key, config)
-    logger.info(f"✅ Saved config for {device_id}")
+    logger.info(f"âœ… Saved config for {device_id}")
 
-# ──────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # RENDERING & BROWSER
-# ──────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 if ENABLE_RENDERING:
     try:
@@ -269,7 +269,7 @@ if ENABLE_RENDERING:
             playwright_browser = await pw.chromium.launch(
                 args=["--no-sandbox", "--disable-dev-shm-usage"]
             )
-            logger.info("🎭 Playwright browser initialized")
+            logger.info("ðŸŽ­ Playwright browser initialized")
 
         @app.on_event("startup")
         async def startup():
@@ -280,12 +280,12 @@ if ENABLE_RENDERING:
             if playwright_browser:
                 await playwright_browser.close()
     except Exception as e:
-        logger.warning(f"⚠️ Playwright disabled: {e}")
+        logger.warning(f"âš ï¸ Playwright disabled: {e}")
         ENABLE_RENDERING = False
         
-# ──────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # CONTENT PROVIDERS
-# ──────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def resolve_weather_icon_url(theme: str, code: str) -> str:
     """Resolve weather icon URL (proxied)."""
@@ -331,6 +331,7 @@ async def get_weather(lat: float = None, lon: float = None, city: str = None) ->
                     # Calculate today's actual min/max from first 8 entries (24 hours)
                     today_min, today_max = None, None
                     tomorrow_data = None
+                    rain_periods = []  # Track when rain is expected
                     
                     if fr.status_code == 200:
                         forecast = fr.json()
@@ -340,14 +341,32 @@ async def get_weather(lat: float = None, lon: float = None, city: str = None) ->
                             today_min = round(min(today_temps)) if today_temps else None
                             today_max = round(max(today_temps)) if today_temps else None
                             
+                            # Check for rain in today's forecast
+                            for i, entry in enumerate(forecast["list"][:8]):
+                                if entry.get("rain") or any(w["main"].lower() in ["rain", "drizzle"] for w in entry["weather"]):
+                                    # Convert forecast time to readable format
+                                    dt = datetime.fromtimestamp(entry["dt"])
+                                    hour = dt.strftime("%I%p").lstrip("0").lower()
+                                    rain_periods.append(hour)
+                            
                             # Tomorrow's forecast (entries 8-16)
                             if len(forecast["list"]) > 8:
                                 tomorrow_temps = [entry["main"]["temp"] for entry in forecast["list"][8:16]]
                                 tomorrow_entry = forecast["list"][8]
+                                
+                                # Check for rain in tomorrow's forecast
+                                tomorrow_rain_periods = []
+                                for entry in forecast["list"][8:16]:
+                                    if entry.get("rain") or any(w["main"].lower() in ["rain", "drizzle"] for w in entry["weather"]):
+                                        dt = datetime.fromtimestamp(entry["dt"])
+                                        hour = dt.strftime("%I%p").lstrip("0").lower()
+                                        tomorrow_rain_periods.append(hour)
+                                
                                 tomorrow_data = {
                                     "temp_min": round(min(tomorrow_temps)) if tomorrow_temps else None,
                                     "temp_max": round(max(tomorrow_temps)) if tomorrow_temps else None,
                                     "desc": tomorrow_entry["weather"][0]["description"].title(),
+                                    "rain_periods": tomorrow_rain_periods[:3]  # First 3 periods
                                 }
 
                     # Use forecast min/max if available
@@ -359,6 +378,9 @@ async def get_weather(lat: float = None, lon: float = None, city: str = None) ->
                     humidity = data["main"]["humidity"]
                     wind_speed = round(data["wind"]["speed"] * 3.6)
                     rain_amount = data.get("rain", {}).get("1h", 0)
+                    feels_like = round(data["main"]["feels_like"])
+                    pressure = data["main"].get("pressure", 0)
+                    clouds = data.get("clouds", {}).get("all", 0)
                     
                     verbose_desc = f"Expecting {desc} with temperatures ranging from {temp_min}°C to {temp_max}°C. "
                     
@@ -405,12 +427,16 @@ async def get_weather(lat: float = None, lon: float = None, city: str = None) ->
                     return {
                         "humidity": humidity,
                         "rain": rain_amount,
+                        "rain_periods": rain_periods[:3],  # First 3 rain periods
                         "wind": wind_speed,
                         "icon": data["weather"][0]["icon"],
                         "desc": desc.title(),
                         "desc_extended": verbose_desc,
                         "temp_min": temp_min,
                         "temp_max": temp_max,
+                        "feels_like": feels_like,
+                        "pressure": pressure,
+                        "clouds": clouds,
                         "timezone_offset": data.get("timezone", 0),
                         "tomorrow": tomorrow_data,
                         "lat": actual_lat,
@@ -428,7 +454,7 @@ async def get_weather(lat: float = None, lon: float = None, city: str = None) ->
         "wind": 15,
         "icon": "01d",
         "desc": "Sunny",
-        "desc_extended": "Expecting sunny conditions with temperatures ranging from 26°C to 36°C. Moderate humidity levels.",
+        "desc_extended": "Expecting sunny conditions with temperatures ranging from 26Â°C to 36Â°C. Moderate humidity levels.",
         "temp_min": 26,
         "temp_max": 36,
         "timezone_offset": 0,
@@ -436,7 +462,7 @@ async def get_weather(lat: float = None, lon: float = None, city: str = None) ->
             "temp_min": 25, 
             "temp_max": 35, 
             "desc": "Partly Cloudy",
-            "desc_extended": "Tomorrow expecting partly cloudy with temperatures from 25°C to 35°C. Cloudy skies."
+            "desc_extended": "Tomorrow expecting partly cloudy with temperatures from 25Â°C to 35Â°C. Cloudy skies."
         },
         "lat": -12.4634,
         "lon": 130.8456,
@@ -461,9 +487,9 @@ async def get_joke() -> str:
             logger.warning(f"Joke API failed: {e}")
     return random.choice(LOCAL_JOKES)
 
-# ──────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # MOOD FORECAST (DeepAI Integration)
-# ──────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Add this section after the get_joke() function in main.py
 
 async def generate_mood_forecast(weather_data: dict, mood: str, day: str, location: str) -> str:
@@ -471,13 +497,13 @@ async def generate_mood_forecast(weather_data: dict, mood: str, day: str, locati
     Generate a mood-based weather forecast using Groq (fastest free AI API).
     
     Args:
-        weather_data: Dict containing temp_min, temp_max, desc, humidity, wind
+        weather_data: Dict containing temp_min, temp_max, desc, humidity, wind, feels_like, clouds, rain_periods
         mood: One of: "upbeat", "sarcastic", "poetic", "dad_joke", "enthusiastic", "grumpy"
         day: "today" or "tomorrow"
         location: City/suburb name
     
     Returns:
-        Generated forecast string (max 100 chars)
+        Generated forecast string (max 40 words)
     """
     api_key = os.getenv("GROQ_API_KEY")
     
@@ -505,9 +531,9 @@ async def generate_mood_forecast(weather_data: dict, mood: str, day: str, locati
         logger.info("GROQ_API_KEY not set, using fallback")
         key = f"{mood}_{day}"
         template = fallback_examples.get(key, "{}°-{}°C with {}")
-        return template.format(temp_min, temp_max, conditions)[:100]
+        return template.format(temp_min, temp_max, conditions)[:120]
     
-    # Construct prompt for Groq
+    # Construct richer context for Groq
     mood_instructions = {
         "upbeat": "enthusiastic and positive",
         "sarcastic": "witty and dry with subtle humor",
@@ -518,14 +544,33 @@ async def generate_mood_forecast(weather_data: dict, mood: str, day: str, locati
     }
     
     day_text = "today" if day == "today" else "tomorrow"
-    weather_context = f"{conditions}, {temp_min}°-{temp_max}°C in {location}"
     
-    prompt = f"""Write ONE SHORT sentence for a weather forecast for {day_text} in a {mood_instructions.get(mood, 'casual')} style.
+    # Build rich weather context
+    humidity = weather_data.get('humidity', '')
+    wind = weather_data.get('wind', '')
+    feels_like = weather_data.get('feels_like', '')
+    clouds = weather_data.get('clouds', '')
+    rain_periods = weather_data.get('rain_periods', [])
+    
+    weather_context = f"{conditions}, {temp_min}°-{temp_max}°C"
+    if feels_like and feels_like != temp_max:
+        weather_context += f" (feels like {feels_like}°C)"
+    if humidity:
+        weather_context += f", {humidity}% humidity"
+    if wind and wind > 15:
+        weather_context += f", {wind}km/h winds"
+    if clouds and clouds > 70:
+        weather_context += f", {clouds}% cloudy"
+    if rain_periods:
+        weather_context += f", rain expected around {', '.join(rain_periods[:2])}"
+    weather_context += f" in {location}"
+    
+    prompt = f"""Write ONE SHORT weather forecast for {day_text} in a {mood_instructions.get(mood, 'casual')} style.
 
-Weather: {weather_context}
+Weather details: {weather_context}
 
 Requirements:
-- Maximum 25 words
+- MAXIMUM 40 words
 - Single sentence only
 - No greetings or preamble
 - Be {mood_instructions.get(mood, 'casual')}
@@ -547,7 +592,7 @@ Requirements:
                     }
                 ],
                 "temperature": 0.9,
-                "max_tokens": 60,
+                "max_tokens": 80,
                 "top_p": 0.95
             }
             
@@ -569,180 +614,19 @@ Requirements:
                     message = choices[0].get('message', {})
                     generated_text = message.get('content', '').strip()
                     
-                    # Clean and limit
-                    words = generated_text.split()[:25]
+                    # Clean and limit to 40 words
+                    words = generated_text.split()[:40]
                     forecast = ' '.join(words)
                     forecast = forecast.replace('Forecast:', '').replace('Weather:', '').strip()
                     forecast = forecast.rstrip('.')  # Remove trailing period if present
                     
                     logger.info(f"✅ Generated {mood} {day} forecast: {forecast}")
-                    return forecast[:100]
+                    return forecast[:200]
                 
-                # If we couldn't extract text, use fallback
-                logger.warning("Could not extract text from Groq response")
-                raise Exception("No text in response")
-                
-            else:
-                # Log the full error response
-                try:
-                    error_body = response.json()
-                    logger.error(f"Groq API error {response.status_code}: {error_body}")
-                except:
-                    logger.error(f"Groq API error {response.status_code}: {response.text[:200]}")
-                raise Exception(f"API error: {response.status_code}")
-                
-    except httpx.TimeoutException as e:
-        logger.error(f"Groq timeout error: {str(e)}")
-        logger.error(traceback.format_exc())
-        key = f"{mood}_{day}"
-        template = fallback_examples.get(key, "{}°-{}°C with {}")
-        forecast = template.format(temp_min, temp_max, conditions)[:100]
-        logger.info(f"Generated {mood}_{day} forecast (fallback): {forecast}")
-        return forecast
-    except httpx.RequestError as e:
-        logger.error(f"Groq request error: {str(e)}")
-        logger.error(traceback.format_exc())
-        key = f"{mood}_{day}"
-        template = fallback_examples.get(key, "{}°-{}°C with {}")
-        forecast = template.format(temp_min, temp_max, conditions)[:100]
-        logger.info(f"Generated {mood}_{day} forecast (fallback): {forecast}")
-        return forecast
+            logger.warning(f"Groq API returned status {response.status_code}")
+            
     except Exception as e:
-        logger.error(f"Groq forecast failed: {type(e).__name__}: {str(e)}")
-        logger.error(traceback.format_exc())
-        # Use fallback
-        key = f"{mood}_{day}"
-        template = fallback_examples.get(key, "{}°-{}°C with {}")
-        forecast = template.format(temp_min, temp_max, conditions)[:100]
-        logger.info(f"Generated {mood}_{day} forecast (fallback): {forecast}")
-        return forecast
-
-async def download_unsplash_theme_set(theme: str = "modern_minimal", images_per_theme: int = 9) -> int:
-    """
-    Download a set of images for a theme from Unsplash and store in GCS.
-    This is called by a scheduler/admin endpoint, not during regular renders.
-    
-    Returns: Number of images successfully downloaded
-    """
-    api_key = os.getenv("UNSPLASH_ACCESS_KEY")
-    
-    if not api_key or not storage_enabled:
-        logger.error("Cannot download: UNSPLASH_ACCESS_KEY or GCS not configured")
-        return 0
-    
-    # Theme subcategories
-    theme_subcategories = {
-        "modern_minimal": [
-            "minimal gradient", "abstract gradient", "pastel gradient",
-            "geometric minimal", "modern abstract", "color field",
-            "soft gradient background", "minimal shapes", "abstract waves"
-        ],
-        "playful_illustrations": [
-            "cute illustration", "kawaii pattern", "doodle pattern",
-            "cartoon pattern", "colorful shapes", "paper craft",
-            "kids illustration", "playful abstract", "flat illustration"
-        ],
-        "nature_abstraction": [
-            "abstract nature", "watercolor abstract", "organic shapes",
-            "botanical abstract", "marble texture", "ink water abstract",
-            "pastel nature", "abstract landscape", "zen minimalist"
-        ],
-        "retro_vibrant": [
-            "retro abstract", "70s pattern", "memphis design",
-            "pop art abstract", "vintage geometric", "retro gradient",
-            "bauhaus design", "mid century pattern", "graphic design poster"
-        ],
-        "textured_artistic": [
-            "abstract painting", "acrylic abstract", "collage art",
-            "artistic texture", "expressionist abstract", "contemporary art",
-            "mixed media art", "abstract expressionism", "modern painting"
-        ]
-    }
-    
-    subcategories = theme_subcategories.get(theme, theme_subcategories["modern_minimal"])
-    downloaded_count = 0
-    
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        for i, query in enumerate(subcategories[:images_per_theme]):
-            try:
-                # Get random image from Unsplash
-                response = await client.get(
-                    "https://api.unsplash.com/photos/random",
-                    params={
-                        "query": query,
-                        "orientation": "landscape",
-                        "client_id": api_key
-                    }
-                )
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    
-                    # Use Unsplash's custom size API for optimal 800x480 display
-                    # Request 800x480 with crop to fill (ensures perfect fit)
-                    base_url = data["urls"]["raw"]
-                    custom_url = f"{base_url}&w=800&h=480&fit=crop&crop=entropy"
-                    
-                    photo_id = data["id"]
-                    
-                    # Download image at custom size
-                    img_response = await client.get(custom_url)
-                    if img_response.status_code == 200:
-                        # Save to GCS: backgrounds/{theme}/{index}_{photo_id}.jpg
-                        blob_name = f"backgrounds/{theme}/{i}_{photo_id}.jpg"
-                        blob = bucket.blob(blob_name)
-                        blob.upload_from_string(
-                            img_response.content,
-                            content_type="image/jpeg"
-                        )
-                        
-                        downloaded_count += 1
-                        logger.info(f"  ✅ {i+1}/{images_per_theme}: {query} → {blob_name} (800x480)")
-                    
-                    # Respect rate limits (50/hour = ~72 seconds for 50)
-                    await asyncio.sleep(2)
-                    
-            except Exception as e:
-                logger.error(f"  ❌ Failed to download {query}: {e}")
-    
-    logger.info(f"🎉 Downloaded {downloaded_count}/{images_per_theme} images for {theme}")
-    return downloaded_count
-
-
-def choose_background_from_storage(selected_theme: str = None) -> dict | None:
-    """
-    Choose a random background from pre-downloaded images in GCS.
-    This is fast and doesn't call external APIs.
-    """
-    if not storage_enabled:
-        return None
-    
-    try:
-        # Default to modern_minimal if no theme specified
-        if not selected_theme:
-            selected_theme = "modern_minimal"
-        
-        # List all images for this theme
-        prefix = f"backgrounds/{selected_theme}/"
-        blobs = list(bucket.list_blobs(prefix=prefix))
-        
-        # Filter for image files
-        blobs = [b for b in blobs if b.name.endswith(('.jpg', '.jpeg', '.png'))]
-        
-        if blobs:
-            # Randomly select one
-            chosen = random.choice(blobs)
-            filename = chosen.name.split("/")[-1]
-            
-            logger.info(f"📸 Selected background: {selected_theme}/{filename}")
-            
-            return {
-                "url": make_public_url(f"gcs/{chosen.name}"),
-                "theme": selected_theme,
-                "filename": filename
-            }
-        else:
-            logger.warning(f"No images found for theme: {selected_theme}")
+        logger.warning(f"Groq API failed: {e}")
             
     except Exception as e:
         logger.warning(f"Could not choose background from storage: {e}")
@@ -811,7 +695,7 @@ def render_todo_element(elem: dict, context: dict) -> str:
     from datetime import datetime
     
     layout = elem.get('layout', 'kids')
-    title = elem.get('title', 'TODAY\'S MISSIONS 🎯')
+    title = elem.get('title', 'TODAY\'S MISSIONS ðŸŽ¯')
     all_items = elem.get('items', [])
     show_time = elem.get('showTime', True)
     show_emoji = elem.get('showEmoji', True)
@@ -829,7 +713,7 @@ def render_todo_element(elem: dict, context: dict) -> str:
     # If no items for today, show empty state
     if not items:
         return f'<div class="todo-list todo-empty" style="text-align:center; padding:20px; opacity:0.6;">' \
-               f'<div style="font-size:3em;">✓</div>' \
+               f'<div style="font-size:3em;">âœ“</div>' \
                f'<div style="font-size:1.2em; margin-top:10px;">No tasks today!</div>' \
                f'</div>'
     
@@ -879,7 +763,7 @@ def render_todo_kids_style(title, items, show_time, show_emoji, style, html_lib)
     html += f'<div class="todo-title">{html_lib.escape(title)}</div>'
     
     for item in items:
-        emoji = item.get('emoji', '⭐') if show_emoji else ''
+        emoji = item.get('emoji', 'â­') if show_emoji else ''
         task = item.get('task', '')
         time_str = item.get('time', '')
         
@@ -889,7 +773,7 @@ def render_todo_kids_style(title, items, show_time, show_emoji, style, html_lib)
         html += f'<div class="todo-task">{html_lib.escape(task).upper()}</div>'
         
         if show_time and time_str:
-            html += f'<div class="todo-time">⏰ {html_lib.escape(time_str)}</div>'
+            html += f'<div class="todo-time">â° {html_lib.escape(time_str)}</div>'
         
         html += '</div>'
     
@@ -908,13 +792,13 @@ def render_todo_compact_horizontal(title, items, show_time, show_emoji, style, h
     for row in rows:
         html += '<div class="todo-row">'
         for i, item in enumerate(row):
-            emoji = item.get('emoji', '⭐') if show_emoji else ''
+            emoji = item.get('emoji', 'â­') if show_emoji else ''
             task = item.get('task', '')
             time_str = item.get('time', '')
             
             # Add separator between items
             if i > 0:
-                html += ' • '
+                html += ' â€¢ '
             
             html += f'{emoji} {html_lib.escape(task)}'
             if show_time and time_str:
@@ -936,12 +820,12 @@ def render_todo_compact_vertical(title, items, show_time, show_emoji, style, htm
     for col in cols:
         html += '<div class="todo-row">'
         for i, item in enumerate(col):
-            emoji = item.get('emoji', '⭐') if show_emoji else ''
+            emoji = item.get('emoji', 'â­') if show_emoji else ''
             task = item.get('task', '')
             time_str = item.get('time', '')
             
             if i > 0:
-                html += ' • '
+                html += ' â€¢ '
             
             if show_time and time_str:
                 html += f'{html_lib.escape(time_str)} '
@@ -958,12 +842,12 @@ def render_todo_single_line(title, items, show_time, show_emoji, style, html_lib
     html += f'<span class="todo-title">{html_lib.escape(title)}</span> '
     
     for i, item in enumerate(items):
-        emoji = item.get('emoji', '⭐') if show_emoji else ''
+        emoji = item.get('emoji', 'â­') if show_emoji else ''
         task = item.get('task', '')[:10]  # Truncate long tasks
         time_str = item.get('time', '')
         
         if i > 0:
-            html += ' • '
+            html += ' â€¢ '
         
         html += f'{emoji} {html_lib.escape(task)}'
         if show_time and time_str:
@@ -979,9 +863,9 @@ def get_todo_presets():
     return {"presets": TODO_PRESETS}
 
 
-# ──────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # RENDER DATA
-# ──────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async def build_render_data(device: str = "familydisplay") -> dict:
     device_config = get_device_config(device)
@@ -1024,7 +908,10 @@ async def build_render_data(device: str = "familydisplay") -> dict:
                             'temp_max': weather.get('temp_max'),
                             'desc': weather.get('desc', 'conditions'),
                             'humidity': weather.get('humidity'),
-                            'wind': weather.get('wind')
+                            'wind': weather.get('wind'),
+                            'feels_like': weather.get('feels_like'),
+                            'clouds': weather.get('clouds'),
+                            'rain_periods': weather.get('rain_periods', [])
                         }
                     elif day == 'tomorrow' and weather and weather.get('tomorrow'):
                         weather_data = {
@@ -1032,7 +919,8 @@ async def build_render_data(device: str = "familydisplay") -> dict:
                             'temp_max': weather['tomorrow'].get('temp_max'),
                             'desc': weather['tomorrow'].get('desc', 'conditions'),
                             'humidity': weather['tomorrow'].get('humidity'),
-                            'wind': weather['tomorrow'].get('wind')
+                            'wind': weather['tomorrow'].get('wind'),
+                            'rain_periods': weather['tomorrow'].get('rain_periods', [])
                         }
                     else:
                         # Fallback weather data
@@ -1096,9 +984,9 @@ async def build_render_data(device: str = "familydisplay") -> dict:
         if val is None:
             return ""
         try:
-            return f"{round(float(val))}°C"
+            return f"{round(float(val))}Â°C"
         except Exception:
-            return f"{val}°C"
+            return f"{val}Â°C"
 
     def _fmt_minmax(tmin, tmax):
         if tmin is None and tmax is None:
@@ -1106,8 +994,8 @@ async def build_render_data(device: str = "familydisplay") -> dict:
         tmin_s = "" if tmin is None else str(round(float(tmin)))
         tmax_s = "" if tmax is None else str(round(float(tmax)))
         if tmin_s and tmax_s:
-            return f"{tmin_s}/{tmax_s}°C"
-        return f"{tmin_s or tmax_s}°C"
+            return f"{tmin_s}/{tmax_s}Â°C"
+        return f"{tmin_s or tmax_s}Â°C"
 
     def _fmt_speed(val):
         if val is None:
@@ -1177,9 +1065,9 @@ async def build_render_data(device: str = "familydisplay") -> dict:
         "todo_presets": TODO_PRESETS,
     }
     return context
-# ──────────────────────────────────────────────────────────────────────────────
-# RENDER HTML → PNG
-# ──────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# RENDER HTML â†’ PNG
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async def render_html_to_png(render_path: str, context: dict) -> bytes:
     """Render base.html to PNG using Playwright with data injection."""
@@ -1198,24 +1086,24 @@ async def render_html_to_png(render_path: str, context: dict) -> bytes:
     # Navigate to base.html without data parameter
     url = f"{public_base}/layouts/base.html"
     
-    logger.info(f"🎨 Rendering via: {url}")
-    logger.info(f"📊 Context data size: {len(json.dumps(context))} bytes")
-    logger.info(f"📐 Layout elements: {len(context.get('layout', {}).get('elements', []))}")
+    logger.info(f"ðŸŽ¨ Rendering via: {url}")
+    logger.info(f"ðŸ“Š Context data size: {len(json.dumps(context))} bytes")
+    logger.info(f"ðŸ“ Layout elements: {len(context.get('layout', {}).get('elements', []))}")
 
     try:
         # Inject context data BEFORE page navigation using add_init_script
         # Use __RENDER_DATA__ to match what base.html expects
         context_json = json.dumps(context)
-        logger.info(f"📦 Preparing injection, size: {len(context_json)} bytes")
+        logger.info(f"ðŸ“¦ Preparing injection, size: {len(context_json)} bytes")
         
         await page.add_init_script(f"""
             window.__RENDER_DATA__ = {context_json};
             window.renderData = {context_json};  // Also set old name for backwards compat
-            console.log('✅ __RENDER_DATA__ injected via init script');
+            console.log('âœ… __RENDER_DATA__ injected via init script');
             console.log('Elements in data:', (window.__RENDER_DATA__.layout?.elements || []).length);
         """)
         
-        logger.info("📝 Init script added, now navigating to page")
+        logger.info("ðŸ“ Init script added, now navigating to page")
 
         # Navigate to the page (data now exists before page loads)
         response = await page.goto(url, wait_until="networkidle", timeout=30000)
@@ -1231,12 +1119,12 @@ async def render_html_to_png(render_path: str, context: dict) -> bytes:
         element_count = await page.evaluate("""
             () => document.querySelectorAll('#canvas .el').length
         """)
-        logger.info(f"📸 Rendered elements on page: {element_count}")
+        logger.info(f"ðŸ“¸ Rendered elements on page: {element_count}")
 
         # Take screenshot
         png_bytes = await page.screenshot(type="png")
 
-        logger.info("✅ Render complete")
+        logger.info("âœ… Render complete")
         return png_bytes
 
     except Exception as e:
@@ -1246,9 +1134,9 @@ async def render_html_to_png(render_path: str, context: dict) -> bytes:
     finally:
         await page.close()
         
-# ──────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # API ROUTES
-# ──────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 # Device Config
 @app.get("/v1/devices/{device_id}/config")
@@ -1399,9 +1287,9 @@ def debug_layout(device: str = "familydisplay"):
             "storage_enabled": storage_enabled,
         }
 
-# ──────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # DESIGNER ROUTE (LOADS HTML DIRECTLY FROM GCS)
-# ──────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 @app.get("/designer/", response_class=HTMLResponse)
 async def designer():
@@ -1412,7 +1300,7 @@ async def designer():
     designer_key = "web/designer/overlay_designer_v4_clean.html"
     try:
         html_content = gcs_read_text(designer_key)
-        logger.info(f"✅ Designer loaded from {designer_key}")
+        logger.info(f"âœ… Designer loaded from {designer_key}")
         return HTMLResponse(content=html_content, media_type="text/html")
     except FileNotFoundError:
         raise HTTPException(
@@ -1427,15 +1315,15 @@ async def designer():
         logger.error(f"Failed to load designer: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
-# ──────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # STATIC MOUNTS (optional in-container dev)
-# ──────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 try:
     presets_dir = resolve_static_dir("web/presets", "backend/web/presets")
     if presets_dir and presets_dir.is_dir():
         app.mount("/presets", StaticFiles(directory=str(presets_dir)), name="presets")
-        logger.info(f"✓ Mounted /presets from {presets_dir}")
+        logger.info(f"âœ“ Mounted /presets from {presets_dir}")
 except Exception as e:
     logger.warning(f"Could not mount /presets: {e}")
 
@@ -1443,13 +1331,13 @@ try:
     fonts_dir = resolve_static_dir("web/fonts", "backend/web/fonts")
     if fonts_dir and fonts_dir.is_dir():
         app.mount("/fonts", StaticFiles(directory=str(fonts_dir)), name="fonts")
-        logger.info(f"✓ Mounted /fonts from {fonts_dir}")
+        logger.info(f"âœ“ Mounted /fonts from {fonts_dir}")
 except Exception as e:
     logger.warning(f"Could not mount /fonts: {e}")
 
-# ──────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # GCS ASSET PROXY
-# ──────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 @app.get("/gcs/{path:path}")
 async def gcs_proxy(path: str):
@@ -1481,9 +1369,9 @@ async def gcs_proxy(path: str):
         logger.error(f"GCS proxy error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# ──────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # ADMIN
-# ──────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 @app.get("/admin/render_now")
 async def admin_render_now(token: str = None, device: str = "familydisplay"):
@@ -1503,9 +1391,9 @@ async def admin_render_now(token: str = None, device: str = "familydisplay"):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# ──────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # DEVICE MANAGEMENT ROUTES
-# ──────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 @app.get("/v1/devices")
 def list_devices():
@@ -1526,7 +1414,7 @@ def list_devices():
 @app.post("/v1/devices/{device_id}/layouts/init_from_default")
 def init_layout_from_default(device_id: str):
     """
-    Copy assets/default.json → devices/<device_id>/layouts/current.json
+    Copy assets/default.json â†’ devices/<device_id>/layouts/current.json
     (idempotent; overwrites existing file)
     """
     if not storage_enabled:
@@ -1534,15 +1422,15 @@ def init_layout_from_default(device_id: str):
     try:
         default_layout = gcs_read_json(DEFAULT_LAYOUT_KEY)
         gcs_write_json(f"devices/{device_id}/layouts/current.json", default_layout)
-        logger.info(f"✅ Initialized layout for {device_id} from default.json")
+        logger.info(f"âœ… Initialized layout for {device_id} from default.json")
         return {"status": "ok", "device": device_id}
     except Exception as e:
         logger.error(f"Failed to initialize layout: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# ──────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # API HELPER ROUTES (for designer)
-# ──────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 @app.get("/api/list-svgs")
 def list_svgs():
@@ -1607,10 +1495,10 @@ async def admin_download_all_themes(token: str = None, count: int = 9):
         try:
             downloaded = await download_unsplash_theme_set(theme, count)
             results[theme] = {"downloaded": downloaded, "total": count}
-            logger.info(f"✅ Completed theme: {theme}")
+            logger.info(f"âœ… Completed theme: {theme}")
         except Exception as e:
             results[theme] = {"error": str(e)}
-            logger.error(f"❌ Failed theme: {theme} - {e}")
+            logger.error(f"âŒ Failed theme: {theme} - {e}")
     
     return {
         "status": "completed",
@@ -1699,9 +1587,9 @@ def get_preset_json(name: str):
         logger.exception(f"Failed to load preset {name}: {e}")
         raise HTTPException(status_code=500, detail="failed to load preset")
 
-# ──────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # MAIN
-# ──────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 if __name__ == "__main__":
     import uvicorn
