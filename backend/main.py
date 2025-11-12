@@ -454,7 +454,7 @@ async def get_weather(lat: float = None, lon: float = None, city: str = None) ->
         "wind": 15,
         "icon": "01d",
         "desc": "Sunny",
-        "desc_extended": "Expecting sunny conditions with temperatures ranging from 26Â°C to 36Â°C. Moderate humidity levels.",
+        "desc_extended": "Expecting sunny conditions with temperatures ranging from 26°C to 36°C. Moderate humidity levels.",
         "temp_min": 26,
         "temp_max": 36,
         "timezone_offset": 0,
@@ -462,7 +462,7 @@ async def get_weather(lat: float = None, lon: float = None, city: str = None) ->
             "temp_min": 25, 
             "temp_max": 35, 
             "desc": "Partly Cloudy",
-            "desc_extended": "Tomorrow expecting partly cloudy with temperatures from 25Â°C to 35Â°C. Cloudy skies."
+            "desc_extended": "Tomorrow expecting partly cloudy with temperatures from 25°C to 35°C. Cloudy skies."
         },
         "lat": -12.4634,
         "lon": 130.8456,
@@ -1118,9 +1118,9 @@ async def build_render_data(device: str = "familydisplay") -> dict:
         if val is None:
             return ""
         try:
-            return f"{round(float(val))}Â°C"
+            return f"{round(float(val))}°C"
         except Exception:
-            return f"{val}Â°C"
+            return f"{val}°C"
 
     def _fmt_minmax(tmin, tmax):
         if tmin is None and tmax is None:
@@ -1128,8 +1128,8 @@ async def build_render_data(device: str = "familydisplay") -> dict:
         tmin_s = "" if tmin is None else str(round(float(tmin)))
         tmax_s = "" if tmax is None else str(round(float(tmax)))
         if tmin_s and tmax_s:
-            return f"{tmin_s}/{tmax_s}Â°C"
-        return f"{tmin_s or tmax_s}Â°C"
+            return f"{tmin_s}/{tmax_s}°C"
+        return f"{tmin_s or tmax_s}°C"
 
     def _fmt_speed(val):
         if val is None:
