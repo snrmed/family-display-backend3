@@ -1324,7 +1324,7 @@ async def api_render_data(device: str = "familydisplay"):
         data = await build_render_data(device)
         
         if storage_enabled:
-            gcs_write_json(f"devices/{device}/render_data.json", render_data)
+            gcs_write_json(f"devices/{device}/render_data.json", data)
         
         return JSONResponse(content=data)
         
@@ -1339,6 +1339,9 @@ async def api_frame(device: str = "familydisplay"):
         raise HTTPException(status_code=503, detail="Rendering disabled")
     try:
         data = await build_render_data(device)
+        # Save render_data.json beside config.json
+        if storage_enabled:
+            gcs_write_json(f"devices/{device}/render_data.json", data)
         render_path = Path(RENDER_PATH)
         if not render_path.exists():
             render_path = BASE_DIR / "web" / "layouts" / "base.html"
