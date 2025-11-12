@@ -86,46 +86,46 @@ TODO_PRESETS = {
     "kids_morning": {
         "name": "Kids Morning Routine",
         "items": [
-            {"emoji": "🛏️", "time": "7:00am", "task": "Make bed"},
-            {"emoji": "🪥", "time": "7:15am", "task": "Brush teeth"},
-            {"emoji": "🥣", "time": "7:30am", "task": "Eat breakfast"},
-            {"emoji": "🎒", "time": "8:00am", "task": "Pack school bag"}
+            {"emoji": "🛏️", "time": "7:00am", "task": "Make bed", "days": ["weekdays"]},
+            {"emoji": "🪥", "time": "7:15am", "task": "Brush teeth", "days": ["all"]},
+            {"emoji": "🥣", "time": "7:30am", "task": "Eat breakfast", "days": ["all"]},
+            {"emoji": "🎒", "time": "8:00am", "task": "Pack school bag", "days": ["weekdays"]}
         ]
     },
     "kids_afternoon": {
         "name": "After School Tasks",
         "items": [
-            {"emoji": "👕", "time": "3:30pm", "task": "Change clothes"},
-            {"emoji": "📚", "time": "4:00pm", "task": "Homework time"},
-            {"emoji": "🧹", "time": "5:00pm", "task": "Tidy room"},
-            {"emoji": "🐱", "time": "5:30pm", "task": "Feed pets"}
+            {"emoji": "👕", "time": "3:30pm", "task": "Change clothes", "days": ["weekdays"]},
+            {"emoji": "📚", "time": "4:00pm", "task": "Homework time", "days": ["weekdays"]},
+            {"emoji": "🧹", "time": "5:00pm", "task": "Tidy room", "days": ["all"]},
+            {"emoji": "🐱", "time": "5:30pm", "task": "Feed pets", "days": ["all"]}
         ]
     },
     "kids_chores": {
         "name": "Weekly Chores",
         "items": [
-            {"emoji": "🗑️", "time": "", "task": "Take out bins"},
-            {"emoji": "🧺", "time": "", "task": "Put laundry away"},
-            {"emoji": "🧽", "time": "", "task": "Wipe table after dinner"},
-            {"emoji": "🌱", "time": "", "task": "Water plants"}
+            {"emoji": "🗑️", "time": "6:00pm", "task": "Take out bins", "days": ["mon", "thu"]},
+            {"emoji": "🧺", "time": "", "task": "Put laundry away", "days": ["wed", "sat"]},
+            {"emoji": "🧽", "time": "", "task": "Wipe table after dinner", "days": ["all"]},
+            {"emoji": "🌱", "time": "", "task": "Water plants", "days": ["sun"]}
         ]
     },
     "family_weekly": {
         "name": "Family Reminders",
         "items": [
-            {"emoji": "📚", "time": "Mon", "task": "Library books due"},
-            {"emoji": "🗑️", "time": "Wed", "task": "Bin night"},
-            {"emoji": "🎹", "time": "Fri", "task": "Piano lesson"},
-            {"emoji": "⚽", "time": "Sat", "task": "Soccer game"}
+            {"emoji": "📚", "time": "", "task": "Library books due", "days": ["mon"]},
+            {"emoji": "🗑️", "time": "6:00pm", "task": "Bin night", "days": ["wed"]},
+            {"emoji": "🎹", "time": "4:00pm", "task": "Piano lesson", "days": ["fri"]},
+            {"emoji": "⚽", "time": "9:00am", "task": "Soccer game", "days": ["sat"]}
         ]
     },
     "homework": {
         "name": "Homework Checklist",
         "items": [
-            {"emoji": "📖", "time": "", "task": "Reading"},
-            {"emoji": "✏️", "time": "", "task": "Math worksheet"},
-            {"emoji": "🔤", "time": "", "task": "Spelling practice"},
-            {"emoji": "🎨", "time": "", "task": "Art project"}
+            {"emoji": "📖", "time": "", "task": "Reading", "days": ["weekdays"]},
+            {"emoji": "✏️", "time": "", "task": "Math worksheet", "days": ["weekdays"]},
+            {"emoji": "🔤", "time": "", "task": "Spelling practice", "days": ["weekdays"]},
+            {"emoji": "🎨", "time": "", "task": "Art project", "days": ["weekends"]}
         ]
     }
 }
@@ -785,15 +785,53 @@ def get_unsplash_themes() -> list:
         }
     ]
 
+def filter_items_by_day(items: list, current_day: str) -> list:
+    """Filter todo items based on current day of week"""
+    filtered = []
+    
+    for item in items:
+        days = item.get('days', ['all'])
+        
+        # Handle special keywords
+        if 'all' in days:
+            filtered.append(item)
+        elif 'weekdays' in days and current_day in ['mon', 'tue', 'wed', 'thu', 'fri']:
+            filtered.append(item)
+        elif 'weekends' in days and current_day in ['sat', 'sun']:
+            filtered.append(item)
+        elif current_day in days:
+            filtered.append(item)
+    
+    return filtered
+
+
 def render_todo_element(elem: dict, context: dict) -> str:
-    """Render todo list with multiple layout options"""
+    """Render todo list with multiple layout options and day filtering"""
     import html as html_lib
+    from datetime import datetime
     
     layout = elem.get('layout', 'kids')
     title = elem.get('title', 'TODAY\'S MISSIONS 🎯')
-    items = elem.get('items', [])
+    all_items = elem.get('items', [])
     show_time = elem.get('showTime', True)
     show_emoji = elem.get('showEmoji', True)
+    
+    # Get current day of week
+    try:
+        now = datetime.fromisoformat(context.get('timestamp', datetime.now().isoformat()))
+        current_day = now.strftime('%a').lower()[:3]  # 'mon', 'tue', etc.
+    except:
+        current_day = 'mon'
+    
+    # Filter items for current day
+    items = filter_items_by_day(all_items, current_day)
+    
+    # If no items for today, show empty state
+    if not items:
+        return f'<div class="todo-list todo-empty" style="text-align:center; padding:20px; opacity:0.6;">' \
+               f'<div style="font-size:3em;">✓</div>' \
+               f'<div style="font-size:1.2em; margin-top:10px;">No tasks today!</div>' \
+               f'</div>'
     
     # Text styling
     font_size = elem.get('fontSize', 16)
