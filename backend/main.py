@@ -12,7 +12,7 @@ from typing import Dict, Any, List
 from urllib.parse import quote
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, Response, JSONResponse, FileResponse
+from fastapi.responses import HTMLResponse, Response, JSONResponse, FileResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -1779,6 +1779,20 @@ async def frame_bg_reroll(
         gcs_write_json(key, render_data)
 
     return Response(content=png_bytes, media_type="image/png")
+
+@app.get("/v1/frame_bg_reroll_browser")
+async def frame_bg_reroll_browser(
+    device: str = Query("familydisplay"),
+    theme: str | None = Query(None)
+):
+    """Browser-friendly background reroll.
+    Performs the same logic as /v1/frame_bg_reroll and then redirects
+    to the updated PNG with a cache-buster so you see the new image immediately.
+    """
+    await frame_bg_reroll(device=device, theme=theme)
+    ts = int(datetime.now(timezone.utc).timestamp())
+    png_url = f"/gcs/devices/{device}/renders/latest.png?t={ts}"
+    return RedirectResponse(png_url)
 
 
 
