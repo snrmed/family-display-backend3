@@ -34,7 +34,7 @@
 SpectraDisplay display;
 WiFiManager wifiMgr;
 RAW7Decoder imageDecoder;
-ButtonHandler button(PIN_BUTTON);
+ButtonHandler button;  // Manages both GPIO 34 (reroll) and GPIO 0 (reset)
 RTCManager rtcMgr;
 SDManager sdCard;
 
@@ -104,8 +104,8 @@ void setup() {
 
     // Handle different wake scenarios
     switch (wakeReason) {
-        case ESP_SLEEP_WAKEUP_EXT0:
-            // Button wake
+        case ESP_SLEEP_WAKEUP_EXT1:
+            // Button wake (either GPIO 34 reroll or GPIO 0 reset)
             DEBUG_PRINTLN("Mode: Button Wake");
             handleButtonWake();
             break;
@@ -160,15 +160,19 @@ void handleFirstBoot() {
 void handleButtonWake() {
     DEBUG_PRINTLN("\n=== BUTTON WAKE ===");
 
-    // Wait a bit for user to release button
+    // Determine which button woke us up
+    uint8_t wakePin = ButtonHandler::getWakePin();
+    DEBUG_PRINTF("Wake pin: GPIO %d\n", wakePin);
+
+    // Wait a bit to stabilize
     delay(500);
 
-    // Check for long press (factory reset)
+    // Monitor button for events
     unsigned long checkStart = millis();
     while (millis() - checkStart < BUTTON_LONG_PRESS_MS + 1000) {
         ButtonEvent event = button.checkButton();
 
-        if (event == BUTTON_LONG_PRESS) {
+        if (event == BUTTON_RESET_LONG_PRESS) {
             DEBUG_PRINTLN("\n!!! FACTORY RESET TRIGGERED !!!");
 
             // Clear credentials
@@ -184,8 +188,8 @@ void handleButtonWake() {
             return;
         }
 
-        if (event == BUTTON_SHORT_PRESS) {
-            DEBUG_PRINTLN("Short press detected - Background reroll");
+        if (event == BUTTON_REROLL_PRESSED) {
+            DEBUG_PRINTLN("Reroll button detected - Background reroll");
 
             // Connect to WiFi
             if (!wifiMgr.connect()) {
@@ -219,7 +223,7 @@ void handleButtonWake() {
         delay(50);
     }
 
-    DEBUG_PRINTLN("No button action detected");
+    DEBUG_PRINTLN("No button action detected - returning to sleep");
 }
 
 // ============================================================

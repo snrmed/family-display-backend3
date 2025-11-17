@@ -7,43 +7,49 @@
 // ============================================================
 // Button Handler
 // ============================================================
-// Handles button debouncing and press detection
-// - Short press: Trigger background reroll
-// - Long press (6s): Factory reset
+// Handles dual button configuration:
+// - Reroll button (GPIO 34): Trigger background reroll
+// - Reset button (GPIO 0): Factory reset (long press 6s)
 // ============================================================
 
 enum ButtonEvent {
     BUTTON_NONE = 0,
-    BUTTON_SHORT_PRESS,
-    BUTTON_LONG_PRESS
+    BUTTON_REROLL_PRESSED,  // GPIO 34 activated
+    BUTTON_RESET_LONG_PRESS // GPIO 0 held for 6+ seconds
 };
 
 class ButtonHandler {
 public:
-    ButtonHandler(uint8_t pin);
+    ButtonHandler();
 
-    // Initialize button GPIO and interrupts
+    // Initialize button GPIOs
     void begin();
 
     // Check for button events (call from main loop)
     ButtonEvent checkButton();
 
-    // Enable/disable button wake from deep sleep
+    // Enable buttons for wake from deep sleep
     void enableWakeup();
 
-    // Check if button caused wake from deep sleep
+    // Check which button caused wake from deep sleep
     static bool wasWakeSource();
+    static uint8_t getWakePin();
 
 private:
-    uint8_t _pin;
-    bool _buttonState;
-    bool _lastButtonState;
-    unsigned long _pressStartTime;
-    unsigned long _lastDebounceTime;
-    bool _longPressTriggered;
+    // Reroll button (GPIO 34)
+    bool _rerollState;
+    bool _lastRerollState;
+    unsigned long _rerollDebounceTime;
 
-    // Debounce the button state
-    bool readDebouncedState();
+    // Reset button (GPIO 0)
+    bool _resetState;
+    bool _lastResetState;
+    unsigned long _resetPressStart;
+    unsigned long _resetDebounceTime;
+    bool _resetLongPressTriggered;
+
+    // Debounce helpers
+    bool readDebouncedState(uint8_t pin, bool& lastState, unsigned long& debounceTime);
 };
 
 #endif // BUTTON_HANDLER_H
