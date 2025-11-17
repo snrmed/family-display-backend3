@@ -18,8 +18,10 @@
 #define PIN_EPD_SCK   18
 #define PIN_EPD_MOSI  23
 
-// Button pin (adjust based on your hardware)
-#define PIN_BUTTON    0  // GPIO0 (BOOT button) - change if using external button
+// Button pins (3-position switch on e-ink board)
+#define PIN_BUTTON_REROLL  34  // Switch DOWN position - triggers background reroll
+#define PIN_BUTTON_RESET   0   // Switch UP position - factory reset (long press)
+// Note: GPIO 35 (CENTER) is not used - neutral position
 
 // SD Card pins (using default VSPI)
 #define PIN_SD_CS     13  // Adjust based on your hardware
