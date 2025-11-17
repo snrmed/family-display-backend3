@@ -39,6 +39,7 @@
 
 // SD Card pins (sharing VSPI with display)
 // WARNING: SD card CS appears to share GPIO5 with display CS on this board
+#define SD_CARD_ENABLED   false  // Set to false to disable SD card (use if initialization hangs)
 #define PIN_SD_CS     5   // CS pin (matches board marking, shared with display!)
 #define PIN_SD_MOSI   23  // CMD on board (VSPI MOSI)
 #define PIN_SD_MISO   19  // DAT on board (VSPI MISO)

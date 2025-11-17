@@ -108,11 +108,15 @@ void setup() {
     }
 
     // Initialize SD card (optional)
+    #if SD_CARD_ENABLED
     if (sdCard.begin()) {
         DEBUG_PRINTLN("SD card available");
     } else {
         DEBUG_PRINTLN("SD card not available (optional)");
     }
+    #else
+    DEBUG_PRINTLN("SD card disabled in config");
+    #endif
 
     // NEW: Check battery before any heavy operations
     checkBatteryAndSleep();
@@ -235,6 +239,7 @@ void updateDisplay(bool triggerReroll) {
         rtcMgr.recordWiFiFailure();
 
         // Try to load cached image from SD card
+        #if SD_CARD_ENABLED
         if (sdCard.isAvailable() && sdCard.hasCachedImage()) {
             DEBUG_PRINTLN("Loading cached image from SD card");
             size_t size = 0;
@@ -253,6 +258,7 @@ void updateDisplay(bool triggerReroll) {
 
             if (cachedImage) free(cachedImage);
         }
+        #endif
 
         showErrorScreen("WiFi Failed");
         delay(3000);
@@ -291,6 +297,7 @@ void updateDisplay(bool triggerReroll) {
         DEBUG_PRINTLN("Image fetch failed");
 
         // Try cached image
+        #if SD_CARD_ENABLED
         if (sdCard.isAvailable() && sdCard.hasCachedImage()) {
             DEBUG_PRINTLN("Falling back to cached image");
             size_t size = 0;
@@ -309,6 +316,7 @@ void updateDisplay(bool triggerReroll) {
 
             if (cachedImage) free(cachedImage);
         }
+        #endif
 
         showErrorScreen("Image Fetch Failed");
         WiFi.disconnect(true);
@@ -322,11 +330,13 @@ void updateDisplay(bool triggerReroll) {
     battery.overlayLowBatteryWarning(imageBuffer, imageSize);
 
     // Cache image to SD card
+    #if SD_CARD_ENABLED
     if (sdCard.isAvailable()) {
         if (sdCard.saveRAW7(imageBuffer, imageSize)) {
             DEBUG_PRINTLN("Image cached to SD card");
         }
     }
+    #endif
 
     // Display image
     display.displayRAW7(imageBuffer, imageSize);
