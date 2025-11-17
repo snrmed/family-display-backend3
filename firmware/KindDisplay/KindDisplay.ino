@@ -26,6 +26,7 @@
 #include "button_handler.h"
 #include "rtc_manager.h"
 #include "sd_manager.h"
+#include "qr_display.h"
 
 // ============================================================
 // Global Objects
@@ -140,9 +141,9 @@ void loop() {
 void handleFirstBoot() {
     DEBUG_PRINTLN("\n=== FIRST BOOT SETUP ===");
 
-    // Show setup message on display
-    display.clear(EPD_WHITE);
-    // Could add text rendering here if you have a font library
+    // Show QR code setup screen on display
+    QRDisplay::showSetupScreen(display);
+    display.powerOff();
 
     // Start WiFi configuration portal
     wifiMgr.startConfigPortal();
@@ -194,11 +195,12 @@ void handleButtonWake() {
                 return;
             }
 
-            // Get backend URL
+            // Get backend URL and device name
             String backendUrl = wifiMgr.getBackendUrl();
+            String deviceName = wifiMgr.getDeviceName();
 
             // Trigger background reroll
-            if (imageDecoder.triggerBackgroundReroll(backendUrl.c_str())) {
+            if (imageDecoder.triggerBackgroundReroll(backendUrl.c_str(), deviceName.c_str())) {
                 DEBUG_PRINTLN("Background reroll successful");
                 delay(2000);  // Give backend time to regenerate
 
@@ -263,13 +265,15 @@ void updateDisplay() {
     // Initialize RTC and sync time
     rtcMgr.begin("pool.ntp.org", 0, 0);  // UTC, adjust gmtOffset as needed
 
-    // Get backend URL
+    // Get backend URL and device name
     String backendUrl = wifiMgr.getBackendUrl();
+    String deviceName = wifiMgr.getDeviceName();
     DEBUG_PRINTF("Backend URL: %s\n", backendUrl.c_str());
+    DEBUG_PRINTF("Device Name: %s\n", deviceName.c_str());
 
     // Fetch RAW7 image
     size_t imageSize = 0;
-    uint8_t* imageBuffer = imageDecoder.fetchImage(backendUrl.c_str(), imageSize);
+    uint8_t* imageBuffer = imageDecoder.fetchImage(backendUrl.c_str(), deviceName.c_str(), imageSize);
 
     if (!imageBuffer || imageSize != RAW7_SIZE) {
         DEBUG_PRINTLN("Image fetch failed");

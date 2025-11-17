@@ -4,6 +4,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <WebServer.h>
+#include <DNSServer.h>
 #include <Preferences.h>
 #include "config.h"
 
@@ -38,9 +39,13 @@ public:
     // Set backend URL
     void setBackendUrl(const String& url);
 
+    // Get stored device name
+    String getDeviceName();
+
 private:
     Preferences _prefs;
     WebServer* _server;
+    DNSServer* _dnsServer;
     bool _configPortalRunning;
 
     // Web server handlers
