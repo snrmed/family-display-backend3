@@ -184,8 +184,13 @@ void handleFirstBoot() {
     DEBUG_PRINTLN("\n=== FIRST BOOT / SETUP MODE ===");
 
     // Show QR code setup screen on display
-    QRDisplay::showSetupScreen(display);
-    display.powerOff();
+    // TEMPORARILY DISABLED - causes out of memory crash
+    // QRDisplay::showSetupScreen(display);
+    // display.powerOff();
+
+    DEBUG_PRINTLN("QR display disabled to save memory");
+    DEBUG_PRINTLN("Connect to WiFi: KIND-Setup (password: kind1234)");
+    DEBUG_PRINTLN("Visit: http://192.168.4.1");
 
     // Start WiFi configuration portal with LED slow blink
     wifiMgr.startConfigPortal(&statusLED);  // NEW: Pass LED for slow blink
