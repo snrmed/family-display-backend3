@@ -32,7 +32,8 @@ bool SpectraDisplay::begin() {
     digitalWrite(PIN_EPD_DC, HIGH);
 
     // Initialize SPI
-    SPI.begin(PIN_EPD_SCK, -1, PIN_EPD_MOSI, PIN_EPD_CS);
+    // Note: EPD is write-only, so MISO = -1, and we control CS manually, so SS = -1
+    SPI.begin(PIN_EPD_SCK, -1, PIN_EPD_MOSI, -1);
     SPI.beginTransaction(SPISettings(4000000, MSBFIRST, SPI_MODE0));
 
     // Hardware reset

@@ -40,7 +40,7 @@
 // SD Card pins (using default VSPI)
 #define PIN_SD_CS     13  // Adjust based on your hardware
 #define PIN_SD_MOSI   15
-#define PIN_SD_MISO   2
+#define PIN_SD_MISO   19  // FIXED: Was GPIO2 (conflicted with LED), now GPIO19 (standard VSPI MISO)
 #define PIN_SD_SCK    14
 
 // ============================================================

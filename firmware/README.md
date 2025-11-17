@@ -159,9 +159,11 @@ The e-ink dev board includes a built-in 3-position switch:
 Default VSPI pins for SD card:
 - **CS**: GPIO 13
 - **MOSI**: GPIO 15
-- **MISO**: GPIO 2
+- **MISO**: GPIO 19 (Standard VSPI MISO pin)
 - **SCK**: GPIO 14
 
+> **Note**: Previous versions incorrectly used GPIO 2 for MISO, which conflicted with the status LED. This has been fixed to use the standard VSPI MISO pin (GPIO 19).
+>
 > These can be adjusted in `config.h` if your board uses different pins.
 
 ## 🚀 Getting Started
