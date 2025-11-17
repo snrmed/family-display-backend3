@@ -48,6 +48,12 @@ public:
     // Get stored device name
     String getDeviceName();
 
+    // Get stored email address (optional)
+    String getEmail();
+
+    // Get stored admin token (optional)
+    String getAdminToken();
+
 private:
     Preferences _prefs;
     WebServer* _server;

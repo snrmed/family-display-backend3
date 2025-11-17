@@ -171,6 +171,8 @@ void WiFiManager::handleSave() {
     String password = _server->arg("password");
     String backendUrl = _server->arg("backend");
     String deviceName = _server->arg("devicename");
+    String email = _server->arg("email");
+    String adminToken = _server->arg("token");
 
     // Validate inputs
     if (ssid.length() == 0) {
@@ -188,12 +190,25 @@ void WiFiManager::handleSave() {
         deviceName = "familydisplay";
     }
 
-    // Save to NVS (including device name)
+    // Save to NVS (including device name, email, and admin token)
     _prefs.begin(NVS_NAMESPACE, false);
     _prefs.putString(NVS_WIFI_SSID, ssid);
     _prefs.putString(NVS_WIFI_PASS, password);
     _prefs.putString(NVS_BACKEND, backendUrl);
     _prefs.putString("device_name", deviceName);
+
+    // Save email if provided
+    if (email.length() > 0) {
+        _prefs.putString("email", email);
+        DEBUG_PRINTF("WiFi: Saved email: %s\n", email.c_str());
+    }
+
+    // Save admin token if provided
+    if (adminToken.length() > 0) {
+        _prefs.putString("admin_token", adminToken);
+        DEBUG_PRINTF("WiFi: Saved admin token: %s\n", adminToken.c_str());
+    }
+
     _prefs.end();
 
     DEBUG_PRINTF("WiFi: Saved - SSID: %s, Device: %s\n", ssid.c_str(), deviceName.c_str());
@@ -247,6 +262,20 @@ String WiFiManager::getDeviceName() {
     String name = _prefs.getString("device_name", "familydisplay");
     _prefs.end();
     return name;
+}
+
+String WiFiManager::getEmail() {
+    _prefs.begin(NVS_NAMESPACE, true);
+    String email = _prefs.getString("email", "");
+    _prefs.end();
+    return email;
+}
+
+String WiFiManager::getAdminToken() {
+    _prefs.begin(NVS_NAMESPACE, true);
+    String token = _prefs.getString("admin_token", "");
+    _prefs.end();
+    return token;
 }
 
 String WiFiManager::generateConfigPage(const String& networks) {
@@ -403,6 +432,20 @@ String WiFiManager::generateConfigPage(const String& networks) {
             </label>
             <input type="password" id="password" name="password"
                    placeholder="Enter WiFi password">
+
+            <label for="email">
+                Email Address <span class="optional">(optional, for future features)</span>
+            </label>
+            <input type="email" id="email" name="email"
+                   placeholder="your@email.com"
+                   maxlength="64">
+
+            <label for="token">
+                Admin Token <span class="optional">(optional, for QR code access)</span>
+            </label>
+            <input type="text" id="token" name="token"
+                   placeholder="Enter a unique admin token"
+                   maxlength="64">
 
             <input type="hidden" id="backend" name="backend"
                    value=")" + String(BACKEND_URL) + R"(">
