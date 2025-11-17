@@ -6,9 +6,11 @@ SDManager::SDManager() : _initialized(false), _csPin(PIN_SD_CS) {
 bool SDManager::begin() {
     DEBUG_PRINTLN("SD: Initializing SD card");
 
-    // SPI already initialized by display driver
-    // SD card shares the same SPI bus, just uses different CS pin
-    if (!SD.begin(_csPin)) {
+    // Re-initialize SPI with SD card parameters
+    // Even though display uses same pins, SD.begin() needs SPI configured
+    SPI.begin(PIN_SD_SCK, PIN_SD_MISO, PIN_SD_MOSI, PIN_SD_CS);
+
+    if (!SD.begin(_csPin, SPI, 4000000)) {  // 4MHz for compatibility
         DEBUG_PRINTLN("SD: Card mount failed or not present");
         _initialized = false;
         return false;
