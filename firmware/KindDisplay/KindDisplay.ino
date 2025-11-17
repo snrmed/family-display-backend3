@@ -31,6 +31,7 @@
 #include "rtc_manager.h"
 #include "sd_manager.h"
 #include "qr_display.h"
+#include "text_welcome.h"   // NEW: Text-based welcome screen
 #include "led_status.h"     // NEW: LED status feedback
 #include "battery.h"        // NEW: Battery monitoring
 
@@ -187,7 +188,9 @@ void loop() {
 void handleFirstBoot() {
     DEBUG_PRINTLN("\n=== FIRST BOOT / SETUP MODE ===");
 
-    // Try to load and display welcome screen from SD card
+    // Try to load and display welcome screen from SD card, or generate text-based fallback
+    bool welcomeDisplayed = false;
+
     #if SD_CARD_ENABLED
     if (sdCard.isAvailable() && sdCard.fileExists(SD_WELCOME_FILE)) {
         DEBUG_PRINTLN("Loading welcome screen from SD card...");
@@ -195,17 +198,28 @@ void handleFirstBoot() {
         uint8_t* welcomeBuffer = sdCard.loadRAW7FromFile(SD_WELCOME_FILE, size);
 
         if (welcomeBuffer && size == RAW7_SIZE) {
-            DEBUG_PRINTLN("Displaying welcome screen");
+            DEBUG_PRINTLN("Displaying welcome screen from SD card");
             display.displayRAW7(welcomeBuffer, size);
             display.powerOff();
             free(welcomeBuffer);
+            welcomeDisplayed = true;
         } else {
-            DEBUG_PRINTLN("Failed to load welcome screen");
+            DEBUG_PRINTLN("Failed to load welcome screen from SD card");
         }
     } else {
         DEBUG_PRINTLN("No welcome screen found on SD card");
     }
     #endif
+
+    // Fallback to text-based welcome screen if SD card image not available
+    if (!welcomeDisplayed) {
+        DEBUG_PRINTLN("Generating text-based welcome screen...");
+        if (TextWelcome::showWelcomeScreen(display)) {
+            welcomeDisplayed = true;
+        } else {
+            DEBUG_PRINTLN("Failed to generate text-based welcome screen");
+        }
+    }
 
     // Show setup instructions
     DEBUG_PRINTLN("Connect to WiFi: KIND-Setup (password: kind1234)");

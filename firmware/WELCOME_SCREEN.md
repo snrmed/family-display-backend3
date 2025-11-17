@@ -2,17 +2,31 @@
 
 ## Overview
 
-The firmware now supports displaying a custom welcome screen from the SD card during first boot / WiFi setup mode. This is perfect for shipping devices with pre-loaded setup instructions on the e-ink display.
+The firmware now supports displaying a custom welcome screen during first boot / WiFi setup mode. This is perfect for shipping devices with pre-loaded setup instructions on the e-ink display.
+
+**Two options available:**
+1. **Custom image from SD card** - Professional, fully customizable welcome screen
+2. **Text-based fallback** - Automatically generated colorful instruction screen (no SD card needed!)
 
 ## How It Works
 
 When the device boots without WiFi credentials, it will:
-1. Check if SD card is available
-2. Look for `/welcome.raw7` on the SD card
-3. Display the image if found (the e-ink will retain it even when powered off!)
-4. Start the WiFi configuration portal
+1. **First**: Check if SD card is available and look for `/welcome.raw7`
+2. **If found**: Display the custom image from SD card
+3. **If not found**: Automatically generate a colorful text-based welcome screen
+4. **Either way**: Display shows setup instructions, then starts WiFi configuration portal
 
 The welcome screen persists on the e-ink display because of its memory retention properties - perfect for shipping!
+
+### Text-Based Fallback Screen
+
+If no SD card or custom image is present, the firmware automatically generates a clean, colorful welcome screen with:
+- Blue header bar with "Kin:D" branding
+- Color-coded instruction sections (Orange, Yellow, Green, Red)
+- Clear visual layout for easy reading
+- All essential setup information
+
+**This means your device will ALWAYS show setup instructions, even without preparing an SD card!**
 
 ## Creating a Welcome Screen
 
@@ -152,13 +166,22 @@ If you see "Card mount failed", check:
 
 ### Welcome Screen Not Displaying
 
+The device should ALWAYS display a welcome screen (either custom from SD or text-based fallback).
+
 Check serial output for:
 ```
 Loading welcome screen from SD card...
-Displaying welcome screen
+Displaying welcome screen from SD card
 ```
 
-If you see "No welcome screen found":
+Or if using text-based fallback:
+```
+No welcome screen found on SD card
+Generating text-based welcome screen...
+Welcome: Displaying screen
+```
+
+If using SD card and you see "No welcome screen found":
 1. Ensure file is named exactly `welcome.raw7`
 2. Ensure file is in root directory (not in a folder)
 3. Ensure file is exactly 192,000 bytes
@@ -193,16 +216,25 @@ In `config.h`:
 
 ## Benefits for Shipping
 
-1. **Professional unboxing**: Customers see branded setup instructions immediately
-2. **No manual needed**: All instructions on the display itself
-3. **E-ink retention**: Image stays on screen even when device is off - no power needed!
-4. **Easy updates**: Just update the SD card file before shipping batches
-5. **Works offline**: No WiFi needed to show welcome screen
+1. **Always works**: Text-based fallback ensures setup instructions ALWAYS display
+2. **Professional unboxing**: Custom SD card image for branded experience (optional)
+3. **No manual needed**: All instructions on the display itself
+4. **E-ink retention**: Image stays on screen even when device is off - no power needed!
+5. **Flexible production**: Ship with or without SD card - both work great
+6. **Easy updates**: Just update the SD card file before shipping batches
+7. **Works offline**: No WiFi needed to show welcome screen
+8. **Memory efficient**: Text-based screen uses only 192KB (same as image)
 
 ## Next Steps
 
+### Option 1: Quick Start (No SD Card Needed)
+1. Flash firmware
+2. Boot device - text-based welcome screen appears automatically
+3. Ship! 🚀
+
+### Option 2: Custom Branded Screen
 1. Design your welcome screen image (800×480, 7 colors)
 2. Convert to RAW7 format
-3. Copy to SD card
+3. Copy to SD card as `welcome.raw7`
 4. Test on device
 5. Mass-produce and ship! 🚀
