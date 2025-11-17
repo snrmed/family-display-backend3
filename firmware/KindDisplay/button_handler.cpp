@@ -1,114 +1,85 @@
 #include "button_handler.h"
 
 ButtonHandler::ButtonHandler()
-    : _rerollState(HIGH),
-      _lastRerollState(HIGH),
-      _rerollDebounceTime(0),
-      _resetState(HIGH),
-      _lastResetState(HIGH),
-      _resetPressStart(0),
-      _resetDebounceTime(0),
-      _resetLongPressTriggered(false) {
+    : _currentMode(MODE_UNKNOWN),
+      _lastReadTime(0) {
 }
 
 void ButtonHandler::begin() {
-    // Configure reroll button (GPIO 34)
-    // Note: GPIO 34 is input-only, no internal pull-up available
-    // External pull-down or switch to VCC makes it HIGH when active
-    pinMode(PIN_BUTTON_REROLL, INPUT);
-    _rerollState = digitalRead(PIN_BUTTON_REROLL);
-    _lastRerollState = _rerollState;
+    // Configure switch position GPIOs
+    // GPIO 34 and 35 are input-only, no internal pull-ups available
+    // Expecting external pull-downs or direct switch connections
+    pinMode(PIN_SWITCH_34, INPUT);
+    pinMode(PIN_SWITCH_35, INPUT);
 
-    // Configure reset button (GPIO 0)
-    pinMode(PIN_BUTTON_RESET, INPUT_PULLUP);
-    _resetState = digitalRead(PIN_BUTTON_RESET);
-    _lastResetState = _resetState;
+    // Read initial mode
+    _currentMode = readMode();
 
-    DEBUG_PRINTF("Button: Initialized - Reroll:GPIO%d, Reset:GPIO%d\n",
-                 PIN_BUTTON_REROLL, PIN_BUTTON_RESET);
+    DEBUG_PRINTF("Switch: Initialized - GPIO34=%d, GPIO35=%d\n",
+                 PIN_SWITCH_34, PIN_SWITCH_35);
+    DEBUG_PRINTF("Switch: Current mode: %s\n", getModeString(_currentMode));
 }
 
-bool ButtonHandler::readDebouncedState(uint8_t pin, bool& lastState, unsigned long& debounceTime) {
-    bool reading = digitalRead(pin);
+SwitchMode ButtonHandler::readDebouncedMode() {
+    // Read both GPIO pins
+    bool gpio34 = digitalRead(PIN_SWITCH_34);
+    bool gpio35 = digitalRead(PIN_SWITCH_35);
 
-    // If the button state changed, reset debounce timer
-    if (reading != lastState) {
-        debounceTime = millis();
-    }
+    // Determine mode based on switch position
+    // NORMAL MODE:  GPIO34 = HIGH, GPIO35 = LOW
+    // SPECIAL MODE: GPIO34 = LOW,  GPIO35 = HIGH
 
-    lastState = reading;
-
-    // Only accept state change if it's been stable for debounce period
-    if ((millis() - debounceTime) > BUTTON_DEBOUNCE_MS) {
-        return reading;
-    }
-
-    // Return current stable state
-    if (pin == PIN_BUTTON_REROLL) {
-        return _rerollState;
+    if (gpio34 == HIGH && gpio35 == LOW) {
+        return MODE_NORMAL;
+    } else if (gpio34 == LOW && gpio35 == HIGH) {
+        return MODE_SPECIAL;
     } else {
-        return _resetState;
+        // Invalid state (both HIGH, both LOW, or transition)
+        return MODE_UNKNOWN;
     }
 }
 
-ButtonEvent ButtonHandler::checkButton() {
-    // Check reroll button (GPIO 34)
-    // This is active HIGH (switch connects to VCC when down)
-    bool currentReroll = readDebouncedState(PIN_BUTTON_REROLL, _lastRerollState, _rerollDebounceTime);
+SwitchMode ButtonHandler::readMode() {
+    unsigned long now = millis();
 
-    if (currentReroll == HIGH && _rerollState == LOW) {
-        // Reroll button activated (LOW -> HIGH transition)
-        DEBUG_PRINTLN("Button: Reroll button activated (switch DOWN to GPIO 34)");
-        _rerollState = currentReroll;
-        return BUTTON_REROLL_PRESSED;
-    }
-    _rerollState = currentReroll;
-
-    // Check reset button (GPIO 0)
-    // This is active LOW (pulled down when pressed)
-    bool currentReset = readDebouncedState(PIN_BUTTON_RESET, _lastResetState, _resetDebounceTime);
-
-    // Reset button pressed (HIGH -> LOW)
-    if (currentReset == LOW && _resetState == HIGH) {
-        _resetPressStart = millis();
-        _resetLongPressTriggered = false;
-        DEBUG_PRINTLN("Button: Reset button pressed (switch UP to GPIO 0)");
+    // Simple debounce: only read every 50ms
+    if (now - _lastReadTime < BUTTON_DEBOUNCE_MS) {
+        return _currentMode;
     }
 
-    // Reset button being held
-    if (currentReset == LOW && _resetState == LOW) {
-        unsigned long pressDuration = millis() - _resetPressStart;
+    _lastReadTime = now;
+    SwitchMode newMode = readDebouncedMode();
 
-        // Long press detected
-        if (!_resetLongPressTriggered && pressDuration >= BUTTON_LONG_PRESS_MS) {
-            _resetLongPressTriggered = true;
-            DEBUG_PRINTLN("Button: Long press detected - FACTORY RESET");
-            _resetState = currentReset;
-            return BUTTON_RESET_LONG_PRESS;
-        }
+    // Only update if we get a valid mode
+    if (newMode != MODE_UNKNOWN) {
+        _currentMode = newMode;
     }
 
-    // Reset button released
-    if (currentReset == HIGH && _resetState == LOW) {
-        unsigned long pressDuration = millis() - _resetPressStart;
-        DEBUG_PRINTF("Button: Reset button released (duration: %lu ms)\n", pressDuration);
-    }
+    return _currentMode;
+}
 
-    _resetState = currentReset;
-    return BUTTON_NONE;
+const char* ButtonHandler::getModeString(SwitchMode mode) {
+    switch (mode) {
+        case MODE_NORMAL:  return "NORMAL";
+        case MODE_SPECIAL: return "SPECIAL";
+        case MODE_UNKNOWN: return "UNKNOWN";
+        default:           return "INVALID";
+    }
 }
 
 void ButtonHandler::enableWakeup() {
-    // Configure both buttons as wake sources using ext1
-    // Wake on ANY HIGH (either button going HIGH will wake the device)
+    // Optional: Enable switch pins as wake sources
+    // This is not strictly necessary since we primarily use timer wake
+    // But can be useful if you want switch changes to wake the device
+
     const uint64_t ext_wakeup_pin_mask =
-        (1ULL << PIN_BUTTON_REROLL) |
-        (1ULL << PIN_BUTTON_RESET);
+        (1ULL << PIN_SWITCH_34) |
+        (1ULL << PIN_SWITCH_35);
 
     esp_sleep_enable_ext1_wakeup(ext_wakeup_pin_mask, ESP_EXT1_WAKEUP_ANY_HIGH);
 
-    DEBUG_PRINTF("Button: Wake enabled on GPIO%d and GPIO%d\n",
-                 PIN_BUTTON_REROLL, PIN_BUTTON_RESET);
+    DEBUG_PRINTF("Switch: Wake enabled on GPIO%d and GPIO%d\n",
+                 PIN_SWITCH_34, PIN_SWITCH_35);
 }
 
 bool ButtonHandler::wasWakeSource() {
@@ -120,11 +91,11 @@ uint8_t ButtonHandler::getWakePin() {
     if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT1) {
         uint64_t wakeup_pin_mask = esp_sleep_get_ext1_wakeup_status();
 
-        if (wakeup_pin_mask & (1ULL << PIN_BUTTON_REROLL)) {
-            return PIN_BUTTON_REROLL;
+        if (wakeup_pin_mask & (1ULL << PIN_SWITCH_34)) {
+            return PIN_SWITCH_34;
         }
-        if (wakeup_pin_mask & (1ULL << PIN_BUTTON_RESET)) {
-            return PIN_BUTTON_RESET;
+        if (wakeup_pin_mask & (1ULL << PIN_SWITCH_35)) {
+            return PIN_SWITCH_35;
         }
     }
     return 0;

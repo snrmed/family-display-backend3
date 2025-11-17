@@ -5,51 +5,47 @@
 #include "config.h"
 
 // ============================================================
-// Button Handler
+// Mode Switch Handler
 // ============================================================
-// Handles dual button configuration:
-// - Reroll button (GPIO 34): Trigger background reroll
-// - Reset button (GPIO 0): Factory reset (long press 6s)
+// Handles 3-position slide switch configuration:
+// - NORMAL MODE (center): GPIO34 = HIGH, GPIO35 = LOW
+// - SPECIAL MODE (up):    GPIO34 = LOW,  GPIO35 = HIGH
+//
+// SPECIAL mode triggers background reroll before fetching image
 // ============================================================
 
-enum ButtonEvent {
-    BUTTON_NONE = 0,
-    BUTTON_REROLL_PRESSED,  // GPIO 34 activated
-    BUTTON_RESET_LONG_PRESS // GPIO 0 held for 6+ seconds
+enum SwitchMode {
+    MODE_NORMAL = 0,   // Center position - normal operation
+    MODE_SPECIAL = 1,  // Up position - trigger background reroll
+    MODE_UNKNOWN = 2   // Invalid/transition state
 };
 
 class ButtonHandler {
 public:
     ButtonHandler();
 
-    // Initialize button GPIOs
+    // Initialize switch GPIOs
     void begin();
 
-    // Check for button events (call from main loop)
-    ButtonEvent checkButton();
+    // Read current switch position
+    SwitchMode readMode();
 
-    // Enable buttons for wake from deep sleep
+    // Get string representation of mode
+    const char* getModeString(SwitchMode mode);
+
+    // Enable switch for wake from deep sleep (optional, if needed)
     void enableWakeup();
 
-    // Check which button caused wake from deep sleep
+    // Check which GPIO caused wake from deep sleep
     static bool wasWakeSource();
     static uint8_t getWakePin();
 
 private:
-    // Reroll button (GPIO 34)
-    bool _rerollState;
-    bool _lastRerollState;
-    unsigned long _rerollDebounceTime;
+    SwitchMode _currentMode;
+    unsigned long _lastReadTime;
 
-    // Reset button (GPIO 0)
-    bool _resetState;
-    bool _lastResetState;
-    unsigned long _resetPressStart;
-    unsigned long _resetDebounceTime;
-    bool _resetLongPressTriggered;
-
-    // Debounce helpers
-    bool readDebouncedState(uint8_t pin, bool& lastState, unsigned long& debounceTime);
+    // Debounce helper
+    SwitchMode readDebouncedMode();
 };
 
 #endif // BUTTON_HANDLER_H

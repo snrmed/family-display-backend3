@@ -1,9 +1,14 @@
 #include "rtc_manager.h"
 
+// RTC memory storage (persists across deep sleep)
+RTC_DATA_ATTR RTCData rtcData;
+
 RTCManager::RTCManager()
     : _wakeHour(WAKE_HOUR),
       _wakeMinute(WAKE_MINUTE),
       _timeInitialized(false) {
+    // Load RTC data on construction
+    loadRTCData();
 }
 
 bool RTCManager::begin(const char* ntpServer, long gmtOffset, int daylightOffset) {
@@ -132,4 +137,145 @@ String RTCManager::getWakeupReasonString() {
 
 bool RTCManager::wasTimerWake() {
     return getWakeupCause() == ESP_SLEEP_WAKEUP_TIMER;
+}
+
+// ============================================================
+// NEW: RTC Memory Management
+// ============================================================
+
+void RTCManager::loadRTCData() {
+    // Check if RTC data is valid
+    if (rtcData.magic == RTC_MAGIC) {
+        // Verify CRC
+        uint32_t calculatedCRC = calculateCRC32((uint8_t*)&rtcData, sizeof(rtcData) - sizeof(rtcData.crc32));
+        if (calculatedCRC == rtcData.crc32) {
+            DEBUG_PRINTLN("RTC: Valid data loaded from RTC memory");
+            DEBUG_PRINTF("RTC: WiFi failures: %d\n", rtcData.wifiFailureCount);
+            DEBUG_PRINTF("RTC: Last refresh: %lu ms ago\n", millis() - rtcData.lastRefreshTimestamp);
+            return;
+        } else {
+            DEBUG_PRINTLN("RTC: CRC mismatch - reinitializing RTC data");
+        }
+    } else {
+        DEBUG_PRINTLN("RTC: First boot - initializing RTC data");
+    }
+
+    // Initialize RTC data
+    rtcData.magic = RTC_MAGIC;
+    rtcData.wifiFailureCount = 0;
+    rtcData.lastRefreshTimestamp = 0;
+    rtcData.refreshHistoryIndex = 0;
+    for (int i = 0; i < RATE_LIMIT_MAX_REFRESHES; i++) {
+        rtcData.refreshHistory[i] = 0;
+    }
+    saveRTCData();
+}
+
+void RTCManager::saveRTCData() {
+    // Calculate and store CRC
+    rtcData.crc32 = calculateCRC32((uint8_t*)&rtcData, sizeof(rtcData) - sizeof(rtcData.crc32));
+    DEBUG_PRINTLN("RTC: Data saved to RTC memory");
+}
+
+uint32_t RTCManager::calculateCRC32(const uint8_t* data, size_t length) {
+    // Simple CRC32 implementation
+    uint32_t crc = 0xFFFFFFFF;
+    for (size_t i = 0; i < length; i++) {
+        crc ^= data[i];
+        for (int j = 0; j < 8; j++) {
+            crc = (crc >> 1) ^ ((crc & 1) ? 0xEDB88320 : 0);
+        }
+    }
+    return ~crc;
+}
+
+// ============================================================
+// NEW: WiFi Failure Tracking
+// ============================================================
+
+void RTCManager::recordWiFiFailure() {
+    rtcData.wifiFailureCount++;
+    saveRTCData();
+    DEBUG_PRINTF("RTC: WiFi failure recorded (count: %d)\n", rtcData.wifiFailureCount);
+}
+
+void RTCManager::recordWiFiSuccess() {
+    if (rtcData.wifiFailureCount > 0) {
+        DEBUG_PRINTF("RTC: WiFi success - clearing %d failures\n", rtcData.wifiFailureCount);
+        rtcData.wifiFailureCount = 0;
+        saveRTCData();
+    }
+}
+
+uint8_t RTCManager::getWiFiFailureCount() {
+    return rtcData.wifiFailureCount;
+}
+
+void RTCManager::resetWiFiFailureCount() {
+    rtcData.wifiFailureCount = 0;
+    saveRTCData();
+    DEBUG_PRINTLN("RTC: WiFi failure count reset");
+}
+
+// ============================================================
+// NEW: Refresh Throttling & Rate Limiting
+// ============================================================
+
+bool RTCManager::canRefreshNow() {
+    uint32_t now = millis();
+    uint32_t elapsed = now - rtcData.lastRefreshTimestamp;
+
+    // Check minimum interval
+    if (elapsed < MIN_REFRESH_INTERVAL_MS) {
+        DEBUG_PRINTF("RTC: Refresh throttled - only %lu ms since last refresh (min: %lu ms)\n",
+                     elapsed, (unsigned long)MIN_REFRESH_INTERVAL_MS);
+        return false;
+    }
+
+    // Check rate limit
+    if (isRateLimited()) {
+        DEBUG_PRINTLN("RTC: Refresh rate limited - too many recent refreshes");
+        return false;
+    }
+
+    return true;
+}
+
+void RTCManager::recordRefresh() {
+    uint32_t now = millis();
+    rtcData.lastRefreshTimestamp = now;
+
+    // Add to refresh history ring buffer
+    rtcData.refreshHistory[rtcData.refreshHistoryIndex] = now;
+    rtcData.refreshHistoryIndex = (rtcData.refreshHistoryIndex + 1) % RATE_LIMIT_MAX_REFRESHES;
+
+    saveRTCData();
+    DEBUG_PRINTF("RTC: Refresh recorded at %lu ms\n", now);
+}
+
+uint32_t RTCManager::millisSinceLastRefresh() {
+    return millis() - rtcData.lastRefreshTimestamp;
+}
+
+bool RTCManager::isRateLimited() {
+    uint32_t now = millis();
+    uint8_t recentCount = 0;
+
+    // Count refreshes within the rate limit window
+    for (int i = 0; i < RATE_LIMIT_MAX_REFRESHES; i++) {
+        uint32_t refreshTime = rtcData.refreshHistory[i];
+        if (refreshTime > 0 && (now - refreshTime) < RATE_LIMIT_WINDOW_MS) {
+            recentCount++;
+        }
+    }
+
+    // Rate limited if we've hit the max refreshes within the window
+    bool limited = (recentCount >= RATE_LIMIT_MAX_REFRESHES);
+
+    if (limited) {
+        DEBUG_PRINTF("RTC: Rate limit check - %d refreshes in last %lu ms\n",
+                     recentCount, (unsigned long)RATE_LIMIT_WINDOW_MS);
+    }
+
+    return limited;
 }

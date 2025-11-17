@@ -10,11 +10,15 @@
  * - WiFi setup portal (AP mode on first boot)
  * - Daily wake at 01:00 to refresh display
  * - RAW7 image format from backend
- * - Button controls:
- *   - Short press: Trigger background reroll
- *   - Long press (6s): Factory reset
+ * - Switch modes:
+ *   - NORMAL MODE (center): Standard operation
+ *   - SPECIAL MODE (up): Background reroll before fetch
  * - SD card caching for offline fallback
  * - Deep sleep for power efficiency
+ * - Status LED feedback (GPIO2)
+ * - Battery monitoring with low-battery overlay
+ * - Auto-recovery from WiFi failures
+ * - Panel protection (refresh throttling)
  *
  * ============================================================
  */
@@ -27,6 +31,8 @@
 #include "rtc_manager.h"
 #include "sd_manager.h"
 #include "qr_display.h"
+#include "led_status.h"     // NEW: LED status feedback
+#include "battery.h"        // NEW: Battery monitoring
 
 // ============================================================
 // Global Objects
@@ -34,26 +40,29 @@
 SpectraDisplay display;
 WiFiManager wifiMgr;
 RAW7Decoder imageDecoder;
-ButtonHandler button;  // Manages both GPIO 34 (reroll) and GPIO 0 (reset)
+ButtonHandler button;      // NEW: Manages slide switch (GPIO 34/35) for mode detection
 RTCManager rtcMgr;
 SDManager sdCard;
+LEDStatus statusLED;       // NEW: Status LED (GPIO2)
+BatteryMonitor battery;    // NEW: Battery monitoring
 
 // ============================================================
 // State Flags
 // ============================================================
 bool firstBoot = false;
-bool buttonPressed = false;
-bool isFactoryReset = false;
+SwitchMode currentMode = MODE_UNKNOWN;  // NEW: Current switch position
 
 // ============================================================
 // Function Prototypes
 // ============================================================
 void handleFirstBoot();
-void handleButtonWake();
-void handleScheduledWake();
-void updateDisplay();
+void handleNormalMode();          // NEW: Normal operation
+void handleSpecialMode();         // NEW: Special mode (background reroll)
+void updateDisplay(bool triggerReroll = false);  // Updated signature
 void enterDeepSleep();
 void showErrorScreen(const char* message);
+void checkBatteryAndSleep();      // NEW: Battery check before operations
+void handleFactoryReset();        // NEW: Factory reset handler
 
 // ============================================================
 // Setup - Runs once on boot
@@ -67,21 +76,32 @@ void setup() {
 
     DEBUG_PRINTLN("\n\n");
     DEBUG_PRINTLN("========================================");
-    DEBUG_PRINTLN("  KIND Display - Firmware v1.0");
-    DEBUG_PRINTLN("  7-Color E-Ink Display");
+    DEBUG_PRINTLN("  KIND Display - Firmware v2.0");
+    DEBUG_PRINTLN("  7-Color E-Ink Display + Extensions");
     DEBUG_PRINTLN("========================================");
+
+    // NEW: Initialize LED status
+    statusLED.begin();
+
+    // NEW: Initialize battery monitor
+    battery.begin();
 
     // Determine wake reason
     esp_sleep_wakeup_cause_t wakeReason = RTCManager::getWakeupCause();
     DEBUG_PRINT("Wake Reason: ");
     DEBUG_PRINTLN(RTCManager::getWakeupReasonString());
 
-    // Initialize button handler
+    // Initialize switch handler
     button.begin();
+
+    // NEW: Read current switch mode
+    currentMode = button.readMode();
+    DEBUG_PRINTF("Switch Mode: %s\n", button.getModeString(currentMode));
 
     // Initialize display
     if (!display.begin()) {
         DEBUG_PRINTLN("FATAL: Display initialization failed");
+        statusLED.show(LED_FIVE_QUICK_BLINKS);  // Error indication
         showErrorScreen("Display Init Failed");
         delay(5000);
         ESP.restart();
@@ -94,6 +114,24 @@ void setup() {
         DEBUG_PRINTLN("SD card not available (optional)");
     }
 
+    // NEW: Check battery before any heavy operations
+    checkBatteryAndSleep();
+
+    // NEW: Check WiFi failure count for auto-recovery (Part 5)
+    uint8_t wifiFailures = rtcMgr.getWiFiFailureCount();
+    if (wifiFailures >= WIFI_MAX_FAILURES_BEFORE_RESET) {
+        DEBUG_PRINTF("WiFi: Auto-recovery triggered (%d failures)\n", wifiFailures);
+        DEBUG_PRINTLN("WiFi: Clearing credentials and entering setup mode");
+
+        // Clear credentials and reset failure count
+        wifiMgr.clearCredentials();
+        rtcMgr.resetWiFiFailureCount();
+
+        // Enter setup mode
+        handleFirstBoot();
+        return;  // Will restart after setup
+    }
+
     // Check if WiFi credentials exist
     if (!wifiMgr.hasCredentials()) {
         DEBUG_PRINTLN("No WiFi credentials found - entering setup mode");
@@ -102,28 +140,32 @@ void setup() {
         return;  // Will restart after setup
     }
 
-    // Handle different wake scenarios
-    switch (wakeReason) {
-        case ESP_SLEEP_WAKEUP_EXT1:
-            // Button wake (either GPIO 34 reroll or GPIO 0 reset)
-            DEBUG_PRINTLN("Mode: Button Wake");
-            handleButtonWake();
+    // NEW: Check refresh throttling (Part 7)
+    if (!rtcMgr.canRefreshNow()) {
+        DEBUG_PRINTLN("Refresh throttled - skipping update and returning to sleep");
+        enterDeepSleep();
+        return;
+    }
+
+    // Handle operation based on switch mode
+    switch (currentMode) {
+        case MODE_NORMAL:
+            DEBUG_PRINTLN("=== NORMAL MODE ===");
+            handleNormalMode();
             break;
 
-        case ESP_SLEEP_WAKEUP_TIMER:
-            // Scheduled wake (01:00 daily)
-            DEBUG_PRINTLN("Mode: Scheduled Wake");
-            handleScheduledWake();
+        case MODE_SPECIAL:
+            DEBUG_PRINTLN("=== SPECIAL MODE (Background Reroll) ===");
+            handleSpecialMode();
             break;
 
         default:
-            // Power on / reset
-            DEBUG_PRINTLN("Mode: Power On / Reset");
-            handleScheduledWake();  // Treat as normal update
+            DEBUG_PRINTLN("=== UNKNOWN MODE - defaulting to NORMAL ===");
+            handleNormalMode();
             break;
     }
 
-    // Enter deep sleep (won't reach here if factory reset)
+    // Enter deep sleep
     enterDeepSleep();
 }
 
@@ -136,17 +178,17 @@ void loop() {
 }
 
 // ============================================================
-// First Boot - WiFi Setup Portal
+// First Boot - WiFi Setup Portal (Part 4)
 // ============================================================
 void handleFirstBoot() {
-    DEBUG_PRINTLN("\n=== FIRST BOOT SETUP ===");
+    DEBUG_PRINTLN("\n=== FIRST BOOT / SETUP MODE ===");
 
     // Show QR code setup screen on display
     QRDisplay::showSetupScreen(display);
     display.powerOff();
 
-    // Start WiFi configuration portal
-    wifiMgr.startConfigPortal();
+    // Start WiFi configuration portal with LED slow blink
+    wifiMgr.startConfigPortal(&statusLED);  // NEW: Pass LED for slow blink
 
     // Configuration saved, restart
     DEBUG_PRINTLN("Configuration saved. Restarting...");
@@ -155,94 +197,37 @@ void handleFirstBoot() {
 }
 
 // ============================================================
-// Button Wake Handler
+// NORMAL MODE Handler (Part 2)
 // ============================================================
-void handleButtonWake() {
-    DEBUG_PRINTLN("\n=== BUTTON WAKE ===");
+void handleNormalMode() {
+    DEBUG_PRINTLN("\n=== NORMAL MODE - Standard Operation ===");
 
-    // Determine which button woke us up
-    uint8_t wakePin = ButtonHandler::getWakePin();
-    DEBUG_PRINTF("Wake pin: GPIO %d\n", wakePin);
-
-    // Wait a bit to stabilize
-    delay(500);
-
-    // Monitor button for events
-    unsigned long checkStart = millis();
-    while (millis() - checkStart < BUTTON_LONG_PRESS_MS + 1000) {
-        ButtonEvent event = button.checkButton();
-
-        if (event == BUTTON_RESET_LONG_PRESS) {
-            DEBUG_PRINTLN("\n!!! FACTORY RESET TRIGGERED !!!");
-
-            // Clear credentials
-            wifiMgr.clearCredentials();
-
-            // Show reset message
-            display.clear(EPD_BLACK);
-            display.powerOff();
-
-            DEBUG_PRINTLN("Factory reset complete. Restarting...");
-            delay(2000);
-            ESP.restart();
-            return;
-        }
-
-        if (event == BUTTON_REROLL_PRESSED) {
-            DEBUG_PRINTLN("Reroll button detected - Background reroll");
-
-            // Connect to WiFi
-            if (!wifiMgr.connect()) {
-                DEBUG_PRINTLN("WiFi connection failed");
-                showErrorScreen("WiFi Failed");
-                delay(3000);
-                return;
-            }
-
-            // Get backend URL and device name
-            String backendUrl = wifiMgr.getBackendUrl();
-            String deviceName = wifiMgr.getDeviceName();
-
-            // Trigger background reroll
-            if (imageDecoder.triggerBackgroundReroll(backendUrl.c_str(), deviceName.c_str())) {
-                DEBUG_PRINTLN("Background reroll successful");
-                delay(2000);  // Give backend time to regenerate
-
-                // Fetch and display new image
-                updateDisplay();
-            } else {
-                DEBUG_PRINTLN("Background reroll failed");
-                showErrorScreen("Reroll Failed");
-                delay(3000);
-            }
-
-            WiFi.disconnect(true);
-            return;
-        }
-
-        delay(50);
-    }
-
-    DEBUG_PRINTLN("No button action detected - returning to sleep");
+    // Standard operation: fetch and display
+    updateDisplay(false);  // No background reroll
 }
 
 // ============================================================
-// Scheduled Wake Handler (Daily 01:00)
+// SPECIAL MODE Handler (Part 2)
 // ============================================================
-void handleScheduledWake() {
-    DEBUG_PRINTLN("\n=== SCHEDULED WAKE ===");
-    updateDisplay();
+void handleSpecialMode() {
+    DEBUG_PRINTLN("\n=== SPECIAL MODE - Background Reroll ===");
+
+    // Special operation: trigger background reroll, then fetch and display
+    updateDisplay(true);  // Trigger background reroll
 }
 
 // ============================================================
-// Update Display - Fetch and show new image
+// Update Display - Fetch and show new image (EXTENDED)
 // ============================================================
-void updateDisplay() {
+void updateDisplay(bool triggerReroll) {
     DEBUG_PRINTLN("\n--- Updating Display ---");
 
-    // Connect to WiFi
-    if (!wifiMgr.connect()) {
+    // Connect to WiFi with LED fast blink feedback
+    if (!wifiMgr.connect(&statusLED)) {  // NEW: Pass LED for feedback
         DEBUG_PRINTLN("WiFi connection failed");
+
+        // NEW: Record WiFi failure for auto-recovery (Part 5)
+        rtcMgr.recordWiFiFailure();
 
         // Try to load cached image from SD card
         if (sdCard.isAvailable() && sdCard.hasCachedImage()) {
@@ -251,6 +236,9 @@ void updateDisplay() {
             uint8_t* cachedImage = sdCard.loadRAW7(size);
 
             if (cachedImage && size == RAW7_SIZE) {
+                // NEW: Apply battery overlay if needed (Part 8)
+                battery.overlayLowBatteryWarning(cachedImage, size);
+
                 display.displayRAW7(cachedImage, size);
                 free(cachedImage);
                 display.powerOff();
@@ -266,6 +254,9 @@ void updateDisplay() {
         return;
     }
 
+    // NEW: Record successful WiFi connection (Part 5)
+    rtcMgr.recordWiFiSuccess();
+
     // Initialize RTC and sync time
     rtcMgr.begin("pool.ntp.org", 0, 0);  // UTC, adjust gmtOffset as needed
 
@@ -274,6 +265,18 @@ void updateDisplay() {
     String deviceName = wifiMgr.getDeviceName();
     DEBUG_PRINTF("Backend URL: %s\n", backendUrl.c_str());
     DEBUG_PRINTF("Device Name: %s\n", deviceName.c_str());
+
+    // NEW: If in SPECIAL mode, trigger background reroll first (Part 2)
+    if (triggerReroll) {
+        DEBUG_PRINTLN("Triggering background reroll...");
+        if (imageDecoder.triggerBackgroundReroll(backendUrl.c_str(), deviceName.c_str())) {
+            DEBUG_PRINTLN("Background reroll successful");
+            statusLED.show(LED_TRIPLE_BLINK);  // NEW: Triple blink feedback
+            delay(2000);  // Give backend time to regenerate
+        } else {
+            DEBUG_PRINTLN("Background reroll failed - continuing with fetch");
+        }
+    }
 
     // Fetch RAW7 image
     size_t imageSize = 0;
@@ -289,6 +292,9 @@ void updateDisplay() {
             uint8_t* cachedImage = sdCard.loadRAW7(size);
 
             if (cachedImage && size == RAW7_SIZE) {
+                // NEW: Apply battery overlay (Part 8)
+                battery.overlayLowBatteryWarning(cachedImage, size);
+
                 display.displayRAW7(cachedImage, size);
                 free(cachedImage);
                 display.powerOff();
@@ -307,6 +313,9 @@ void updateDisplay() {
 
     DEBUG_PRINTLN("Image fetched successfully");
 
+    // NEW: Apply low battery overlay if needed (Part 8)
+    battery.overlayLowBatteryWarning(imageBuffer, imageSize);
+
     // Cache image to SD card
     if (sdCard.isAvailable()) {
         if (sdCard.saveRAW7(imageBuffer, imageSize)) {
@@ -321,6 +330,12 @@ void updateDisplay() {
     free(imageBuffer);
     display.powerOff();
 
+    // NEW: Show solid LED for 3 seconds after successful display (Part 1)
+    statusLED.show(LED_SOLID_3S);
+
+    // NEW: Record this refresh for throttling (Part 6 & 7)
+    rtcMgr.recordRefresh();
+
     // Disconnect WiFi
     WiFi.disconnect(true);
     WiFi.mode(WIFI_OFF);
@@ -329,7 +344,7 @@ void updateDisplay() {
 }
 
 // ============================================================
-// Enter Deep Sleep
+// Enter Deep Sleep (UPDATED)
 // ============================================================
 void enterDeepSleep() {
     DEBUG_PRINTLN("\n--- Preparing for Deep Sleep ---");
@@ -337,7 +352,10 @@ void enterDeepSleep() {
     // Put display to sleep
     display.sleep();
 
-    // Enable button wake
+    // NEW: Turn off LED before sleep (Part 1)
+    statusLED.off();
+
+    // Enable button wake (optional for switch monitoring)
     button.enableWakeup();
 
     // Calculate and enter deep sleep
@@ -357,4 +375,68 @@ void showErrorScreen(const char* message) {
     display.powerOff();
 
     // Could add text rendering here if font library available
+}
+
+// ============================================================
+// NEW: Check Battery and Enter Extended Sleep if Critical (Part 8)
+// ============================================================
+void checkBatteryAndSleep() {
+    if (!BATTERY_ENABLED) {
+        return;  // Skip if battery monitoring is disabled
+    }
+
+    uint8_t batteryPercent = battery.getPercentage();
+    DEBUG_PRINTF("Battery: %d%%\n", batteryPercent);
+
+    if (battery.isCritical()) {
+        DEBUG_PRINTF("Battery: CRITICAL (%d%%) - entering extended sleep\n", batteryPercent);
+
+        // Show minimal low-battery indicator on display
+        display.clear(EPD_RED);
+        display.powerOff();
+
+        // Show 5 blinks to indicate critical battery
+        statusLED.show(LED_FIVE_QUICK_BLINKS);
+
+        // Turn off LED
+        statusLED.off();
+
+        // Enter extended deep sleep (6 hours)
+        DEBUG_PRINTF("Battery: Sleeping for %d hours to protect battery\n", BATTERY_CRITICAL_SLEEP_HOURS);
+        rtcMgr.sleepForSeconds(BATTERY_CRITICAL_SLEEP_HOURS * 3600ULL);
+
+        // Never reaches here
+    }
+
+    // If battery is low (but not critical), continue normally
+    // The low battery overlay will be applied during updateDisplay()
+}
+
+// ============================================================
+// NEW: Factory Reset Handler (Part 3)
+// ============================================================
+void handleFactoryReset() {
+    DEBUG_PRINTLN("\n!!! FACTORY RESET TRIGGERED !!!");
+
+    // Show 5 quick blinks
+    statusLED.show(LED_FIVE_QUICK_BLINKS);
+
+    // Clear all WiFi and app config
+    Preferences prefs;
+    prefs.begin(NVS_NAMESPACE, false);
+    prefs.clear();
+    prefs.end();
+
+    DEBUG_PRINTLN("Factory reset: All settings cleared");
+
+    // Clear RTC data as well
+    rtcMgr.resetWiFiFailureCount();
+
+    // Show reset message on display
+    display.clear(EPD_BLACK);
+    display.powerOff();
+
+    DEBUG_PRINTLN("Factory reset complete. Restarting into setup mode...");
+    delay(2000);
+    ESP.restart();
 }
