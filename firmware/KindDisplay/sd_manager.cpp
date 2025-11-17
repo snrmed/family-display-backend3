@@ -126,6 +126,67 @@ bool SDManager::hasCachedImage() {
     return SD.exists(SD_CACHE_FILE);
 }
 
+uint8_t* SDManager::loadRAW7FromFile(const char* filepath, size_t& size) {
+    size = 0;
+
+    if (!_initialized) {
+        DEBUG_PRINTLN("SD: Not initialized");
+        return nullptr;
+    }
+
+    if (!SD.exists(filepath)) {
+        DEBUG_PRINTF("SD: File not found: %s\n", filepath);
+        return nullptr;
+    }
+
+    DEBUG_PRINTF("SD: Loading RAW7 from %s\n", filepath);
+
+    File file = SD.open(filepath, FILE_READ);
+    if (!file) {
+        DEBUG_PRINTF("SD: Failed to open file: %s\n", filepath);
+        return nullptr;
+    }
+
+    size_t fileSize = file.size();
+    DEBUG_PRINTF("SD: File size: %d bytes\n", fileSize);
+
+    if (fileSize != RAW7_SIZE) {
+        DEBUG_PRINTF("SD: Invalid file size (expected %d)\n", RAW7_SIZE);
+        file.close();
+        return nullptr;
+    }
+
+    // Allocate buffer
+    uint8_t* buffer = (uint8_t*)malloc(fileSize);
+    if (!buffer) {
+        DEBUG_PRINTLN("SD: Memory allocation failed");
+        file.close();
+        return nullptr;
+    }
+
+    // Read file
+    size_t bytesRead = file.read(buffer, fileSize);
+    file.close();
+
+    if (bytesRead == fileSize) {
+        size = bytesRead;
+        DEBUG_PRINTF("SD: Successfully loaded %d bytes\n", bytesRead);
+        return buffer;
+    } else {
+        DEBUG_PRINTF("SD: Read error - read %d of %d bytes\n", bytesRead, fileSize);
+        free(buffer);
+        return nullptr;
+    }
+}
+
+bool SDManager::fileExists(const char* filepath) {
+    if (!_initialized) {
+        return false;
+    }
+
+    return SD.exists(filepath);
+}
+
 void SDManager::printCardInfo() {
     if (!_initialized) {
         return;
