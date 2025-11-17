@@ -636,19 +636,51 @@ Requirements:
 
 
 
+def get_spectra_e6_color_bias(theme: str, query: str) -> str:
+    """
+    Bias Unsplash queries toward Spectra-E6 friendly colors.
+
+    Returns one of: "red", "yellow", "orange", "black_and_white"
+
+    Rules:
+    - abstract/kids/geo/paper_collage themes → red/yellow/orange
+    - soft_minimal → orange or black_and_white
+    - All other themes → random choice from all 4 colors
+    """
+    # Warm color themes (abstract, kids, geometric, paper collage)
+    warm_themes = ["playful_illustrations", "retro_vibrant", "textured_artistic"]
+    warm_queries = ["abstract", "geometric", "paper", "collage", "kids", "illustration", "doodle", "cartoon"]
+
+    # Soft minimal themes
+    soft_themes = ["modern_minimal", "nature_abstraction"]
+    soft_queries = ["minimal", "soft", "gradient", "zen", "pastel"]
+
+    # Check if theme matches warm categories
+    if theme in warm_themes or any(q in query.lower() for q in warm_queries):
+        return random.choice(["red", "yellow", "orange"])
+
+    # Check if theme/query matches soft minimal
+    elif theme in soft_themes or any(q in query.lower() for q in soft_queries):
+        return random.choice(["orange", "black_and_white"])
+
+    # Default: random choice from all options
+    else:
+        return random.choice(["red", "yellow", "orange", "black_and_white"])
+
+
 async def download_unsplash_theme_set(theme: str = "modern_minimal", images_per_theme: int = 9) -> int:
     """
     Download a set of images for a theme from Unsplash and store in GCS.
     This is called by a scheduler/admin endpoint, not during regular renders.
-    
+
     Returns: Number of images successfully downloaded
     """
     api_key = os.getenv("UNSPLASH_ACCESS_KEY")
-    
+
     if not api_key or not storage_enabled:
         logger.error("Cannot download: UNSPLASH_ACCESS_KEY or GCS not configured")
         return 0
-    
+
     # Theme subcategories
     theme_subcategories = {
         "modern_minimal": [
@@ -677,19 +709,23 @@ async def download_unsplash_theme_set(theme: str = "modern_minimal", images_per_
             "mixed media art", "abstract expressionism", "modern painting"
         ]
     }
-    
+
     subcategories = theme_subcategories.get(theme, theme_subcategories["modern_minimal"])
     downloaded_count = 0
     
     async with httpx.AsyncClient(timeout=15.0) as client:
         for i, query in enumerate(subcategories[:images_per_theme]):
             try:
-                # Get random image from Unsplash
+                # Get Spectra-E6 color bias for this theme and query
+                color_bias = get_spectra_e6_color_bias(theme, query)
+
+                # Get random image from Unsplash with color bias
                 response = await client.get(
                     "https://api.unsplash.com/photos/random",
                     params={
                         "query": query,
                         "orientation": "landscape",
+                        "color": color_bias,
                         "client_id": api_key
                     }
                 )
@@ -1268,8 +1304,127 @@ async def render_html_to_png(render_path: str, context: dict) -> bytes:
         raise
     finally:
         await page.close()
-        
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+# ────────────────────────────────────────────────────────────────────────────
+# RAW7 7-COLOUR PALETTE (FOR SPECTRA E6 PANELS)
+# ────────────────────────────────────────────────────────────────────────────
+
+# RAW7 palette for Spectra E6 e-paper displays
+RAW7_PALETTE = [
+    (255, 255, 255),  # 0: white
+    (0, 0, 0),        # 1: black
+    (220, 0, 0),      # 2: red
+    (255, 216, 0),    # 3: yellow
+    (0, 0, 200),      # 4: blue
+    (0, 160, 0),      # 5: green
+    (255, 128, 0),    # 6: orange
+]
+
+
+def quantize_rgb_to_raw7_index(rgb: tuple) -> int:
+    """
+    Quantize an RGB tuple to the closest RAW7 palette index (0-6).
+
+    Args:
+        rgb: Tuple of (r, g, b) values (0-255)
+
+    Returns:
+        Index (0-6) of the closest color in RAW7_PALETTE
+    """
+    r, g, b = rgb
+    min_distance = float('inf')
+    best_index = 0
+
+    for idx, (pr, pg, pb) in enumerate(RAW7_PALETTE):
+        # Euclidean distance in RGB space
+        distance = (r - pr) ** 2 + (g - pg) ** 2 + (b - pb) ** 2
+        if distance < min_distance:
+            min_distance = distance
+            best_index = idx
+
+    return best_index
+
+
+def png_bytes_to_raw7(image_bytes: bytes, width: int, height: int) -> bytes:
+    """
+    Convert PNG image bytes to RAW7 format with Floyd-Steinberg dithering.
+
+    Process:
+    1. Load PNG from bytes
+    2. Resize to (width, height)
+    3. Apply Floyd-Steinberg dithering in RGB space
+    4. Quantize every pixel to RAW7 palette index
+    5. Pack output using RAW7 format (2 pixels per byte)
+
+    Args:
+        image_bytes: PNG image as bytes
+        width: Target width
+        height: Target height
+
+    Returns:
+        RAW7 encoded bytes (width * height / 2 bytes)
+    """
+    from PIL import Image
+    import io
+
+    # Load PNG from bytes
+    img = Image.open(io.BytesIO(image_bytes))
+
+    # Resize to target dimensions
+    img = img.resize((width, height), Image.Resampling.LANCZOS)
+
+    # Convert to RGB if not already
+    if img.mode != 'RGB':
+        img = img.convert('RGB')
+
+    # Convert to numpy array for easier manipulation
+    import numpy as np
+    pixels = np.array(img, dtype=np.float32)  # Use float for error diffusion
+
+    # Floyd-Steinberg dithering
+    for y in range(height):
+        for x in range(width):
+            old_pixel = pixels[y, x]
+
+            # Quantize to nearest RAW7 color
+            new_index = quantize_rgb_to_raw7_index(tuple(old_pixel.astype(int)))
+            new_pixel = np.array(RAW7_PALETTE[new_index], dtype=np.float32)
+
+            # Set the quantized pixel
+            pixels[y, x] = new_pixel
+
+            # Calculate quantization error
+            quant_error = old_pixel - new_pixel
+
+            # Distribute error to neighboring pixels (Floyd-Steinberg coefficients)
+            if x + 1 < width:
+                pixels[y, x + 1] += quant_error * 7 / 16
+            if y + 1 < height:
+                if x > 0:
+                    pixels[y + 1, x - 1] += quant_error * 3 / 16
+                pixels[y + 1, x] += quant_error * 5 / 16
+                if x + 1 < width:
+                    pixels[y + 1, x + 1] += quant_error * 1 / 16
+
+    # Convert dithered pixels to RAW7 indices
+    indices = []
+    for y in range(height):
+        for x in range(width):
+            pixel = pixels[y, x].clip(0, 255).astype(int)
+            index = quantize_rgb_to_raw7_index(tuple(pixel))
+            indices.append(index)
+
+    # Pack indices into RAW7 format (2 pixels per byte, high nibble first)
+    raw7_bytes = bytearray()
+    for i in range(0, len(indices), 2):
+        high_nibble = indices[i] & 0x0F
+        low_nibble = indices[i + 1] & 0x0F if i + 1 < len(indices) else 0
+        byte = (high_nibble << 4) | low_nibble
+        raw7_bytes.append(byte)
+
+    return bytes(raw7_bytes)
+
+# â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 # API ROUTES
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -1354,6 +1509,53 @@ async def api_frame(device: str = "familydisplay"):
         return Response(content=png_bytes, media_type="image/png")
     except Exception as e:
         logger.error(f"Failed to render frame: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# RAW7 Render (for Spectra E6 e-paper displays)
+@app.get("/v1/raw7")
+async def api_raw7(device: str = "familydisplay"):
+    """
+    Render frame in RAW7 format for Spectra E6 e-paper displays.
+
+    Process:
+    1. Build render data using existing build_render_data()
+    2. Render HTML to PNG using existing render_html_to_png()
+    3. Convert PNG to RAW7 using png_bytes_to_raw7()
+    4. Return RAW7 bytes as application/octet-stream
+    5. Save to GCS at devices/{device}/renders/latest.raw7 (if enabled)
+    """
+    if not ENABLE_RENDERING:
+        raise HTTPException(status_code=503, detail="Rendering disabled")
+    try:
+        # Step 1: Build render data
+        data = await build_render_data(device)
+
+        # Save render_data.json
+        if storage_enabled:
+            gcs_write_json(f"devices/{device}/render_data.json", data)
+
+        # Step 2: Render HTML to PNG
+        render_path = Path(RENDER_PATH)
+        if not render_path.exists():
+            render_path = BASE_DIR / "web" / "layouts" / "base.html"
+        png_bytes = await render_html_to_png(str(render_path), data)
+
+        # Step 3: Convert PNG to RAW7
+        raw7_bytes = png_bytes_to_raw7(png_bytes, RENDER_WIDTH, RENDER_HEIGHT)
+
+        # Step 4: Save to GCS (if enabled)
+        if storage_enabled:
+            render_key = f"devices/{device}/renders/latest.raw7"
+            gcs_write_bytes(render_key, raw7_bytes, content_type="application/octet-stream")
+            logger.info(f"💾 Saved RAW7 render: {render_key} ({len(raw7_bytes)} bytes)")
+
+        # Step 5: Return RAW7 bytes
+        logger.info(f"✅ RAW7 render complete: {len(raw7_bytes)} bytes ({RENDER_WIDTH}x{RENDER_HEIGHT})")
+        return Response(content=raw7_bytes, media_type="application/octet-stream")
+
+    except Exception as e:
+        logger.error(f"Failed to render RAW7 frame: {e}")
+        logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
 # Debug Routes
