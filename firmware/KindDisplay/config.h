@@ -37,8 +37,7 @@
 #define AP_IP         "192.168.4.1"
 
 // Backend API configuration
-// NOTE: User should modify this to match their backend URL
-#define BACKEND_URL   "http://YOUR_BACKEND_IP_OR_DOMAIN"  // e.g., "http://192.168.1.100:8080"
+#define BACKEND_URL   "https://family-display-backend-867804884116.australia-southeast1.run.app"
 #define RAW7_ENDPOINT "/v1/raw7?device=familydisplay"
 #define REROLL_ENDPOINT "/v1/frame_bg_reroll"
 
