@@ -10,7 +10,7 @@ A complete smart e-ink display system that brings daily artwork, weather, jokes,
 
 The kin;D Family Display is an intelligent e-ink photo frame that automatically updates with:
 
-- Daily curated artwork from Pexels
+- Daily curated artwork from Unsplash
 - Real-time weather with beautiful icons
 - Dad jokes to brighten your day
 - Fully customizable layouts via drag-and-drop designer
@@ -165,7 +165,7 @@ Drag-and-drop web interface for creating custom layouts:
 | **Cloud** | Google Cloud Run, Google Cloud Storage |
 | **Firmware** | C++, PlatformIO, ESP32, FreeRTOS |
 | **Display** | Spectra-6 E-Ink (7-color, SPI) |
-| **APIs** | Pexels, OpenWeather, icanhazdadjoke |
+| **APIs** | Unsplash, OpenWeather, icanhazdadjoke |
 | **Designer** | HTML5, JavaScript, CSS3 |
 
 ---
@@ -246,7 +246,7 @@ Key configuration variables:
 | `PUBLIC_BASE_URL` | Full URL of backend service | Yes |
 | `ADMIN_TOKEN` | Admin authentication token | Yes |
 | `OPENWEATHER_KEY` | OpenWeather API key | If weather enabled |
-| `PEXELS_API_KEY` | Pexels API key | If Pexels enabled |
+| `UNSPLASH_ACCESS_KEY` | Unsplash API key | If Unsplash enabled |
 | `ENABLE_RENDERING` | Enable/disable Playwright rendering | No (default: true) |
 | `RENDER_WIDTH` | PNG render width | No (default: 800) |
 | `RENDER_HEIGHT` | PNG render height | No (default: 480) |
@@ -483,7 +483,7 @@ See [LICENSE](LICENSE) file for details.
 ## Acknowledgments
 
 - Waveshare for e-ink display modules and documentation
-- Pexels API for beautiful free artwork
+- Unsplash API for beautiful free artwork
 - OpenWeather for weather data
 - icanhazdadjoke for bringing the laughs
 - PlatformIO and Arduino community for ESP32 tools
