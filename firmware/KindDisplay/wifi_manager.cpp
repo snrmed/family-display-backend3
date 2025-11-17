@@ -1,6 +1,7 @@
 #include "wifi_manager.h"
+#include "led_status.h"  // Include LED status for feedback
 
-WiFiManager::WiFiManager() : _server(nullptr), _dnsServer(nullptr), _configPortalRunning(false) {
+WiFiManager::WiFiManager() : _server(nullptr), _dnsServer(nullptr), _configPortalRunning(false), _led(nullptr) {
 }
 
 bool WiFiManager::hasCredentials() {
@@ -10,7 +11,9 @@ bool WiFiManager::hasCredentials() {
     return hasSSID;
 }
 
-bool WiFiManager::connect() {
+bool WiFiManager::connect(LEDStatus* led) {
+    _led = led;  // Store LED pointer
+
     _prefs.begin(NVS_NAMESPACE, true);  // Read-only
     String ssid = _prefs.getString(NVS_WIFI_SSID, "");
     String password = _prefs.getString(NVS_WIFI_PASS, "");
@@ -22,15 +25,36 @@ bool WiFiManager::connect() {
     }
 
     DEBUG_PRINTF("WiFi: Connecting to %s\n", ssid.c_str());
+
+    // NEW: Show fast blink during WiFi connection
+    if (_led) {
+        _led->startPattern(LED_FAST_BLINK);
+    }
+
     WiFi.mode(WIFI_STA);
     WiFi.begin(ssid.c_str(), password.c_str());
 
     unsigned long startAttempt = millis();
+    unsigned long lastBlink = millis();
+    bool ledState = false;
+
     while (WiFi.status() != WL_CONNECTED && millis() - startAttempt < WIFI_CONNECT_TIMEOUT) {
-        delay(500);
-        DEBUG_PRINT(".");
+        // Manual blink LED during connection
+        if (_led && (millis() - lastBlink >= 200)) {
+            ledState = !ledState;
+            if (ledState) _led->on();
+            else _led->off();
+            lastBlink = millis();
+        }
+        delay(50);
+        if (millis() % 500 == 0) DEBUG_PRINT(".");
     }
     DEBUG_PRINTLN();
+
+    // Turn off LED after connection attempt
+    if (_led) {
+        _led->off();
+    }
 
     if (WiFi.status() == WL_CONNECTED) {
         DEBUG_PRINTF("WiFi: Connected! IP: %s\n", WiFi.localIP().toString().c_str());
@@ -41,8 +65,15 @@ bool WiFiManager::connect() {
     }
 }
 
-void WiFiManager::startConfigPortal() {
+void WiFiManager::startConfigPortal(LEDStatus* led) {
+    _led = led;  // Store LED pointer
+
     DEBUG_PRINTLN("WiFi: Starting configuration portal");
+
+    // NEW: Start slow blink during AP mode
+    if (_led) {
+        _led->startPattern(LED_SLOW_BLINK);
+    }
 
     // Start Access Point
     WiFi.mode(WIFI_AP);
@@ -74,10 +105,27 @@ void WiFiManager::startConfigPortal() {
     DEBUG_PRINTF("       URL: http://%s or http://makeasmile.com\n", IP.toString().c_str());
 
     // Run server until configuration is saved
+    unsigned long lastBlink = millis();
+    bool ledState = false;
+
     while (_configPortalRunning) {
         _dnsServer->processNextRequest();  // Handle DNS requests
         _server->handleClient();
+
+        // NEW: Manual slow blink during portal (1 second ON/OFF)
+        if (_led && (millis() - lastBlink >= 1000)) {
+            ledState = !ledState;
+            if (ledState) _led->on();
+            else _led->off();
+            lastBlink = millis();
+        }
+
         delay(10);
+    }
+
+    // NEW: Turn off LED when exiting portal
+    if (_led) {
+        _led->off();
     }
 
     // Clean up

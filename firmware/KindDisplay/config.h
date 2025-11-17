@@ -18,10 +18,24 @@
 #define PIN_EPD_SCK   18
 #define PIN_EPD_MOSI  23
 
-// Button pins (3-position switch on e-ink board)
-#define PIN_BUTTON_REROLL  34  // Switch DOWN position - triggers background reroll
-#define PIN_BUTTON_RESET   0   // Switch UP position - factory reset (long press)
-// Note: GPIO 35 (CENTER) is not used - neutral position
+// ============================================================
+// NEW: Mode Switch pins (3-position slide switch)
+// ============================================================
+// Switch position detection:
+// - NORMAL MODE (center): GPIO34 = HIGH, GPIO35 = LOW
+// - SPECIAL MODE (up):    GPIO34 = LOW,  GPIO35 = HIGH
+#define PIN_SWITCH_34      34  // Switch position detector A
+#define PIN_SWITCH_35      35  // Switch position detector B
+
+// Status LED (used for firmware feedback)
+#define PIN_STATUS_LED     2   // GPIO2 - Built-in LED on most ESP32 boards
+
+// Battery monitoring (ADC input via voltage divider)
+// IMPORTANT: Set this to your actual battery sense pin!
+// Common options: GPIO36 (VP), GPIO39 (VN), GPIO34, GPIO35
+// If not using battery, this feature will be skipped
+#define PIN_BATTERY_ADC    36  // Change this to your actual battery sense pin
+#define BATTERY_ENABLED    true  // Set to false to disable battery monitoring
 
 // SD Card pins (using default VSPI)
 #define PIN_SD_CS     13  // Adjust based on your hardware
@@ -54,12 +68,38 @@
 #define WAKE_HOUR     1
 #define WAKE_MINUTE   0
 
-// Button timing
+// Button/Switch timing
 #define BUTTON_DEBOUNCE_MS    50
 #define BUTTON_LONG_PRESS_MS  6000  // 6 seconds for factory reset
 
 // WiFi connection timeout
 #define WIFI_CONNECT_TIMEOUT  20000  // 20 seconds
+
+// ============================================================
+// NEW: Panel Protection & Throttling
+// ============================================================
+#define MIN_REFRESH_INTERVAL_MS     (5 * 60 * 1000)  // 5 minutes minimum between refreshes
+#define RATE_LIMIT_WINDOW_MS        (2 * 60 * 1000)  // 2 minute window for rate limiting
+#define RATE_LIMIT_MAX_REFRESHES    3                // Max 3 refreshes within window
+
+// ============================================================
+// NEW: Battery Configuration
+// ============================================================
+#define BATTERY_LOW_THRESHOLD       20   // Percentage - show "TIME TO CHARGE" warning
+#define BATTERY_CRITICAL_THRESHOLD  10   // Percentage - enter extended sleep
+#define BATTERY_CRITICAL_SLEEP_HOURS 6   // Hours to sleep when critically low
+
+// Battery voltage calibration (adjust for your voltage divider)
+// Default assumes 2:1 divider (e.g., 8.4V max -> 4.2V at ADC input)
+#define BATTERY_VOLTAGE_MIN         6.0f  // Empty battery voltage
+#define BATTERY_VOLTAGE_MAX         8.4f  // Full battery voltage (2S LiPo)
+#define BATTERY_ADC_REFERENCE       3.3f  // ESP32 ADC reference voltage
+#define BATTERY_DIVIDER_RATIO       2.0f  // Voltage divider ratio
+
+// ============================================================
+// NEW: WiFi Auto-Recovery Configuration
+// ============================================================
+#define WIFI_MAX_FAILURES_BEFORE_RESET  3  // Enter setup mode after 3 failed boots
 
 // ============================================================
 // STORAGE CONFIGURATION

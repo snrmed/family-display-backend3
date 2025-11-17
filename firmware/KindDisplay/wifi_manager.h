@@ -8,10 +8,14 @@
 #include <Preferences.h>
 #include "config.h"
 
+// Forward declaration to avoid circular dependency
+class LEDStatus;
+
 // ============================================================
 // WiFi Configuration Manager
 // ============================================================
 // Handles WiFi credentials storage and setup portal
+// NEW: Integrated with LED status feedback
 // ============================================================
 
 class WiFiManager {
@@ -21,11 +25,13 @@ public:
     // Check if WiFi credentials are stored
     bool hasCredentials();
 
-    // Load and connect to WiFi
-    bool connect();
+    // Load and connect to WiFi (with LED feedback)
+    // Pass LED pointer for status indication
+    bool connect(LEDStatus* led = nullptr);
 
-    // Start configuration portal (AP mode)
-    void startConfigPortal();
+    // Start configuration portal (AP mode with LED slow blink)
+    // Pass LED pointer for status indication
+    void startConfigPortal(LEDStatus* led = nullptr);
 
     // Save WiFi credentials to NVS
     bool saveCredentials(const String& ssid, const String& password, const String& backendUrl);
@@ -47,6 +53,7 @@ private:
     WebServer* _server;
     DNSServer* _dnsServer;
     bool _configPortalRunning;
+    LEDStatus* _led;  // NEW: LED status indicator
 
     // Web server handlers
     void handleRoot();
