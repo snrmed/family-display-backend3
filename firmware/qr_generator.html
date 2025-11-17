@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kin:D - QR Code Generator</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        :root {
+            --bg: #0f0f0f;
+            --panel: #1a1a1a;
+            --panel-hover: #212121;
+            --border: #2d2d2d;
+            --text: #e8e8e8;
+            --text-muted: #888;
+            --brand: #2d8cf0;
+            --brand-hover: #1a6ec0;
+            --radius: 8px;
+            --shadow: 0 4px 16px rgba(0,0,0,0.4);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        .brand {
+            font-size: 36px;
+            font-weight: 700;
+            color: var(--brand);
+            margin-bottom: 8px;
+        }
+        .tagline {
+            font-size: 18px;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+        }
+        .description {
+            font-size: 14px;
+            color: var(--text-muted);
+            line-height: 1.6;
+        }
+        .panel {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: var(--shadow);
+        }
+        h2 {
+            font-size: 18px;
+            margin-bottom: 20px;
+            color: var(--brand);
+        }
+        label {
+            display: block;
+            margin-top: 16px;
+            margin-bottom: 8px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        input {
+            width: 100%;
+            padding: 12px;
+            background: var(--panel-hover);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            color: var(--text);
+            font-size: 14px;
+        }
+        input:focus {
+            outline: none;
+            border-color: var(--brand);
+        }
+        button {
+            width: 100%;
+            padding: 14px;
+            margin-top: 20px;
+            background: var(--brand);
+            color: white;
+            border: none;
+            border-radius: var(--radius);
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        button:hover {
+            background: var(--brand-hover);
+        }
+        .qr-output {
+            margin-top: 30px;
+            text-align: center;
+            display: none;
+        }
+        #qrcode {
+            display: inline-block;
+            padding: 20px;
+            background: white;
+            border-radius: var(--radius);
+            margin: 20px 0;
+        }
+        .qr-info {
+            background: var(--panel-hover);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 16px;
+            margin-top: 20px;
+            font-size: 13px;
+            text-align: left;
+        }
+        .qr-info code {
+            background: var(--bg);
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: var(--brand);
+        }
+        .print-btn {
+            background: var(--panel-hover);
+            border: 1px solid var(--border);
+            color: var(--text);
+            margin-top: 12px;
+        }
+        .print-btn:hover {
+            background: var(--border);
+        }
+        @media print {
+            body {
+                background: white;
+            }
+            .panel, .header .description {
+                display: none;
+            }
+            .qr-output {
+                display: block !important;
+            }
+            .qr-info, .print-btn {
+                display: none;
+            }
+            #qrcode {
+                margin: 40px auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="brand">Kin:D</div>
+            <div class="tagline">make a smile</div>
+            <p class="description">
+                Generate QR codes for your Kin:D displays.<br>
+                Print and attach to each device for easy setup.
+            </p>
+        </div>
+
+        <div class="panel">
+            <h2>QR Code Generator</h2>
+            <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;">
+                Enter device details below to generate a setup QR code. Users can scan this to quickly connect to the device's WiFi setup portal.
+            </p>
+
+            <label for="deviceId">Device ID (optional)</label>
+            <input type="text" id="deviceId" placeholder="e.g., ESP32-A1B2C3D4">
+
+            <label for="setupUrl">Setup URL</label>
+            <input type="text" id="setupUrl" value="http://192.168.4.1" placeholder="http://192.168.4.1">
+
+            <label for="label">Label Text (optional)</label>
+            <input type="text" id="label" placeholder="e.g., Living Room Display">
+
+            <button onclick="generateQR()">Generate QR Code</button>
+        </div>
+
+        <div class="qr-output" id="output">
+            <h2>Your QR Code</h2>
+            <div id="qrcode"></div>
+            <div class="qr-info">
+                <strong>Setup Instructions:</strong><br>
+                1. Connect to WiFi: <code>KIND-Setup</code><br>
+                2. Password: <code>kind1234</code><br>
+                3. Scan QR code or visit: <code id="urlDisplay">http://192.168.4.1</code><br>
+                4. Enter device name and WiFi credentials
+            </div>
+            <button class="print-btn" onclick="window.print()">🖨️ Print QR Code</button>
+            <button class="print-btn" onclick="downloadQR()">💾 Download PNG</button>
+        </div>
+    </div>
+
+    <script>
+        let qrcodeInstance = null;
+
+        function generateQR() {
+            const deviceId = document.getElementById('deviceId').value;
+            const setupUrl = document.getElementById('setupUrl').value;
+            const label = document.getElementById('label').value;
+
+            // Clear previous QR code
+            const qrContainer = document.getElementById('qrcode');
+            qrContainer.innerHTML = '';
+
+            // Generate new QR code
+            qrcodeInstance = new QRCode(qrContainer, {
+                text: setupUrl,
+                width: 256,
+                height: 256,
+                colorDark: "#000000",
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.M
+            });
+
+            // Update URL display
+            document.getElementById('urlDisplay').textContent = setupUrl;
+
+            // Show output
+            document.getElementById('output').style.display = 'block';
+
+            // Scroll to QR code
+            setTimeout(() => {
+                document.getElementById('output').scrollIntoView({ behavior: 'smooth' });
+            }, 100);
+        }
+
+        function downloadQR() {
+            const canvas = document.querySelector('#qrcode canvas');
+            if (canvas) {
+                const link = document.createElement('a');
+                const label = document.getElementById('label').value || 'kind-display';
+                link.download = `${label.replace(/\s+/g, '-').toLowerCase()}-qr.png`;
+                link.href = canvas.toDataURL();
+                link.click();
+            }
+        }
+
+        // Generate default QR on load
+        window.addEventListener('load', () => {
+            // Don't auto-generate, let user click button
+        });
+    </script>
+</body>
+</html>

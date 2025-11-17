@@ -21,10 +21,10 @@ public:
     // Fetch RAW7 image from backend
     // Returns buffer containing RAW7 data (must be freed by caller)
     // Sets actualSize to the number of bytes received
-    uint8_t* fetchImage(const char* backendUrl, size_t& actualSize);
+    uint8_t* fetchImage(const char* backendUrl, const char* deviceName, size_t& actualSize);
 
     // Fetch a new background (triggers backend reroll)
-    bool triggerBackgroundReroll(const char* backendUrl);
+    bool triggerBackgroundReroll(const char* backendUrl, const char* deviceName);
 
     // Stream RAW7 directly to callback function (memory efficient)
     // Callback is called with chunks of data as they arrive

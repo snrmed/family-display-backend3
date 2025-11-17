@@ -7,11 +7,11 @@ RAW7Decoder::~RAW7Decoder() {
     _http.end();
 }
 
-uint8_t* RAW7Decoder::fetchImage(const char* backendUrl, size_t& actualSize) {
+uint8_t* RAW7Decoder::fetchImage(const char* backendUrl, const char* deviceName, size_t& actualSize) {
     actualSize = 0;
 
-    // Build full URL
-    String url = String(backendUrl) + String(RAW7_ENDPOINT);
+    // Build full URL with device name
+    String url = String(backendUrl) + "/v1/raw7?device=" + String(deviceName);
     DEBUG_PRINTF("RAW7: Fetching from %s\n", url.c_str());
 
     // Allocate buffer for RAW7 image
@@ -126,8 +126,8 @@ bool RAW7Decoder::streamImage(const char* backendUrl, ChunkCallback callback, vo
     return (totalRead == RAW7_SIZE);
 }
 
-bool RAW7Decoder::triggerBackgroundReroll(const char* backendUrl) {
-    String url = String(backendUrl) + String(REROLL_ENDPOINT);
+bool RAW7Decoder::triggerBackgroundReroll(const char* backendUrl, const char* deviceName) {
+    String url = String(backendUrl) + "/v1/frame_bg_reroll?device=" + String(deviceName);
     DEBUG_PRINTF("RAW7: Triggering background reroll at %s\n", url.c_str());
 
     _http.begin(url);
