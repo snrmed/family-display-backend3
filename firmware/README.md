@@ -2,6 +2,111 @@
 
 Complete firmware for the Kin:D / Family Display 7-color e-ink device.
 
+---
+
+## 🚀 Quick Start Guide (For Beginners)
+
+**Never programmed an ESP32 before? Start here!**
+
+### What You'll Need
+- ✅ Your ESP32 e-ink development board
+- ✅ USB-C cable
+- ✅ Computer (Windows, Mac, or Linux)
+- ✅ WiFi network
+- ✅ 15 minutes
+
+### Step 1: Install PlatformIO
+
+**Option A: VS Code (Easiest)**
+1. Download and install [VS Code](https://code.visualstudio.com/)
+2. Open VS Code
+3. Click Extensions icon (left sidebar)
+4. Search for "PlatformIO IDE"
+5. Click Install and wait 2-3 minutes
+6. Restart VS Code
+
+**Option B: Command Line**
+```bash
+pip install platformio
+```
+
+### Step 2: Get the Code
+
+Clone this repository or download the `firmware` folder:
+```bash
+git clone https://github.com/snrmed/family-display-backend3.git
+cd family-display-backend3/firmware
+```
+
+### Step 3: Connect Your ESP32
+
+1. Plug ESP32 into your computer with USB-C cable
+2. Wait 10 seconds for drivers to install
+3. The ESP32 should light up
+
+### Step 4: Upload Firmware
+
+**Using VS Code:**
+1. Open the `firmware` folder in VS Code
+2. Look at the bottom blue bar
+3. Click ✓ (checkmark) to build
+4. Wait 1-2 minutes for compilation
+5. Click → (arrow) to upload
+6. Wait 30 seconds
+
+**Using Terminal:**
+```bash
+cd firmware
+pio run -t upload
+```
+
+### Step 5: First Time Setup
+
+1. **E-ink displays QR code** with setup instructions
+2. **On your phone**: Connect to WiFi `KIND-Setup` (password: `kind1234`)
+3. **Browser opens** to beautiful setup page (or go to `http://192.168.4.1`)
+4. **Enter**:
+   - Display name (e.g., "Living Room")
+   - Your WiFi network
+   - Your WiFi password
+5. **Click** "Connect & Continue"
+6. **Device reboots** and fetches first image (takes 30-60 seconds)
+7. **Done!** Display shows your content
+
+### Hardware Controls (3-Position Switch)
+
+Your board has a 3-position switch labeled `0`, `35`, `34`:
+
+| Position | GPIO | Action |
+|----------|------|--------|
+| **DOWN** (34) | GPIO 34 | Get new background variant |
+| **CENTER** (35) | GPIO 35 | Neutral (no action) |
+| **UP** (0) | GPIO 0 | Factory reset (hold 6 seconds) |
+
+**To get a new background:** Flip switch DOWN
+**To factory reset:** Flip switch UP and hold for 6+ seconds
+
+### Troubleshooting
+
+**"Upload failed"**
+- Try a different USB cable (some are power-only)
+- Hold BOOT button while uploading
+- Install [USB drivers](https://www.silabs.com/developers/usb-to-uart-bridge-vcp-drivers) (Windows)
+
+**"WiFi connection failed"**
+- Check password (case-sensitive!)
+- Use 2.4GHz WiFi (ESP32 doesn't support 5GHz)
+- Factory reset and try again
+
+**"Display shows red screen"**
+- Red = error occurred
+- Connect serial monitor: `pio device monitor`
+- Check error message
+
+**Need more help?** See detailed sections below.
+
+---
+
 ## 📋 Hardware Specifications
 
 ### Display
@@ -30,14 +135,24 @@ Complete firmware for the Kin:D / Family Display 7-color e-ink device.
 | 5V             | 5V         | Power |
 | GND            | GND        | Ground |
 
-### Optional: External Button
+### 3-Position Control Switch
 
-| Button Pin | ESP32 GPIO |
-|------------|------------|
-| Button     | GPIO 0 (or configure in `config.h`) |
-| GND        | GND |
+The e-ink dev board includes a built-in 3-position switch:
 
-> **Note**: By default, the firmware uses GPIO 0 (BOOT button). You can add an external button for easier access.
+| Switch Position | GPIO | Function |
+|----------------|------|----------|
+| DOWN (34) | GPIO 34 | Background reroll |
+| CENTER (35) | GPIO 35 | Neutral (no action) |
+| UP (0) | GPIO 0 | Factory reset (hold 6s) |
+
+**Physical layout on board:**
+```
+    ┌─────────┐
+    │  ○ (0)  │ ← UP: Factory reset
+    │  ○ (35) │ ← CENTER: Neutral
+    │  ○ (34) │ ← DOWN: Reroll background
+    └─────────┘
+```
 
 ### SD Card (Optional)
 
