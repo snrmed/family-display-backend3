@@ -37,11 +37,11 @@
 #define PIN_BATTERY_ADC    36  // Change this to your actual battery sense pin
 #define BATTERY_ENABLED    true  // Set to false to disable battery monitoring
 
-// SD Card pins (using default VSPI)
-#define PIN_SD_CS     13  // Adjust based on your hardware
-#define PIN_SD_MOSI   15
-#define PIN_SD_MISO   19  // FIXED: Was GPIO2 (conflicted with LED), now GPIO19 (standard VSPI MISO)
-#define PIN_SD_SCK    14
+// SD Card pins (sharing VSPI with display, different CS)
+#define PIN_SD_CS     13  // Separate chip select for SD card
+#define PIN_SD_MOSI   23  // Shared with display (VSPI MOSI)
+#define PIN_SD_MISO   19  // VSPI MISO
+#define PIN_SD_SCK    18  // Shared with display (VSPI SCK)
 
 // ============================================================
 // NETWORK CONFIGURATION

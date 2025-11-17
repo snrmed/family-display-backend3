@@ -6,9 +6,8 @@ SDManager::SDManager() : _initialized(false), _csPin(PIN_SD_CS) {
 bool SDManager::begin() {
     DEBUG_PRINTLN("SD: Initializing SD card");
 
-    // Initialize SPI for SD card
-    SPI.begin(PIN_SD_SCK, PIN_SD_MISO, PIN_SD_MOSI, _csPin);
-
+    // SPI already initialized by display driver
+    // SD card shares the same SPI bus, just uses different CS pin
     if (!SD.begin(_csPin)) {
         DEBUG_PRINTLN("SD: Card mount failed or not present");
         _initialized = false;
