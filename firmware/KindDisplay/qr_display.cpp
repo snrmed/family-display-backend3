@@ -1,5 +1,5 @@
 #include "qr_display.h"
-#include "qrcode.h"  // Using ricmoo/qrcode library
+#include <qrcode.h>  // Using ricmoo/qrcode library
 
 void QRDisplay::showSetupScreen(SpectraDisplay& display) {
     DEBUG_PRINTLN("QR: Rendering setup screen");
