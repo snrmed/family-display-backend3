@@ -14,9 +14,9 @@
 #define PIN_EPD_BUSY  4
 #define PIN_EPD_RST   16
 #define PIN_EPD_CS    5
-#define PIN_EPD_DC    17
+#define PIN_EPD_DC    23
 #define PIN_EPD_SCK   18
-#define PIN_EPD_MOSI  23
+#define PIN_EPD_MOSI  19
 
 // ============================================================
 // NEW: Mode Switch pins (3-position slide switch)
@@ -38,12 +38,12 @@
 #define BATTERY_ENABLED    true  // Set to false to disable battery monitoring
 
 // SD Card pins (sharing VSPI with display)
-// WARNING: SD card CS appears to share GPIO5 with display CS on this board
-#define SD_CARD_ENABLED   false  // Set to false to disable SD card (use if initialization hangs)
-#define PIN_SD_CS     5   // CS pin (matches board marking, shared with display!)
-#define PIN_SD_MOSI   23  // CMD on board (VSPI MOSI)
-#define PIN_SD_MISO   19  // DAT on board (VSPI MISO)
-#define PIN_SD_SCK    18  // CLK on board (VSPI SCK)
+// CS pins are separate: Display=GPIO5, SD=GPIO13
+#define SD_CARD_ENABLED   true   // SD card now has correct pins!
+#define PIN_SD_CS     13  // CS pin (separate from display CS)
+#define PIN_SD_MOSI   19  // CMD on board (VSPI MOSI, shared with display)
+#define PIN_SD_MISO   27  // DAT on board (VSPI MISO)
+#define PIN_SD_SCK    18  // CLK on board (VSPI SCK, shared with display)
 
 // ============================================================
 // NETWORK CONFIGURATION
@@ -114,7 +114,8 @@
 #define NVS_BACKEND    "backend_url"
 
 // SD Card paths
-#define SD_CACHE_FILE  "/last.raw7"
+#define SD_CACHE_FILE     "/last.raw7"
+#define SD_WELCOME_FILE   "/welcome.raw7"  // Welcome screen for first boot
 
 // ============================================================
 // DISPLAY PALETTE (Spectra-6 E-Ink)
