@@ -28,9 +28,10 @@ public:
     bool triggerBackgroundReroll(const char* backendUrl, const char* deviceName);
 
     // Stream RAW7 directly to callback function (memory efficient)
-    // Callback is called with chunks of data as they arrive
-    typedef void (*ChunkCallback)(const uint8_t* chunk, size_t size, void* userData);
-    bool streamImage(const char* backendUrl, ChunkCallback callback, void* userData);
+    // Callback returns true to continue streaming, false to abort
+    typedef bool (*ChunkCallback)(const uint8_t* chunk, size_t size, void* userData);
+    bool streamImage(const char* backendUrl, const char* deviceName,
+                     ChunkCallback callback, void* userData);
 
 private:
     HTTPClient _http;

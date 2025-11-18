@@ -1,6 +1,12 @@
 #include "sd_manager.h"
+#include "memory_utils.h"
 
-SDManager::SDManager() : _initialized(false), _csPin(PIN_SD_CS) {
+static const char* SD_CACHE_TEMP_FILE = "/last.raw7.tmp";
+
+SDManager::SDManager()
+    : _initialized(false),
+      _csPin(PIN_SD_CS),
+      _cacheBytes(0) {
 }
 
 bool SDManager::begin() {
@@ -13,8 +19,20 @@ bool SDManager::begin() {
     pinMode(_csPin, OUTPUT);
     digitalWrite(_csPin, HIGH);  // CS idle high
 
-    // Initialize SD card library
-    if (!SD.begin(_csPin, SPI, 4000000)) {  // 4MHz for compatibility
+    // Initialize SD card library with retries at lower clock speeds
+    const uint32_t frequencies[] = {8000000, 4000000, 2000000, 1000000};
+    bool mounted = false;
+    for (uint32_t freq : frequencies) {
+        if (SD.begin(_csPin, SPI, freq)) {
+            mounted = true;
+            DEBUG_PRINTF("SD: Initialized at %u Hz\n", freq);
+            break;
+        }
+        DEBUG_PRINTF("SD: Init failed at %u Hz - retrying slower\n", freq);
+        delay(20);
+    }
+
+    if (!mounted) {
         DEBUG_PRINTLN("SD: Card mount failed or not present");
         _initialized = false;
         return false;
@@ -51,6 +69,7 @@ bool SDManager::saveRAW7(const uint8_t* buffer, size_t size) {
 
     DEBUG_PRINTLN("SD: Saving RAW7 image to cache");
 
+    SD.remove(SD_CACHE_FILE);
     File file = SD.open(SD_CACHE_FILE, FILE_WRITE);
     if (!file) {
         DEBUG_PRINTLN("SD: Failed to open file for writing");
@@ -100,7 +119,7 @@ uint8_t* SDManager::loadRAW7(size_t& size) {
     }
 
     // Allocate buffer
-    uint8_t* buffer = (uint8_t*)malloc(fileSize);
+    uint8_t* buffer = allocateRaw7Buffer("SD cache load");
     if (!buffer) {
         DEBUG_PRINTLN("SD: Memory allocation failed");
         file.close();
@@ -128,6 +147,109 @@ bool SDManager::hasCachedImage() {
     }
 
     return SD.exists(SD_CACHE_FILE);
+}
+
+bool SDManager::streamCachedRAW7(StreamCallback callback, void* userData) {
+    if (!_initialized || !callback) {
+        return false;
+    }
+
+    if (!hasCachedImage()) {
+        DEBUG_PRINTLN("SD: No cached RAW7 image to stream");
+        return false;
+    }
+
+    File file = SD.open(SD_CACHE_FILE, FILE_READ);
+    if (!file) {
+        DEBUG_PRINTLN("SD: Failed to open cached file for streaming");
+        return false;
+    }
+
+    uint8_t buffer[HTTP_BUFFER_SIZE];
+    size_t totalRead = 0;
+    bool ok = true;
+
+    while (totalRead < RAW7_SIZE && ok) {
+        size_t toRead = min(sizeof(buffer), RAW7_SIZE - totalRead);
+        int bytes = file.read(buffer, toRead);
+        if (bytes <= 0) {
+            ok = false;
+            break;
+        }
+
+        totalRead += bytes;
+        if (!callback(buffer, bytes, userData)) {
+            ok = false;
+            break;
+        }
+    }
+
+    file.close();
+
+    if (!ok || totalRead != RAW7_SIZE) {
+        DEBUG_PRINTLN("SD: Streaming cached RAW7 failed");
+        return false;
+    }
+
+    DEBUG_PRINTLN("SD: Cached RAW7 streamed successfully");
+    return true;
+}
+
+bool SDManager::beginCacheStream() {
+    if (!_initialized) {
+        return false;
+    }
+
+    if (_cacheStream) {
+        _cacheStream.close();
+    }
+
+    SD.remove(SD_CACHE_TEMP_FILE);
+    _cacheStream = SD.open(SD_CACHE_TEMP_FILE, FILE_WRITE);
+    _cacheBytes = 0;
+
+    if (!_cacheStream) {
+        DEBUG_PRINTLN("SD: Failed to open temp cache file for streaming write");
+        return false;
+    }
+
+    DEBUG_PRINTLN("SD: Began streaming write to cache");
+    return true;
+}
+
+bool SDManager::appendCacheStream(const uint8_t* data, size_t size) {
+    if (!_cacheStream || data == nullptr || size == 0) {
+        return false;
+    }
+
+    size_t written = _cacheStream.write(data, size);
+    if (written != size) {
+        DEBUG_PRINTF("SD: Stream write error - wrote %d of %d bytes\n",
+                     written, size);
+        _cacheStream.close();
+        return false;
+    }
+
+    _cacheBytes += written;
+    return true;
+}
+
+void SDManager::finishCacheStream(bool success) {
+    if (_cacheStream) {
+        _cacheStream.close();
+    }
+
+    if (!success || _cacheBytes != RAW7_SIZE) {
+        DEBUG_PRINTLN("SD: Stream cache incomplete - removing temp file");
+        SD.remove(SD_CACHE_TEMP_FILE);
+    } else {
+        DEBUG_PRINTF("SD: Stream cache saved (%d bytes)\n",
+                     static_cast<int>(_cacheBytes));
+        SD.remove(SD_CACHE_FILE);
+        SD.rename(SD_CACHE_TEMP_FILE, SD_CACHE_FILE);
+    }
+
+    _cacheBytes = 0;
 }
 
 uint8_t* SDManager::loadRAW7FromFile(const char* filepath, size_t& size) {
@@ -161,7 +283,7 @@ uint8_t* SDManager::loadRAW7FromFile(const char* filepath, size_t& size) {
     }
 
     // Allocate buffer
-    uint8_t* buffer = (uint8_t*)malloc(fileSize);
+    uint8_t* buffer = allocateRaw7Buffer("SD file load");
     if (!buffer) {
         DEBUG_PRINTLN("SD: Memory allocation failed");
         file.close();

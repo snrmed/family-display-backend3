@@ -1,4 +1,5 @@
 #include "raw7_decoder.h"
+#include "memory_utils.h"
 
 RAW7Decoder::RAW7Decoder() {
 }
@@ -20,7 +21,7 @@ uint8_t* RAW7Decoder::fetchImage(const char* backendUrl, const char* deviceName,
     DEBUG_PRINTF("RAW7: Need to allocate: %d bytes\n", RAW7_SIZE);
 
     // Allocate buffer for RAW7 image
-    uint8_t* buffer = (uint8_t*)malloc(RAW7_SIZE);
+    uint8_t* buffer = allocateRaw7Buffer("RAW7 download");
     if (!buffer) {
         DEBUG_PRINTLN("RAW7: ERROR - Memory allocation failed");
         DEBUG_PRINTF("RAW7: Free heap: %d bytes (insufficient for %d bytes)\n",
@@ -85,13 +86,14 @@ uint8_t* RAW7Decoder::fetchImage(const char* backendUrl, const char* deviceName,
     }
 }
 
-bool RAW7Decoder::streamImage(const char* backendUrl, ChunkCallback callback, void* userData) {
-    if (!callback) {
-        DEBUG_PRINTLN("RAW7: ERROR - No callback provided");
+bool RAW7Decoder::streamImage(const char* backendUrl, const char* deviceName,
+                              ChunkCallback callback, void* userData) {
+    if (!callback || backendUrl == nullptr || deviceName == nullptr) {
+        DEBUG_PRINTLN("RAW7: ERROR - Invalid stream parameters");
         return false;
     }
 
-    String url = String(backendUrl) + String(RAW7_ENDPOINT);
+    String url = String(backendUrl) + "/v1/raw7?device=" + String(deviceName);
     DEBUG_PRINTF("RAW7: Streaming from %s\n", url.c_str());
 
     _http.begin(url);
@@ -117,7 +119,11 @@ bool RAW7Decoder::streamImage(const char* backendUrl, ChunkCallback callback, vo
 
             int read = stream->readBytes(buffer, toRead);
             if (read > 0) {
-                callback(buffer, read, userData);
+                if (!callback(buffer, read, userData)) {
+                    DEBUG_PRINTLN("RAW7: Stream aborted by callback");
+                    _http.end();
+                    return false;
+                }
                 totalRead += read;
 
                 if (totalRead % 10000 == 0) {

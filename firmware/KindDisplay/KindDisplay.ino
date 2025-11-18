@@ -47,6 +47,18 @@ SDManager sdCard;
 LEDStatus statusLED;       // NEW: Status LED (GPIO2)
 BatteryMonitor battery;    // NEW: Battery monitoring
 
+struct Raw7StreamContext {
+    SpectraDisplay* display;
+    bool success;
+    size_t totalBytes;
+#if SD_CARD_ENABLED
+    SDManager* sd;
+    bool cacheActive;
+#endif
+};
+
+static bool streamChunkToDisplay(const uint8_t* chunk, size_t size, void* userData);
+
 // ============================================================
 // State Flags
 // ============================================================
@@ -64,6 +76,38 @@ void enterDeepSleep();
 void showErrorScreen(const char* message);
 void checkBatteryAndSleep();      // NEW: Battery check before operations
 void handleFactoryReset();        // NEW: Factory reset handler
+
+static bool streamChunkToDisplay(const uint8_t* chunk, size_t size, void* userData) {
+    if (userData == nullptr) {
+        return false;
+    }
+
+    Raw7StreamContext* ctx = static_cast<Raw7StreamContext*>(userData);
+    if (!ctx->success) {
+        return false;
+    }
+
+    if (chunk == nullptr || size == 0) {
+        return true;
+    }
+
+    if (!ctx->display || !ctx->display->streamRaw7Chunk(chunk, size)) {
+        ctx->success = false;
+        return false;
+    }
+
+    ctx->totalBytes += size;
+
+#if SD_CARD_ENABLED
+    if (ctx->cacheActive && ctx->sd) {
+        if (!ctx->sd->appendCacheStream(chunk, size)) {
+            ctx->cacheActive = false;
+        }
+    }
+#endif
+
+    return true;
+}
 
 // ============================================================
 // Setup - Runs once on boot
@@ -86,6 +130,14 @@ void setup() {
 
     // NEW: Initialize battery monitor
     battery.begin();
+
+#if SD_CARD_ENABLED
+    if (sdCard.begin()) {
+        DEBUG_PRINTLN("SD: Card ready - caching enabled");
+    } else {
+        DEBUG_PRINTLN("SD: Card unavailable - continuing without cache");
+    }
+#endif
 
     // Determine wake reason
     esp_sleep_wakeup_cause_t wakeReason = RTCManager::getWakeupCause();
@@ -233,6 +285,8 @@ void handleSpecialMode() {
 void updateDisplay(bool triggerReroll) {
     DEBUG_PRINTLN("\n--- Updating Display ---");
 
+    bool imageDisplayed = false;
+
     // Memory diagnostics
     DEBUG_PRINTF("Memory: Free heap: %d bytes, Largest block: %d bytes\n",
                  ESP.getFreeHeap(), ESP.getMaxAllocHeap());
@@ -288,8 +342,119 @@ void updateDisplay(bool triggerReroll) {
     // Fetch RAW7 image
     size_t imageSize = 0;
     uint8_t* imageBuffer = imageDecoder.fetchImage(backendUrl.c_str(), deviceName.c_str(), imageSize);
+#if SD_CARD_ENABLED
+    bool usedCachedImage = false;
+#endif
 
-    if (!imageBuffer || imageSize != RAW7_SIZE) {
+    if (imageBuffer && imageSize == RAW7_SIZE) {
+        DEBUG_PRINTLN("Image fetched successfully");
+
+        battery.overlayLowBatteryWarning(imageBuffer, imageSize);
+
+#if SD_CARD_ENABLED
+        if (sdCard.isAvailable() && !usedCachedImage) {
+            if (!sdCard.saveRAW7(imageBuffer, imageSize)) {
+                DEBUG_PRINTLN("SD: Failed to cache RAW7 image");
+            }
+        }
+#endif
+
+        if (display.displayRAW7(imageBuffer, imageSize)) {
+            imageDisplayed = true;
+        } else {
+            DEBUG_PRINTLN("SpectraDisplay: Failed to render RAW7 buffer");
+        }
+
+        free(imageBuffer);
+        imageBuffer = nullptr;
+        display.powerOff();
+    } else if (imageBuffer) {
+        free(imageBuffer);
+        imageBuffer = nullptr;
+    }
+
+    bool memoryLimited = (ESP.getMaxAllocHeap() < RAW7_SIZE);
+
+    if (!imageDisplayed && memoryLimited) {
+        DEBUG_PRINTLN("RAW7: Unable to allocate full buffer - streaming download directly to display");
+        if (display.beginRaw7Stream()) {
+            Raw7StreamContext streamCtx;
+            streamCtx.display = &display;
+            streamCtx.success = true;
+            streamCtx.totalBytes = 0;
+#if SD_CARD_ENABLED
+            streamCtx.sd = sdCard.isAvailable() ? &sdCard : nullptr;
+            streamCtx.cacheActive = streamCtx.sd ? sdCard.beginCacheStream() : false;
+#endif
+
+            bool httpOk = imageDecoder.streamImage(backendUrl.c_str(), deviceName.c_str(),
+                                                   streamChunkToDisplay, &streamCtx);
+            bool streamSuccess = httpOk && streamCtx.success && streamCtx.totalBytes == RAW7_SIZE;
+
+#if SD_CARD_ENABLED
+            if (streamCtx.sd) {
+                sdCard.finishCacheStream(streamSuccess && streamCtx.cacheActive);
+            }
+#endif
+
+            if (streamSuccess) {
+                display.endRaw7Stream();
+                display.powerOff();
+                imageDisplayed = true;
+            } else {
+                display.endRaw7Stream(false);
+                display.powerOff();
+            }
+        }
+    }
+
+#if SD_CARD_ENABLED
+    if (!imageDisplayed && sdCard.isAvailable() && !memoryLimited) {
+        DEBUG_PRINTLN("RAW7: Fetch failed - attempting to load cached image");
+        size_t cachedSize = 0;
+        uint8_t* cachedBuffer = sdCard.loadRAW7(cachedSize);
+        if (cachedBuffer && cachedSize == RAW7_SIZE) {
+            if (display.displayRAW7(cachedBuffer, cachedSize)) {
+                imageDisplayed = true;
+                usedCachedImage = true;
+                DEBUG_PRINTLN("RAW7: Cached image loaded successfully");
+            } else {
+                DEBUG_PRINTLN("SD: Failed to display cached RAW7 buffer");
+            }
+            free(cachedBuffer);
+            display.powerOff();
+        } else if (cachedBuffer) {
+            free(cachedBuffer);
+        }
+    }
+
+    if (!imageDisplayed && sdCard.isAvailable() && sdCard.hasCachedImage()) {
+        DEBUG_PRINTLN("SD: Streaming cached RAW7 image to display");
+        if (display.beginRaw7Stream()) {
+            Raw7StreamContext cacheCtx;
+            cacheCtx.display = &display;
+            cacheCtx.success = true;
+            cacheCtx.totalBytes = 0;
+            cacheCtx.sd = nullptr;
+            cacheCtx.cacheActive = false;
+
+            bool cacheOk = sdCard.streamCachedRAW7(streamChunkToDisplay, &cacheCtx);
+            bool cacheSuccess = cacheOk && cacheCtx.success && cacheCtx.totalBytes == RAW7_SIZE;
+
+            if (cacheSuccess) {
+                display.endRaw7Stream();
+                display.powerOff();
+                imageDisplayed = true;
+                usedCachedImage = true;
+            } else {
+                display.endRaw7Stream(false);
+                display.powerOff();
+            }
+        }
+    }
+#endif
+
+    if (!imageDisplayed) {
         DEBUG_PRINTLN("Image fetch failed");
 
         showErrorScreen("Image Fetch Failed");
@@ -297,18 +462,6 @@ void updateDisplay(bool triggerReroll) {
         delay(3000);
         return;
     }
-
-    DEBUG_PRINTLN("Image fetched successfully");
-
-    // NEW: Apply low battery overlay if needed (Part 8)
-    battery.overlayLowBatteryWarning(imageBuffer, imageSize);
-
-    // Display image
-    display.displayRAW7(imageBuffer, imageSize);
-
-    // Clean up
-    free(imageBuffer);
-    display.powerOff();
 
     // NEW: Show solid LED for 3 seconds after successful display (Part 1)
     statusLED.show(LED_SOLID_3S);

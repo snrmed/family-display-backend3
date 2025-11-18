@@ -24,6 +24,11 @@ public:
     // Buffer must be 192000 bytes (800×480 pixels, 2 pixels per byte)
     bool displayRAW7(const uint8_t* buffer, size_t bufferSize);
 
+    // Streaming helpers so callers can feed RAW7 chunks without buffering
+    bool beginRaw7Stream();
+    bool streamRaw7Chunk(const uint8_t* chunk, size_t chunkSize);
+    bool endRaw7Stream(bool refreshDisplay = true);
+
     // Clear display to a single color
     void clear(uint8_t color = EPD_WHITE);
 
@@ -52,6 +57,8 @@ private:
 
     // Flag to track initialization state
     bool _initialized;
+    bool _streaming;
+    size_t _streamedBytes;
 };
 
 #endif // DISPLAY_DRIVER_H

@@ -1,10 +1,11 @@
 #include "text_welcome.h"
+#include "memory_utils.h"
 
 bool TextWelcome::showWelcomeScreen(SpectraDisplay& display) {
     DEBUG_PRINTLN("Welcome: Generating text-based welcome screen");
 
     // Allocate RAW7 buffer directly (192KB)
-    uint8_t* raw7Buffer = (uint8_t*)malloc(RAW7_SIZE);
+    uint8_t* raw7Buffer = allocateRaw7Buffer("Welcome RAW7");
     if (!raw7Buffer) {
         DEBUG_PRINTLN("Welcome: RAW7 buffer allocation failed");
         return false;

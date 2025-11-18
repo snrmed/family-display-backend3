@@ -39,6 +39,15 @@ public:
     // Check if cached image exists
     bool hasCachedImage();
 
+    // Stream cached RAW7 image without allocating
+    typedef bool (*StreamCallback)(const uint8_t* chunk, size_t size, void* userData);
+    bool streamCachedRAW7(StreamCallback callback, void* userData);
+
+    // Incrementally save a RAW7 download to cache (used for streaming)
+    bool beginCacheStream();
+    bool appendCacheStream(const uint8_t* data, size_t size);
+    void finishCacheStream(bool success);
+
     // Check if a specific file exists
     bool fileExists(const char* filepath);
 
@@ -48,6 +57,8 @@ public:
 private:
     bool _initialized;
     uint8_t _csPin;
+    File _cacheStream;
+    size_t _cacheBytes;
 };
 
 #endif // SD_MANAGER_H

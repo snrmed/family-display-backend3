@@ -16,7 +16,10 @@
 #define EPD_CMD_RESOLUTION_SETTING      0x61
 #define EPD_CMD_GET_STATUS              0x71
 
-SpectraDisplay::SpectraDisplay() : _initialized(false) {
+SpectraDisplay::SpectraDisplay()
+    : _initialized(false),
+      _streaming(false),
+      _streamedBytes(0) {
 }
 
 bool SpectraDisplay::begin() {
@@ -31,11 +34,8 @@ bool SpectraDisplay::begin() {
     digitalWrite(PIN_EPD_CS, HIGH);
     digitalWrite(PIN_EPD_DC, HIGH);
 
-    // Initialize SPI if not already done (SD card initializes it if enabled)
-    // This handles the case where SD_CARD_ENABLED = false
-    #if !SD_CARD_ENABLED
+    // Initialize SPI bus (safe to call even if SD card already configured it)
     SPI.begin(PIN_EPD_SCK, PIN_SD_MISO, PIN_EPD_MOSI, -1);
-    #endif
     SPI.beginTransaction(SPISettings(4000000, MSBFIRST, SPI_MODE0));
 
     // Hardware reset
@@ -170,38 +170,80 @@ bool SpectraDisplay::displayRAW7(const uint8_t* buffer, size_t bufferSize) {
 
     DEBUG_PRINTLN("SpectraDisplay: Starting image transmission");
 
-    // Power on the display
-    powerOn();
-
-    // Prepare to send image data
-    sendCommand(EPD_CMD_DATA_START_TRANSMISSION);
-
-    // Unpack RAW7 format (2 pixels per byte) to EPD format
-    // RAW7: high nibble = first pixel, low nibble = second pixel
-    uint8_t* expandedBuffer = new uint8_t[DISPLAY_WIDTH * DISPLAY_HEIGHT];
-    if (!expandedBuffer) {
-        DEBUG_PRINTLN("SpectraDisplay: ERROR - Memory allocation failed");
+    if (!beginRaw7Stream()) {
         return false;
     }
 
-    DEBUG_PRINTLN("SpectraDisplay: Unpacking RAW7 data");
-    for (size_t i = 0; i < bufferSize; i++) {
-        uint8_t packed = buffer[i];
-        expandedBuffer[i * 2] = (packed >> 4) & 0x0F;      // High nibble
-        expandedBuffer[i * 2 + 1] = packed & 0x0F;         // Low nibble
+    const size_t chunkSize = 4096;  // Feed stream helper manageable chunks
+    for (size_t offset = 0; offset < bufferSize; offset += chunkSize) {
+        size_t bytes = min(chunkSize, bufferSize - offset);
+        if (!streamRaw7Chunk(buffer + offset, bytes)) {
+            _streaming = false;
+            return false;
+        }
     }
 
-    // Send expanded pixel data to display
-    DEBUG_PRINTLN("SpectraDisplay: Transmitting to EPD");
-    sendData(expandedBuffer, DISPLAY_WIDTH * DISPLAY_HEIGHT);
-
-    // Clean up
-    delete[] expandedBuffer;
-
-    // Refresh display
-    refresh();
+    endRaw7Stream();
 
     DEBUG_PRINTLN("SpectraDisplay: Display update complete");
+    return true;
+}
+
+bool SpectraDisplay::beginRaw7Stream() {
+    if (!_initialized) {
+        DEBUG_PRINTLN("SpectraDisplay: ERROR - Not initialized");
+        return false;
+    }
+
+    if (_streaming) {
+        return true;
+    }
+
+    powerOn();
+    sendCommand(EPD_CMD_DATA_START_TRANSMISSION);
+    _streaming = true;
+    _streamedBytes = 0;
+    return true;
+}
+
+bool SpectraDisplay::streamRaw7Chunk(const uint8_t* chunk, size_t chunkSize) {
+    if (!_streaming || chunk == nullptr || chunkSize == 0) {
+        return chunkSize == 0;
+    }
+
+    const size_t rawChunk = 2048;  // Converts to 4KB expanded chunk
+    uint8_t expandedBuffer[rawChunk * 2];
+
+    size_t processed = 0;
+    while (processed < chunkSize) {
+        size_t toProcess = min(rawChunk, chunkSize - processed);
+        for (size_t i = 0; i < toProcess; i++) {
+            uint8_t packed = chunk[processed + i];
+            expandedBuffer[i * 2] = (packed >> 4) & 0x0F;      // High nibble
+            expandedBuffer[i * 2 + 1] = packed & 0x0F;         // Low nibble
+        }
+        sendData(expandedBuffer, toProcess * 2);
+        processed += toProcess;
+    }
+
+    _streamedBytes += chunkSize;
+    return true;
+}
+
+bool SpectraDisplay::endRaw7Stream(bool refreshDisplay) {
+    if (!_streaming) {
+        return false;
+    }
+
+    _streaming = false;
+    DEBUG_PRINTF("SpectraDisplay: Streamed %u bytes\n",
+                 static_cast<unsigned>(_streamedBytes));
+    _streamedBytes = 0;
+
+    if (refreshDisplay) {
+        refresh();
+    }
+
     return true;
 }
 
