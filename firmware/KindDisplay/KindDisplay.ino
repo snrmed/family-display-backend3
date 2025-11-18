@@ -104,8 +104,16 @@ void setup() {
 
         // Only GPIO34 (DOWN) is enabled for wake
         if (wakePin == PIN_SWITCH_34) {
-            currentMode = MODE_NORMAL;
-            DEBUG_PRINTLN("Switch: Rotated DOWN (GPIO34) → NORMAL mode (refresh)");
+            // Check for factory reset (6 clicks within 10 seconds)
+            if (rtcMgr.checkRotaryClicks()) {
+                DEBUG_PRINTLN("Switch: Rotated DOWN (GPIO34) → FACTORY RESET (6 clicks detected)");
+                handleFactoryReset();
+                return;  // Never returns
+            }
+
+            // Single click: trigger background reroll
+            currentMode = MODE_SPECIAL;
+            DEBUG_PRINTLN("Switch: Rotated DOWN (GPIO34) → SPECIAL mode (background reroll)");
         } else {
             currentMode = MODE_NORMAL;
             DEBUG_PRINTLN("Switch: Unknown wake pin → NORMAL mode (default)");
@@ -408,6 +416,7 @@ void handleFactoryReset() {
 
     // Clear RTC data as well
     rtcMgr.resetWiFiFailureCount();
+    rtcMgr.resetRotaryClickCount();
 
     // Show reset message on display
     display.clear(EPD_BLACK);

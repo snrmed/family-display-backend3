@@ -169,6 +169,8 @@ void RTCManager::loadRTCData() {
     rtcData.wifiFailureCount = 0;
     rtcData.lastRefreshTimestamp = 0;
     rtcData.refreshHistoryIndex = 0;
+    rtcData.rotaryClickCount = 0;
+    rtcData.lastRotaryClickMillis = 0;
     for (int i = 0; i < RATE_LIMIT_MAX_REFRESHES; i++) {
         rtcData.refreshHistory[i] = 0;
     }
@@ -302,4 +304,45 @@ bool RTCManager::isRateLimited() {
     }
 
     return limited;
+}
+
+// ============================================================
+// NEW: Rotary Click Tracking (for factory reset detection)
+// ============================================================
+
+bool RTCManager::checkRotaryClicks() {
+    uint32_t now = millis();
+    uint32_t elapsed = now - rtcData.lastRotaryClickMillis;
+
+    #define ROTARY_CLICK_WINDOW_MS 10000  // 10 second window for 6 clicks
+    #define ROTARY_CLICK_FACTORY_RESET 6   // 6 clicks triggers factory reset
+
+    // If more than 10 seconds since last click, reset counter
+    if (elapsed > ROTARY_CLICK_WINDOW_MS) {
+        rtcData.rotaryClickCount = 1;
+        DEBUG_PRINTLN("Rotary: Click #1 (counter reset)");
+    } else {
+        // Increment counter
+        rtcData.rotaryClickCount++;
+        DEBUG_PRINTF("Rotary: Click #%d (within %lu ms)\n", rtcData.rotaryClickCount, elapsed);
+    }
+
+    // Update last click time
+    rtcData.lastRotaryClickMillis = now;
+    saveRTCData();
+
+    // Check if factory reset threshold reached
+    if (rtcData.rotaryClickCount >= ROTARY_CLICK_FACTORY_RESET) {
+        DEBUG_PRINTLN("Rotary: FACTORY RESET TRIGGERED (6 clicks detected)");
+        return true;
+    }
+
+    return false;
+}
+
+void RTCManager::resetRotaryClickCount() {
+    rtcData.rotaryClickCount = 0;
+    rtcData.lastRotaryClickMillis = 0;
+    saveRTCData();
+    DEBUG_PRINTLN("Rotary: Click counter reset");
 }
