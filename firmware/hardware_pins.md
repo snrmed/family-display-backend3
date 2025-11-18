@@ -1,3 +1,6 @@
+// Pin definitions for ESP32 + Spectra-6 wiring.
+// This file is included directly from firmware/KindDisplay/config.h so the
+// firmware and documentation always reference the same mapping.
 #define EPD_BUSY    4
 #define EPD_RST     16
 #define EPD_DC      23
