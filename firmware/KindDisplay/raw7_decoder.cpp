@@ -146,7 +146,7 @@ bool RAW7Decoder::triggerBackgroundReroll(const char* backendUrl, const char* de
     _http.begin(url);
     _http.setTimeout(HTTP_TIMEOUT);
 
-    int httpCode = _http.GET();
+    int httpCode = _http.POST("");  // POST with empty body (device in query param)
     _http.end();
 
     if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_NO_CONTENT) {
