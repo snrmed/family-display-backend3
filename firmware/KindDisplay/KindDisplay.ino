@@ -92,6 +92,12 @@ void setup() {
     DEBUG_PRINT("Wake Reason: ");
     DEBUG_PRINTLN(RTCManager::getWakeupReasonString());
 
+    // If woken by rotary switch, show which pin
+    if (ButtonHandler::wasWakeSource()) {
+        uint8_t wakePin = ButtonHandler::getWakePin();
+        DEBUG_PRINTF("Switch: Woken by GPIO%d (rotary position)\n", wakePin);
+    }
+
     // Initialize switch handler
     button.begin();
 
@@ -313,11 +319,10 @@ void enterDeepSleep() {
     // NEW: Turn off LED before sleep (Part 1)
     statusLED.off();
 
-    // Disable button wake - causes boot loop with level-triggered wakeup
-    // The switch uses level detection (ANY_HIGH) which triggers immediately
-    // when the switch is in NORMAL (GPIO34=HIGH) or SPECIAL (GPIO35=HIGH) position
-    // Relying on timer wake instead (primary wake method)
-    // button.enableWakeup();  // DISABLED - causes boot loop
+    // Enable rotary switch wake from deep sleep
+    // Momentary rotary switch triggers briefly on rotation
+    // EXT1 wake on ANY_HIGH will detect rotation to position 34 or 35
+    button.enableWakeup();
 
     // Calculate and enter deep sleep
     rtcMgr.sleepUntilWake();
