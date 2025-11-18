@@ -1,5 +1,6 @@
 #include "flash_cache.h"
 #include "raw7_decoder.h"
+#include "http_task.h"
 
 // Flash cache file path
 #define FLASH_CACHE_FILE "/last.raw7"
@@ -79,6 +80,7 @@ bool FlashCache::downloadRaw7ToCache(RAW7Decoder& decoder,
     }
 
     DEBUG_PRINTLN("Flash: Streaming RAW7 download directly to cache");
+    DEBUG_PRINTLN("Flash: Running HTTPS in dedicated task with 64KB stack to avoid overflow");
 
     // Use temporary file for safe cache update
     const char* tempFile = "/last.raw7.tmp";
@@ -88,43 +90,53 @@ bool FlashCache::downloadRaw7ToCache(RAW7Decoder& decoder,
         SPIFFS.remove(tempFile);
     }
 
-    // Open temp file for writing
-    File cacheFile = SPIFFS.open(tempFile, FILE_WRITE);
-    if (!cacheFile) {
-        DEBUG_PRINTLN("Flash: Failed to open temp file for writing");
+    // Run the HTTPS download in a dedicated task with large stack
+    // This avoids stack overflow during TLS handshake on ESP32 without PSRAM
+    bool downloadSuccess = HttpTask::runWithLargeStack([&]() -> bool {
+        // Open temp file for writing
+        File cacheFile = SPIFFS.open(tempFile, FILE_WRITE);
+        if (!cacheFile) {
+            DEBUG_PRINTLN("Flash: Failed to open temp file for writing");
+            return false;
+        }
+
+        // Set up download context
+        DownloadContext ctx;
+        ctx.file = &cacheFile;
+        ctx.totalWritten = 0;
+
+        // Execute HTTPS download (TLS handshake happens here)
+        bool success = decoder.streamImage(backendUrl, deviceName, downloadChunkCallback, &ctx);
+
+        cacheFile.close();
+
+        if (success && ctx.totalWritten == RAW7_SIZE) {
+            DEBUG_PRINTF("Flash: Successfully downloaded %d bytes to temp file\n", ctx.totalWritten);
+            return true;
+        } else {
+            DEBUG_PRINTF("Flash: Download incomplete - wrote %d of %d bytes\n",
+                        ctx.totalWritten, RAW7_SIZE);
+            SPIFFS.remove(tempFile);  // Remove incomplete temp file
+            return false;
+        }
+    });
+
+    if (!downloadSuccess) {
+        DEBUG_PRINTLN("Flash: Download task failed");
         return false;
     }
 
-    // Set up download context
-    DownloadContext ctx;
-    ctx.file = &cacheFile;
-    ctx.totalWritten = 0;
+    // Atomic replace: remove old cache and rename temp to cache
+    if (SPIFFS.exists(FLASH_CACHE_FILE)) {
+        SPIFFS.remove(FLASH_CACHE_FILE);
+    }
 
-    bool success =
-        decoder.streamImage(backendUrl, deviceName, downloadChunkCallback, &ctx);
-
-    cacheFile.close();
-
-    if (success && ctx.totalWritten == RAW7_SIZE) {
-        DEBUG_PRINTF("Flash: Successfully downloaded %d bytes to temp file\n", ctx.totalWritten);
-
-        // Atomic replace: remove old cache and rename temp to cache
-        if (SPIFFS.exists(FLASH_CACHE_FILE)) {
-            SPIFFS.remove(FLASH_CACHE_FILE);
-        }
-
-        if (SPIFFS.rename(tempFile, FLASH_CACHE_FILE)) {
-            DEBUG_PRINTLN("Flash: Cache updated successfully");
-            return true;
-        } else {
-            DEBUG_PRINTLN("Flash: Failed to rename temp file to cache");
-            SPIFFS.remove(tempFile);
-            return false;
-        }
+    if (SPIFFS.rename(tempFile, FLASH_CACHE_FILE)) {
+        DEBUG_PRINTLN("Flash: Cache updated successfully");
+        return true;
     } else {
-        DEBUG_PRINTF("Flash: Download incomplete - wrote %d of %d bytes\n",
-                    ctx.totalWritten, RAW7_SIZE);
-        SPIFFS.remove(tempFile);  // Remove incomplete temp file
+        DEBUG_PRINTLN("Flash: Failed to rename temp file to cache");
+        SPIFFS.remove(tempFile);
         return false;
     }
 }
