@@ -99,19 +99,7 @@ void setup() {
     currentMode = button.readMode();
     DEBUG_PRINTF("Switch Mode: %s\n", button.getModeString(currentMode));
 
-    // Initialize SD card FIRST (before display)
-    // SD card needs full SPI bus with MISO, so it initializes SPI
-    #if SD_CARD_ENABLED
-    if (sdCard.begin()) {
-        DEBUG_PRINTLN("SD card available");
-    } else {
-        DEBUG_PRINTLN("SD card not available (optional)");
-    }
-    #else
-    DEBUG_PRINTLN("SD card disabled in config");
-    #endif
-
-    // Initialize display (uses SPI already initialized by SD card)
+    // Initialize display
     if (!display.begin()) {
         DEBUG_PRINTLN("FATAL: Display initialization failed");
         statusLED.show(LED_FIVE_QUICK_BLINKS);  // Error indication
@@ -144,13 +132,6 @@ void setup() {
         firstBoot = true;
         handleFirstBoot();
         return;  // Will restart after setup
-    }
-
-    // NEW: Check refresh throttling (Part 7)
-    if (!rtcMgr.canRefreshNow()) {
-        DEBUG_PRINTLN("Refresh throttled - skipping update and returning to sleep");
-        enterDeepSleep();
-        return;
     }
 
     // Handle operation based on switch mode
@@ -189,37 +170,10 @@ void loop() {
 void handleFirstBoot() {
     DEBUG_PRINTLN("\n=== FIRST BOOT / SETUP MODE ===");
 
-    // Try to load and display welcome screen from SD card, or generate text-based fallback
-    bool welcomeDisplayed = false;
-
-    #if SD_CARD_ENABLED
-    if (sdCard.isAvailable() && sdCard.fileExists(SD_WELCOME_FILE)) {
-        DEBUG_PRINTLN("Loading welcome screen from SD card...");
-        size_t size = 0;
-        uint8_t* welcomeBuffer = sdCard.loadRAW7FromFile(SD_WELCOME_FILE, size);
-
-        if (welcomeBuffer && size == RAW7_SIZE) {
-            DEBUG_PRINTLN("Displaying welcome screen from SD card");
-            display.displayRAW7(welcomeBuffer, size);
-            display.powerOff();
-            free(welcomeBuffer);
-            welcomeDisplayed = true;
-        } else {
-            DEBUG_PRINTLN("Failed to load welcome screen from SD card");
-        }
-    } else {
-        DEBUG_PRINTLN("No welcome screen found on SD card");
-    }
-    #endif
-
-    // Fallback to text-based welcome screen if SD card image not available
-    if (!welcomeDisplayed) {
-        DEBUG_PRINTLN("Generating text-based welcome screen...");
-        if (TextWelcome::showWelcomeScreen(display)) {
-            welcomeDisplayed = true;
-        } else {
-            DEBUG_PRINTLN("Failed to generate text-based welcome screen");
-        }
+    // Generate text-based welcome screen
+    DEBUG_PRINTLN("Generating text-based welcome screen...");
+    if (!TextWelcome::showWelcomeScreen(display)) {
+        DEBUG_PRINTLN("Failed to generate text-based welcome screen");
     }
 
     // Show setup instructions
@@ -268,28 +222,6 @@ void updateDisplay(bool triggerReroll) {
         // NEW: Record WiFi failure for auto-recovery (Part 5)
         rtcMgr.recordWiFiFailure();
 
-        // Try to load cached image from SD card
-        #if SD_CARD_ENABLED
-        if (sdCard.isAvailable() && sdCard.hasCachedImage()) {
-            DEBUG_PRINTLN("Loading cached image from SD card");
-            size_t size = 0;
-            uint8_t* cachedImage = sdCard.loadRAW7(size);
-
-            if (cachedImage && size == RAW7_SIZE) {
-                // NEW: Apply battery overlay if needed (Part 8)
-                battery.overlayLowBatteryWarning(cachedImage, size);
-
-                display.displayRAW7(cachedImage, size);
-                free(cachedImage);
-                display.powerOff();
-                DEBUG_PRINTLN("Displayed cached image");
-                return;
-            }
-
-            if (cachedImage) free(cachedImage);
-        }
-        #endif
-
         showErrorScreen("WiFi Failed");
         delay(3000);
         return;
@@ -300,6 +232,14 @@ void updateDisplay(bool triggerReroll) {
 
     // Initialize RTC and sync time
     rtcMgr.begin("pool.ntp.org", 0, 0);  // UTC, adjust gmtOffset as needed
+
+    // NEW: Check refresh throttling AFTER WiFi/NTP sync (Part 7)
+    // This ensures we have accurate time for throttling checks
+    if (!rtcMgr.canRefreshNow()) {
+        DEBUG_PRINTLN("Refresh throttled - skipping update and returning to sleep");
+        WiFi.disconnect(true);
+        return;
+    }
 
     // Get backend URL and device name
     String backendUrl = wifiMgr.getBackendUrl();
@@ -326,28 +266,6 @@ void updateDisplay(bool triggerReroll) {
     if (!imageBuffer || imageSize != RAW7_SIZE) {
         DEBUG_PRINTLN("Image fetch failed");
 
-        // Try cached image
-        #if SD_CARD_ENABLED
-        if (sdCard.isAvailable() && sdCard.hasCachedImage()) {
-            DEBUG_PRINTLN("Falling back to cached image");
-            size_t size = 0;
-            uint8_t* cachedImage = sdCard.loadRAW7(size);
-
-            if (cachedImage && size == RAW7_SIZE) {
-                // NEW: Apply battery overlay (Part 8)
-                battery.overlayLowBatteryWarning(cachedImage, size);
-
-                display.displayRAW7(cachedImage, size);
-                free(cachedImage);
-                display.powerOff();
-                WiFi.disconnect(true);
-                return;
-            }
-
-            if (cachedImage) free(cachedImage);
-        }
-        #endif
-
         showErrorScreen("Image Fetch Failed");
         WiFi.disconnect(true);
         delay(3000);
@@ -358,15 +276,6 @@ void updateDisplay(bool triggerReroll) {
 
     // NEW: Apply low battery overlay if needed (Part 8)
     battery.overlayLowBatteryWarning(imageBuffer, imageSize);
-
-    // Cache image to SD card
-    #if SD_CARD_ENABLED
-    if (sdCard.isAvailable()) {
-        if (sdCard.saveRAW7(imageBuffer, imageSize)) {
-            DEBUG_PRINTLN("Image cached to SD card");
-        }
-    }
-    #endif
 
     // Display image
     display.displayRAW7(imageBuffer, imageSize);
