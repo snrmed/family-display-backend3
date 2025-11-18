@@ -1,5 +1,6 @@
 #include "display_driver.h"
 #include "sd_manager.h"
+#include "flash_cache.h"
 
 // ============================================================
 // EPD Command Definitions (common for ACeP displays)
@@ -333,6 +334,101 @@ bool SpectraDisplay::displayRAW7FromSDFile(SDManager& sdCard, const char* filepa
 
     // Stream from SD file, using our callback to unpack and send to EPD
     bool streamSuccess = sdCard.streamRaw7FromFile(filepath, displayStreamCallback, &ctx);
+
+    if (!streamSuccess || ctx.totalProcessed != RAW7_SIZE) {
+        DEBUG_PRINTF("SpectraDisplay: ERROR - Stream incomplete (%d bytes)\n", ctx.totalProcessed);
+        powerOff();
+        return false;
+    }
+
+    DEBUG_PRINTLN("SpectraDisplay: Transmitting to EPD complete");
+
+    // Refresh display
+    refresh();
+
+    DEBUG_PRINTLN("SpectraDisplay: Display update complete");
+    return true;
+}
+
+bool SpectraDisplay::displayRAW7FromFlashCache(FlashCache& flashCache) {
+    if (!_initialized) {
+        DEBUG_PRINTLN("SpectraDisplay: ERROR - Not initialized");
+        return false;
+    }
+
+    if (!flashCache.isAvailable()) {
+        DEBUG_PRINTLN("SpectraDisplay: ERROR - Flash cache not available");
+        return false;
+    }
+
+    if (!flashCache.hasCachedImage()) {
+        DEBUG_PRINTLN("SpectraDisplay: ERROR - No cached image in flash");
+        return false;
+    }
+
+    DEBUG_PRINTLN("SpectraDisplay: Starting streaming image transmission from flash cache");
+
+    // Power on the display
+    powerOn();
+
+    // Prepare to send image data
+    sendCommand(EPD_CMD_DATA_START_TRANSMISSION);
+
+    // Set up streaming context
+    StreamDisplayContext ctx;
+    ctx.display = this;
+    ctx.totalProcessed = 0;
+    ctx.success = true;
+
+    DEBUG_PRINTLN("SpectraDisplay: Unpacking RAW7 data from flash stream");
+
+    // Stream from flash, using our callback to unpack and send to EPD
+    bool streamSuccess = flashCache.streamRaw7FromCache(displayStreamCallback, &ctx);
+
+    if (!streamSuccess || ctx.totalProcessed != RAW7_SIZE) {
+        DEBUG_PRINTF("SpectraDisplay: ERROR - Stream incomplete (%d bytes)\n", ctx.totalProcessed);
+        powerOff();
+        return false;
+    }
+
+    DEBUG_PRINTLN("SpectraDisplay: Transmitting to EPD complete");
+
+    // Refresh display
+    refresh();
+
+    DEBUG_PRINTLN("SpectraDisplay: Display update complete");
+    return true;
+}
+
+bool SpectraDisplay::displayRAW7FromFlashFile(FlashCache& flashCache, const char* filepath) {
+    if (!_initialized) {
+        DEBUG_PRINTLN("SpectraDisplay: ERROR - Not initialized");
+        return false;
+    }
+
+    if (!flashCache.isAvailable()) {
+        DEBUG_PRINTLN("SpectraDisplay: ERROR - Flash cache not available");
+        return false;
+    }
+
+    DEBUG_PRINTF("SpectraDisplay: Starting streaming image transmission from flash %s\n", filepath);
+
+    // Power on the display
+    powerOn();
+
+    // Prepare to send image data
+    sendCommand(EPD_CMD_DATA_START_TRANSMISSION);
+
+    // Set up streaming context
+    StreamDisplayContext ctx;
+    ctx.display = this;
+    ctx.totalProcessed = 0;
+    ctx.success = true;
+
+    DEBUG_PRINTLN("SpectraDisplay: Unpacking RAW7 data from flash stream");
+
+    // Stream from flash file, using our callback to unpack and send to EPD
+    bool streamSuccess = flashCache.streamRaw7FromFile(filepath, displayStreamCallback, &ctx);
 
     if (!streamSuccess || ctx.totalProcessed != RAW7_SIZE) {
         DEBUG_PRINTF("SpectraDisplay: ERROR - Stream incomplete (%d bytes)\n", ctx.totalProcessed);

@@ -1,0 +1,179 @@
+#include "flash_cache.h"
+#include "raw7_decoder.h"
+
+// Flash cache file path
+#define FLASH_CACHE_FILE "/last.raw7"
+
+FlashCache::FlashCache() : _initialized(false) {
+}
+
+bool FlashCache::begin() {
+    DEBUG_PRINTLN("Flash: Initializing SPIFFS");
+
+    if (!SPIFFS.begin(true)) {  // true = format on failure
+        DEBUG_PRINTLN("Flash: SPIFFS mount failed");
+        _initialized = false;
+        return false;
+    }
+
+    _initialized = true;
+    DEBUG_PRINTLN("Flash: SPIFFS initialized successfully");
+    printFlashInfo();
+
+    return true;
+}
+
+bool FlashCache::isAvailable() {
+    return _initialized;
+}
+
+bool FlashCache::hasCachedImage() {
+    if (!_initialized) {
+        return false;
+    }
+
+    return SPIFFS.exists(FLASH_CACHE_FILE);
+}
+
+void FlashCache::printFlashInfo() {
+    if (!_initialized) {
+        return;
+    }
+
+    size_t totalBytes = SPIFFS.totalBytes();
+    size_t usedBytes = SPIFFS.usedBytes();
+
+    DEBUG_PRINTF("Flash: Total: %d bytes, Used: %d bytes, Free: %d bytes\n",
+                 totalBytes, usedBytes, totalBytes - usedBytes);
+}
+
+// ============================================================
+// Streaming Implementation - No Large RAM Buffers
+// ============================================================
+
+// Helper structure for download callback
+struct DownloadContext {
+    File* file;
+    size_t totalWritten;
+};
+
+// Callback for RAW7Decoder::streamImage()
+static void downloadChunkCallback(const uint8_t* chunk, size_t size, void* userData) {
+    DownloadContext* ctx = (DownloadContext*)userData;
+    if (ctx && ctx->file) {
+        size_t written = ctx->file->write(chunk, size);
+        ctx->totalWritten += written;
+
+        if (ctx->totalWritten % 20000 == 0) {
+            DEBUG_PRINTF("Flash: Downloaded %d bytes to cache\n", ctx->totalWritten);
+        }
+    }
+}
+
+bool FlashCache::downloadRaw7ToCache(RAW7Decoder& decoder,
+                                    const char* backendUrl,
+                                    const char* deviceName) {
+    if (!_initialized) {
+        DEBUG_PRINTLN("Flash: Not initialized");
+        return false;
+    }
+
+    DEBUG_PRINTLN("Flash: Streaming RAW7 download directly to cache");
+
+    // Build URL with device name
+    String url = String(backendUrl) + "/v1/raw7?device=" + String(deviceName);
+
+    // Remove old cache file if it exists
+    if (SPIFFS.exists(FLASH_CACHE_FILE)) {
+        SPIFFS.remove(FLASH_CACHE_FILE);
+    }
+
+    // Open file for writing
+    File cacheFile = SPIFFS.open(FLASH_CACHE_FILE, FILE_WRITE);
+    if (!cacheFile) {
+        DEBUG_PRINTLN("Flash: Failed to open cache file for writing");
+        return false;
+    }
+
+    // Set up download context
+    DownloadContext ctx;
+    ctx.file = &cacheFile;
+    ctx.totalWritten = 0;
+
+    // Stream download directly to file
+    bool success = decoder.streamImage(url.c_str(), downloadChunkCallback, &ctx);
+
+    cacheFile.close();
+
+    if (success && ctx.totalWritten == RAW7_SIZE) {
+        DEBUG_PRINTF("Flash: Successfully cached %d bytes\n", ctx.totalWritten);
+        return true;
+    } else {
+        DEBUG_PRINTF("Flash: Cache write incomplete - wrote %d of %d bytes\n",
+                    ctx.totalWritten, RAW7_SIZE);
+        SPIFFS.remove(FLASH_CACHE_FILE);  // Remove incomplete file
+        return false;
+    }
+}
+
+bool FlashCache::streamRaw7FromCache(StreamCallback callback, void* userData) {
+    return streamRaw7FromFile(FLASH_CACHE_FILE, callback, userData);
+}
+
+bool FlashCache::streamRaw7FromFile(const char* filepath, StreamCallback callback, void* userData) {
+    if (!_initialized) {
+        DEBUG_PRINTLN("Flash: Not initialized");
+        return false;
+    }
+
+    if (!callback) {
+        DEBUG_PRINTLN("Flash: No callback provided");
+        return false;
+    }
+
+    if (!SPIFFS.exists(filepath)) {
+        DEBUG_PRINTF("Flash: File not found: %s\n", filepath);
+        return false;
+    }
+
+    DEBUG_PRINTF("Flash: Streaming RAW7 from %s\n", filepath);
+
+    File file = SPIFFS.open(filepath, FILE_READ);
+    if (!file) {
+        DEBUG_PRINTF("Flash: Failed to open file: %s\n", filepath);
+        return false;
+    }
+
+    size_t fileSize = file.size();
+    if (fileSize != RAW7_SIZE) {
+        DEBUG_PRINTF("Flash: Invalid file size: %d (expected %d)\n", fileSize, RAW7_SIZE);
+        file.close();
+        return false;
+    }
+
+    // Stream file in chunks
+    uint8_t buffer[HTTP_BUFFER_SIZE];
+    size_t totalRead = 0;
+
+    while (totalRead < fileSize) {
+        size_t toRead = min((size_t)HTTP_BUFFER_SIZE, fileSize - totalRead);
+        size_t bytesRead = file.read(buffer, toRead);
+
+        if (bytesRead > 0) {
+            callback(buffer, bytesRead, userData);
+            totalRead += bytesRead;
+
+            if (totalRead % 20000 == 0) {
+                DEBUG_PRINTF("Flash: Streamed %d / %d bytes\n", totalRead, fileSize);
+            }
+        } else {
+            DEBUG_PRINTLN("Flash: Read error during streaming");
+            file.close();
+            return false;
+        }
+    }
+
+    file.close();
+    DEBUG_PRINTF("Flash: Stream complete - %d bytes\n", totalRead);
+    return (totalRead == fileSize);
+}

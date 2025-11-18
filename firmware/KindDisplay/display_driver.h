@@ -30,6 +30,12 @@ public:
     // Display RAW7 image from SD file (memory efficient - no large buffer)
     bool displayRAW7FromSDFile(class SDManager& sdCard, const char* filepath);
 
+    // Display RAW7 image from flash cache (memory efficient - no large buffer)
+    bool displayRAW7FromFlashCache(class FlashCache& flashCache);
+
+    // Display RAW7 image from flash file (memory efficient - no large buffer)
+    bool displayRAW7FromFlashFile(class FlashCache& flashCache, const char* filepath);
+
     // Clear display to a single color
     void clear(uint8_t color = EPD_WHITE);
 
