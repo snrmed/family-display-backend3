@@ -7,33 +7,131 @@ SDManager::SDManager() : _initialized(false), _csPin(PIN_SD_CS) {
 bool SDManager::begin() {
     DEBUG_PRINTLN("SD: Initializing SD card");
 
-    // Initialize SPI bus with all pins (SD needs MISO, display doesn't but shares bus)
+    // Step 1: Hardware diagnostics - check pin connections
+    if (!checkHardwareConnections()) {
+        DEBUG_PRINTLN("SD: Hardware connection issues detected");
+        DEBUG_PRINTLN("SD: Check wiring and power supply");
+    }
+
+    // Step 2: Initialize SPI bus with all pins
     SPI.begin(PIN_SD_SCK, PIN_SD_MISO, PIN_SD_MOSI, -1);  // SS=-1, we control CS manually
 
-    // Set up CS pin for SD card
+    // Step 3: Set up CS pin for SD card
     pinMode(_csPin, OUTPUT);
-    digitalWrite(_csPin, HIGH);  // CS idle high
+    digitalWrite(_csPin, HIGH);  // CS idle high initially
 
-    // Small delay for SD card stabilization after SPI init
+    // Step 4: Power-up sequence for SD card
+    // SD cards need specific power-up timing and CS toggling
+    DEBUG_PRINTLN("SD: Starting power-up sequence");
+
+    // Keep CS high and send 80+ clock pulses for card power-up
+    digitalWrite(_csPin, HIGH);
+    delay(10);  // Minimum 1ms power-up time
+
+    // Send 80 clock pulses with CS high (10 bytes @ 8 bits each)
+    SPI.beginTransaction(SPISettings(400000, MSBFIRST, SPI_MODE0));
+    for (int i = 0; i < 10; i++) {
+        SPI.transfer(0xFF);
+    }
+    SPI.endTransaction();
+
+    // Additional stabilization delay
     delay(100);
 
-    // Initialize SD card library with slower speed for better compatibility
-    if (!SD.begin(_csPin, SPI, 400000)) {  // 400kHz for initialization (slower = more reliable)
-        DEBUG_PRINTLN("SD: Card mount failed or not present");
-        _initialized = false;
-        return false;
+    // Step 5: Try multiple initialization strategies
+    const int MAX_ATTEMPTS = 5;
+    const uint32_t speeds[] = {200000, 250000, 300000, 400000, 400000}; // Start even slower
+    const uint16_t delays[] = {500, 400, 300, 200, 100}; // Longer delays for earlier attempts
+
+    for (int attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+        DEBUG_PRINTF("SD: Attempt %d/%d at %d Hz\n", attempt + 1, MAX_ATTEMPTS, speeds[attempt]);
+
+        // Power cycle CS pin before each attempt
+        digitalWrite(_csPin, LOW);
+        delay(10);
+        digitalWrite(_csPin, HIGH);
+        delay(delays[attempt]);
+
+        // Try to initialize SD card
+        if (SD.begin(_csPin, SPI, speeds[attempt])) {
+            // Check if card is actually present
+            uint8_t cardType = SD.cardType();
+            if (cardType != CARD_NONE) {
+                _initialized = true;
+                DEBUG_PRINTLN("SD: Card initialized successfully");
+                printCardInfo();
+                return true;
+            } else {
+                DEBUG_PRINTLN("SD: No card detected after init");
+            }
+        }
+
+        // If not the last attempt, wait before retrying
+        if (attempt < MAX_ATTEMPTS - 1) {
+            DEBUG_PRINTLN("SD: Retrying with different settings...");
+            delay(200);
+        }
     }
 
-    uint8_t cardType = SD.cardType();
-    if (cardType == CARD_NONE) {
-        DEBUG_PRINTLN("SD: No SD card attached");
-        _initialized = false;
+    // All attempts failed
+    DEBUG_PRINTLN("SD: Card mount failed after all attempts");
+    DEBUG_PRINTLN("SD: Possible issues:");
+    DEBUG_PRINTLN("SD:   - Card not inserted or defective");
+    DEBUG_PRINTLN("SD:   - Poor wiring/connection (check breadboard)");
+    DEBUG_PRINTLN("SD:   - Missing pull-up resistor on MISO");
+    DEBUG_PRINTLN("SD:   - Insufficient power supply");
+    DEBUG_PRINTLN("SD:   - Card needs reformatting");
+
+    _initialized = false;
+    return false;
+}
+
+bool SDManager::checkHardwareConnections() {
+    // Test 1: Check if pins can be controlled
+    DEBUG_PRINTLN("SD: Running hardware diagnostics...");
+
+    // Test CS pin
+    pinMode(_csPin, OUTPUT);
+    digitalWrite(_csPin, HIGH);
+    delay(1);
+    int csHigh = digitalRead(_csPin);
+    digitalWrite(_csPin, LOW);
+    delay(1);
+    int csLow = digitalRead(_csPin);
+    digitalWrite(_csPin, HIGH);
+
+    if (csHigh != HIGH || csLow != LOW) {
+        DEBUG_PRINTF("SD: CS pin test failed (high=%d, low=%d)\n", csHigh, csLow);
         return false;
     }
+    DEBUG_PRINTLN("SD: CS pin OK");
 
-    _initialized = true;
-    DEBUG_PRINTLN("SD: Card initialized successfully");
-    printCardInfo();
+    // Test 2: Check MISO pin (should have pull-up or float high when no card)
+    pinMode(PIN_SD_MISO, INPUT);
+    delay(10);
+    int misoState = digitalRead(PIN_SD_MISO);
+    DEBUG_PRINTF("SD: MISO pin state: %d (should be HIGH if pull-up present)\n", misoState);
+
+    if (misoState == LOW) {
+        DEBUG_PRINTLN("SD: WARNING - MISO is LOW, may need external pull-up resistor");
+        DEBUG_PRINTLN("SD:           Try adding 10K-47K resistor from MISO to 3.3V");
+    }
+
+    // Test 3: Verify SPI pins are not shorted
+    pinMode(PIN_SD_MOSI, OUTPUT);
+    pinMode(PIN_SD_SCK, OUTPUT);
+    digitalWrite(PIN_SD_MOSI, HIGH);
+    digitalWrite(PIN_SD_SCK, LOW);
+    delay(1);
+
+    int mosiState = digitalRead(PIN_SD_MOSI);
+    int sckState = digitalRead(PIN_SD_SCK);
+
+    if (mosiState != HIGH || sckState != LOW) {
+        DEBUG_PRINTF("SD: SPI pin test failed (MOSI=%d, SCK=%d)\n", mosiState, sckState);
+        return false;
+    }
+    DEBUG_PRINTLN("SD: SPI pins OK");
 
     return true;
 }

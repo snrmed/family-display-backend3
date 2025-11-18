@@ -48,6 +48,9 @@ public:
 private:
     bool _initialized;
     uint8_t _csPin;
+
+    // Hardware diagnostics
+    bool checkHardwareConnections();
 };
 
 #endif // SD_MANAGER_H
