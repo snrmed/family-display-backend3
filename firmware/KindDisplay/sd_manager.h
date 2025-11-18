@@ -45,6 +45,24 @@ public:
     // Get SD card info
     void printCardInfo();
 
+    // ============================================================
+    // NEW: Streaming API - No large RAM buffers needed
+    // ============================================================
+
+    // Download RAW7 image directly to SD cache using streaming
+    // Uses RAW7Decoder's streamImage() to avoid large allocations
+    bool downloadRaw7ToCache(class RAW7Decoder& decoder,
+                            const char* backendUrl,
+                            const char* deviceName);
+
+    // Stream RAW7 data from cache file in chunks
+    // Callback is called with chunks of data as they are read
+    typedef void (*StreamCallback)(const uint8_t* chunk, size_t size, void* userData);
+    bool streamRaw7FromCache(StreamCallback callback, void* userData);
+
+    // Stream RAW7 data from specific file in chunks
+    bool streamRaw7FromFile(const char* filepath, StreamCallback callback, void* userData);
+
 private:
     bool _initialized;
     uint8_t _csPin;

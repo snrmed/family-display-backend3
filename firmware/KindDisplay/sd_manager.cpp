@@ -1,5 +1,6 @@
 #include "sd_manager.h"
 #include "memory_utils.h"
+#include "raw7_decoder.h"
 
 SDManager::SDManager() : _initialized(false), _csPin(PIN_SD_CS) {
 }
@@ -224,4 +225,148 @@ void SDManager::printCardInfo() {
     uint64_t totalBytes = SD.totalBytes() / (1024 * 1024);
     uint64_t usedBytes = SD.usedBytes() / (1024 * 1024);
     DEBUG_PRINTF("SD: Total: %llu MB, Used: %llu MB\n", totalBytes, usedBytes);
+}
+
+// ============================================================
+// NEW: Streaming Implementation - No Large RAM Buffers
+// ============================================================
+
+// Helper structure for download callback
+struct DownloadContext {
+    File* file;
+    size_t totalWritten;
+};
+
+// Callback for RAW7Decoder::streamImage()
+static void downloadChunkCallback(const uint8_t* chunk, size_t size, void* userData) {
+    DownloadContext* ctx = (DownloadContext*)userData;
+    if (ctx && ctx->file) {
+        size_t written = ctx->file->write(chunk, size);
+        ctx->totalWritten += written;
+
+        if (ctx->totalWritten % 20000 == 0) {
+            DEBUG_PRINTF("SD: Downloaded %d bytes to cache\n", ctx->totalWritten);
+        }
+    }
+}
+
+bool SDManager::downloadRaw7ToCache(RAW7Decoder& decoder,
+                                   const char* backendUrl,
+                                   const char* deviceName) {
+    if (!_initialized) {
+        DEBUG_PRINTLN("SD: Not initialized");
+        return false;
+    }
+
+    DEBUG_PRINTLN("SD: Streaming RAW7 download directly to cache");
+
+    // Use temporary file for safe cache update
+    const char* tempFile = "/last.raw7.tmp";
+
+    // Remove temp file if it exists from previous failed attempt
+    if (SD.exists(tempFile)) {
+        SD.remove(tempFile);
+    }
+
+    // Open temp file for writing
+    File cacheFile = SD.open(tempFile, FILE_WRITE);
+    if (!cacheFile) {
+        DEBUG_PRINTLN("SD: Failed to open temp file for writing");
+        return false;
+    }
+
+    // Set up download context
+    DownloadContext ctx;
+    ctx.file = &cacheFile;
+    ctx.totalWritten = 0;
+
+    bool success =
+        decoder.streamImage(backendUrl, deviceName, downloadChunkCallback, &ctx);
+
+    cacheFile.close();
+
+    if (success && ctx.totalWritten == RAW7_SIZE) {
+        DEBUG_PRINTF("SD: Successfully downloaded %d bytes to temp file\n", ctx.totalWritten);
+
+        // Atomic replace: remove old cache and rename temp to cache
+        if (SD.exists(SD_CACHE_FILE)) {
+            SD.remove(SD_CACHE_FILE);
+        }
+
+        if (SD.rename(tempFile, SD_CACHE_FILE)) {
+            DEBUG_PRINTLN("SD: Cache updated successfully");
+            return true;
+        } else {
+            DEBUG_PRINTLN("SD: Failed to rename temp file to cache");
+            SD.remove(tempFile);
+            return false;
+        }
+    } else {
+        DEBUG_PRINTF("SD: Download incomplete - wrote %d of %d bytes\n",
+                    ctx.totalWritten, RAW7_SIZE);
+        SD.remove(tempFile);  // Remove incomplete temp file
+        return false;
+    }
+}
+
+bool SDManager::streamRaw7FromCache(StreamCallback callback, void* userData) {
+    return streamRaw7FromFile(SD_CACHE_FILE, callback, userData);
+}
+
+bool SDManager::streamRaw7FromFile(const char* filepath, StreamCallback callback, void* userData) {
+    if (!_initialized) {
+        DEBUG_PRINTLN("SD: Not initialized");
+        return false;
+    }
+
+    if (!callback) {
+        DEBUG_PRINTLN("SD: No callback provided");
+        return false;
+    }
+
+    if (!SD.exists(filepath)) {
+        DEBUG_PRINTF("SD: File not found: %s\n", filepath);
+        return false;
+    }
+
+    DEBUG_PRINTF("SD: Streaming RAW7 from %s\n", filepath);
+
+    File file = SD.open(filepath, FILE_READ);
+    if (!file) {
+        DEBUG_PRINTF("SD: Failed to open file: %s\n", filepath);
+        return false;
+    }
+
+    size_t fileSize = file.size();
+    if (fileSize != RAW7_SIZE) {
+        DEBUG_PRINTF("SD: Invalid file size: %d (expected %d)\n", fileSize, RAW7_SIZE);
+        file.close();
+        return false;
+    }
+
+    // Stream file in chunks
+    uint8_t buffer[HTTP_BUFFER_SIZE];
+    size_t totalRead = 0;
+
+    while (totalRead < fileSize) {
+        size_t toRead = min((size_t)HTTP_BUFFER_SIZE, fileSize - totalRead);
+        size_t bytesRead = file.read(buffer, toRead);
+
+        if (bytesRead > 0) {
+            callback(buffer, bytesRead, userData);
+            totalRead += bytesRead;
+
+            if (totalRead % 20000 == 0) {
+                DEBUG_PRINTF("SD: Streamed %d / %d bytes\n", totalRead, fileSize);
+            }
+        } else {
+            DEBUG_PRINTLN("SD: Read error during streaming");
+            file.close();
+            return false;
+        }
+    }
+
+    file.close();
+    DEBUG_PRINTF("SD: Stream complete - %d bytes\n", totalRead);
+    return (totalRead == fileSize);
 }

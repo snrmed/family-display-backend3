@@ -86,13 +86,16 @@ uint8_t* RAW7Decoder::fetchImage(const char* backendUrl, const char* deviceName,
     }
 }
 
-bool RAW7Decoder::streamImage(const char* backendUrl, ChunkCallback callback, void* userData) {
+bool RAW7Decoder::streamImage(const char* backendUrl,
+                              const char* deviceName,
+                              ChunkCallback callback,
+                              void* userData) {
     if (!callback) {
         DEBUG_PRINTLN("RAW7: ERROR - No callback provided");
         return false;
     }
 
-    String url = String(backendUrl) + String(RAW7_ENDPOINT);
+    String url = String(backendUrl) + String(RAW7_ENDPOINT) + String(deviceName);
     DEBUG_PRINTF("RAW7: Streaming from %s\n", url.c_str());
 
     _http.begin(url);
