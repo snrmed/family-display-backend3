@@ -64,8 +64,8 @@
 #define RAW7_ENDPOINT "/v1/raw7?device="
 #define REROLL_ENDPOINT "/v1/frame_bg_reroll"
 
-// HTTP timeout
-#define HTTP_TIMEOUT  30000  // 30 seconds
+// HTTP timeout - increased for slow server-side RAW7 generation
+#define HTTP_TIMEOUT  120000  // 120 seconds (2 minutes)
 
 // ============================================================
 // TIMING CONFIGURATION
