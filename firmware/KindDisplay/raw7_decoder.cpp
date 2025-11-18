@@ -153,6 +153,7 @@ bool RAW7Decoder::streamBackgroundReroll(const char* backendUrl,
 
     _http.begin(url);
     _http.setTimeout(HTTP_TIMEOUT);
+    _http.addHeader("Content-Length", "0");  // Explicitly set Content-Length for empty POST body
 
     int httpCode = _http.POST("");  // POST with empty body (device in query param)
 
