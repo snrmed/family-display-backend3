@@ -54,6 +54,9 @@ public:
     // Get stored admin token (optional)
     String getAdminToken();
 
+    // Get stored timezone offset (in seconds from UTC)
+    long getTimezoneOffset();
+
 private:
     Preferences _prefs;
     WebServer* _server;
