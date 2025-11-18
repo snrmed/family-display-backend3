@@ -14,8 +14,11 @@ bool SDManager::begin() {
     pinMode(_csPin, OUTPUT);
     digitalWrite(_csPin, HIGH);  // CS idle high
 
-    // Initialize SD card library
-    if (!SD.begin(_csPin, SPI, 4000000)) {  // 4MHz for compatibility
+    // Small delay for SD card stabilization after SPI init
+    delay(100);
+
+    // Initialize SD card library with slower speed for better compatibility
+    if (!SD.begin(_csPin, SPI, 400000)) {  // 400kHz for initialization (slower = more reliable)
         DEBUG_PRINTLN("SD: Card mount failed or not present");
         _initialized = false;
         return false;
