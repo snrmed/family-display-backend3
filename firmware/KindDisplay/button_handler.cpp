@@ -68,16 +68,15 @@ const char* ButtonHandler::getModeString(SwitchMode mode) {
 }
 
 void ButtonHandler::enableWakeup() {
-    // Enable rotary switch wake from deep sleep
-    // Using GPIO0 (UP position) which has external 10kΩ pull-down (SMD "103")
-    // Pull-down prevents boot loop - GPIO0 is LOW at rest, HIGH only during rotation
+    // DISABLED: All GPIO wake sources disabled due to boot loop issues
+    // Both GPIO0 and GPIO34 cause immediate re-wake after deep sleep
+    // Relying on timer wake only until press-button GPIO is identified
 
-    const uint64_t ext_wakeup_pin_mask =
-        (1ULL << 0);   // GPIO0 for UP rotation (has pull-down resistor)
+    // TODO: Investigate rotary "press down" button for wake source
 
-    esp_sleep_enable_ext1_wakeup(ext_wakeup_pin_mask, ESP_EXT1_WAKEUP_ANY_HIGH);
+    DEBUG_PRINTLN("Switch: GPIO wake DISABLED - timer wake only (boot loop prevention)");
 
-    DEBUG_PRINTF("Switch: Wake enabled on GPIO0 (UP rotation - has 10k pull-down)\n");
+    // No wake sources enabled - device will only wake on timer
 }
 
 bool ButtonHandler::wasWakeSource() {
