@@ -217,33 +217,34 @@ struct StreamDisplayContext {
     SpectraDisplay* display;
     size_t totalProcessed;
     bool success;
+    uint8_t* expandedBuffer;  // Heap-allocated buffer for unpacking RAW7
+    size_t bufferSize;
 };
 
 // Callback for streaming RAW7 data to display
 static void displayStreamCallback(const uint8_t* chunk, size_t size, void* userData) {
     StreamDisplayContext* ctx = (StreamDisplayContext*)userData;
-    if (!ctx || !ctx->display || !ctx->success) {
+    if (!ctx || !ctx->display || !ctx->success || !ctx->expandedBuffer) {
         return;
     }
 
     // Unpack RAW7 format (2 pixels per byte) to EPD format
-    // Process in manageable chunks to avoid large stack allocations
-    const size_t rawChunk = 2048;  // Process 2KB at a time
-    uint8_t expandedBuffer[rawChunk * 2];
+    // Using heap-allocated buffer from context to avoid stack overflow
+    const size_t rawChunk = ctx->bufferSize / 2;  // Buffer is 2x raw size
 
     size_t offset = 0;
     while (offset < size) {
         size_t chunkSize = min(rawChunk, size - offset);
 
-        // Unpack this chunk
+        // Unpack this chunk into heap buffer
         for (size_t i = 0; i < chunkSize; i++) {
             uint8_t packed = chunk[offset + i];
-            expandedBuffer[i * 2] = (packed >> 4) & 0x0F;      // High nibble
-            expandedBuffer[i * 2 + 1] = packed & 0x0F;         // Low nibble
+            ctx->expandedBuffer[i * 2] = (packed >> 4) & 0x0F;      // High nibble
+            ctx->expandedBuffer[i * 2 + 1] = packed & 0x0F;         // Low nibble
         }
 
         // Send unpacked data to EPD
-        ctx->display->sendData(expandedBuffer, chunkSize * 2);
+        ctx->display->sendData(ctx->expandedBuffer, chunkSize * 2);
 
         offset += chunkSize;
         ctx->totalProcessed += chunkSize;
@@ -279,16 +280,29 @@ bool SpectraDisplay::displayRAW7FromSDCache(SDManager& sdCard) {
     // Prepare to send image data
     sendCommand(EPD_CMD_DATA_START_TRANSMISSION);
 
-    // Set up streaming context
+    // Set up streaming context with heap-allocated buffer
+    // This avoids 4KB stack allocation that was causing overflow
     StreamDisplayContext ctx;
     ctx.display = this;
     ctx.totalProcessed = 0;
     ctx.success = true;
+    ctx.bufferSize = 4096;  // 2KB RAW7 expands to 4KB unpacked
+    ctx.expandedBuffer = (uint8_t*)malloc(ctx.bufferSize);
+
+    if (!ctx.expandedBuffer) {
+        DEBUG_PRINTLN("SpectraDisplay: ERROR - Failed to allocate unpack buffer");
+        powerOff();
+        return false;
+    }
 
     DEBUG_PRINTLN("SpectraDisplay: Unpacking RAW7 data from SD stream");
 
     // Stream from SD card, using our callback to unpack and send to EPD
     bool streamSuccess = sdCard.streamRaw7FromCache(displayStreamCallback, &ctx);
+
+    // Free the buffer
+    free(ctx.expandedBuffer);
+    ctx.expandedBuffer = nullptr;
 
     if (!streamSuccess || ctx.totalProcessed != RAW7_SIZE) {
         DEBUG_PRINTF("SpectraDisplay: ERROR - Stream incomplete (%d bytes)\n", ctx.totalProcessed);
@@ -324,16 +338,29 @@ bool SpectraDisplay::displayRAW7FromSDFile(SDManager& sdCard, const char* filepa
     // Prepare to send image data
     sendCommand(EPD_CMD_DATA_START_TRANSMISSION);
 
-    // Set up streaming context
+    // Set up streaming context with heap-allocated buffer
+    // This avoids 4KB stack allocation that was causing overflow
     StreamDisplayContext ctx;
     ctx.display = this;
     ctx.totalProcessed = 0;
     ctx.success = true;
+    ctx.bufferSize = 4096;  // 2KB RAW7 expands to 4KB unpacked
+    ctx.expandedBuffer = (uint8_t*)malloc(ctx.bufferSize);
+
+    if (!ctx.expandedBuffer) {
+        DEBUG_PRINTLN("SpectraDisplay: ERROR - Failed to allocate unpack buffer");
+        powerOff();
+        return false;
+    }
 
     DEBUG_PRINTLN("SpectraDisplay: Unpacking RAW7 data from SD stream");
 
     // Stream from SD file, using our callback to unpack and send to EPD
     bool streamSuccess = sdCard.streamRaw7FromFile(filepath, displayStreamCallback, &ctx);
+
+    // Free the buffer
+    free(ctx.expandedBuffer);
+    ctx.expandedBuffer = nullptr;
 
     if (!streamSuccess || ctx.totalProcessed != RAW7_SIZE) {
         DEBUG_PRINTF("SpectraDisplay: ERROR - Stream incomplete (%d bytes)\n", ctx.totalProcessed);
@@ -374,16 +401,29 @@ bool SpectraDisplay::displayRAW7FromFlashCache(FlashCache& flashCache) {
     // Prepare to send image data
     sendCommand(EPD_CMD_DATA_START_TRANSMISSION);
 
-    // Set up streaming context
+    // Set up streaming context with heap-allocated buffer
+    // This avoids 4KB stack allocation that was causing overflow
     StreamDisplayContext ctx;
     ctx.display = this;
     ctx.totalProcessed = 0;
     ctx.success = true;
+    ctx.bufferSize = 4096;  // 2KB RAW7 expands to 4KB unpacked
+    ctx.expandedBuffer = (uint8_t*)malloc(ctx.bufferSize);
+
+    if (!ctx.expandedBuffer) {
+        DEBUG_PRINTLN("SpectraDisplay: ERROR - Failed to allocate unpack buffer");
+        powerOff();
+        return false;
+    }
 
     DEBUG_PRINTLN("SpectraDisplay: Unpacking RAW7 data from flash stream");
 
     // Stream from flash, using our callback to unpack and send to EPD
     bool streamSuccess = flashCache.streamRaw7FromCache(displayStreamCallback, &ctx);
+
+    // Free the buffer
+    free(ctx.expandedBuffer);
+    ctx.expandedBuffer = nullptr;
 
     if (!streamSuccess || ctx.totalProcessed != RAW7_SIZE) {
         DEBUG_PRINTF("SpectraDisplay: ERROR - Stream incomplete (%d bytes)\n", ctx.totalProcessed);
