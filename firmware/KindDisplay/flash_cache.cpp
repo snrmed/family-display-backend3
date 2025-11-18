@@ -141,6 +141,76 @@ bool FlashCache::downloadRaw7ToCache(RAW7Decoder& decoder,
     }
 }
 
+bool FlashCache::downloadRaw7ViaReroll(RAW7Decoder& decoder,
+                                       const char* backendUrl,
+                                       const char* deviceName) {
+    if (!_initialized) {
+        DEBUG_PRINTLN("Flash: Not initialized");
+        return false;
+    }
+
+    DEBUG_PRINTLN("Flash: Streaming background reroll download to cache");
+    DEBUG_PRINTLN("Flash: Running HTTPS in dedicated task with 64KB stack to avoid overflow");
+
+    // Use temporary file for safe cache update
+    const char* tempFile = "/last.raw7.tmp";
+
+    // Remove temp file if it exists from previous failed attempt
+    if (SPIFFS.exists(tempFile)) {
+        SPIFFS.remove(tempFile);
+    }
+
+    // Run the HTTPS download in a dedicated task with large stack
+    // This avoids stack overflow during TLS handshake on ESP32 without PSRAM
+    bool downloadSuccess = HttpTask::runWithLargeStack([&]() -> bool {
+        // Open temp file for writing
+        File cacheFile = SPIFFS.open(tempFile, FILE_WRITE);
+        if (!cacheFile) {
+            DEBUG_PRINTLN("Flash: Failed to open temp file for writing");
+            return false;
+        }
+
+        // Set up download context
+        DownloadContext ctx;
+        ctx.file = &cacheFile;
+        ctx.totalWritten = 0;
+
+        // Execute HTTPS background reroll (TLS handshake happens here)
+        bool success = decoder.streamBackgroundReroll(backendUrl, deviceName, downloadChunkCallback, &ctx);
+
+        cacheFile.close();
+
+        if (success && ctx.totalWritten == RAW7_SIZE) {
+            DEBUG_PRINTF("Flash: Successfully downloaded %d bytes via reroll\n", ctx.totalWritten);
+            return true;
+        } else {
+            DEBUG_PRINTF("Flash: Reroll incomplete - wrote %d of %d bytes\n",
+                        ctx.totalWritten, RAW7_SIZE);
+            SPIFFS.remove(tempFile);  // Remove incomplete temp file
+            return false;
+        }
+    });
+
+    if (!downloadSuccess) {
+        DEBUG_PRINTLN("Flash: Reroll download task failed");
+        return false;
+    }
+
+    // Atomic replace: remove old cache and rename temp to cache
+    if (SPIFFS.exists(FLASH_CACHE_FILE)) {
+        SPIFFS.remove(FLASH_CACHE_FILE);
+    }
+
+    if (SPIFFS.rename(tempFile, FLASH_CACHE_FILE)) {
+        DEBUG_PRINTLN("Flash: Cache updated via reroll successfully");
+        return true;
+    } else {
+        DEBUG_PRINTLN("Flash: Failed to rename temp file to cache");
+        SPIFFS.remove(tempFile);
+        return false;
+    }
+}
+
 bool FlashCache::streamRaw7FromCache(StreamCallback callback, void* userData) {
     return streamRaw7FromFile(FLASH_CACHE_FILE, callback, userData);
 }

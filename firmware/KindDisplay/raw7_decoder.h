@@ -24,16 +24,22 @@ public:
     // Sets actualSize to the number of bytes received
     uint8_t* fetchImage(const char* backendUrl, const char* deviceName, size_t& actualSize);
 
-    // Fetch a new background (triggers backend reroll)
-    bool triggerBackgroundReroll(const char* backendUrl, const char* deviceName);
-
     // Stream RAW7 directly to callback function (memory efficient)
     // Callback is called with chunks of data as they arrive
     typedef void (*ChunkCallback)(const uint8_t* chunk, size_t size, void* userData);
+
+    // Stream RAW7 image from standard endpoint (fetches fresh data)
     bool streamImage(const char* backendUrl,
                      const char* deviceName,
                      ChunkCallback callback,
                      void* userData);
+
+    // Stream RAW7 from background reroll endpoint (uses cached data, new background)
+    // Returns RAW7 data directly via callback
+    bool streamBackgroundReroll(const char* backendUrl,
+                                const char* deviceName,
+                                ChunkCallback callback,
+                                void* userData);
 
 private:
     HTTPClient _http;
