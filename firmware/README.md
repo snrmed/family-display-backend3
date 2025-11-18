@@ -73,18 +73,22 @@ pio run -t upload
 6. **Device reboots** and fetches first image (takes 30-60 seconds)
 7. **Done!** Display shows your content
 
-### Hardware Controls (3-Position Switch)
+### Hardware Controls (Spring-Return Rotary Switch)
 
-Your board has a 3-position switch labeled `0`, `35`, `34`:
+Your board has a spring-return rotary switch with a center press button:
 
-| Position | GPIO | Action |
-|----------|------|--------|
-| **DOWN** (34) | GPIO 34 | Get new background variant |
-| **CENTER** (35) | GPIO 35 | Neutral (no action) |
-| **UP** (0) | GPIO 0 | Factory reset (hold 6 seconds) |
+| Position/Action | GPIO | Function |
+|----------------|------|----------|
+| **CENTER PRESS** | GPIO 35 | Wake from sleep + actions (see below) |
+| **UP** (momentary) | GPIO 0 | Returns to center (no function) |
+| **CENTER** (rest) | GPIO 35 | Resting position |
+| **DOWN** (momentary) | GPIO 34 | Returns to center (no function) |
 
-**To get a new background:** Flip switch DOWN
-**To factory reset:** Flip switch UP and hold for 6+ seconds
+**Wake from deep sleep:** Press center button (GPIO35)
+- **1 press:** Get new background variant (reroll)
+- **6 presses within 10 seconds:** Factory reset
+
+The UP and DOWN positions are momentary only and spring back to center.
 
 ### Troubleshooting
 
@@ -135,24 +139,30 @@ Your board has a 3-position switch labeled `0`, `35`, `34`:
 | 5V             | 5V         | Power |
 | GND            | GND        | Ground |
 
-### 3-Position Control Switch
+### Spring-Return Rotary Switch with Center Press
 
-The e-ink dev board includes a built-in 3-position switch:
+The e-ink dev board includes a spring-return rotary switch:
 
-| Switch Position | GPIO | Function |
+| Position/Action | GPIO | Function |
 |----------------|------|----------|
-| DOWN (34) | GPIO 34 | Background reroll |
-| CENTER (35) | GPIO 35 | Neutral (no action) |
-| UP (0) | GPIO 0 | Factory reset (hold 6s) |
+| **CENTER PRESS** | GPIO 35 | Wake from sleep + click actions |
+| UP (momentary) | GPIO 0 | Springs back to center (no function) |
+| CENTER (rest) | GPIO 35 | Resting position |
+| DOWN (momentary) | GPIO 34 | Springs back to center (no function) |
 
 **Physical layout on board:**
 ```
     ┌─────────┐
-    │  ○ (0)  │ ← UP: Factory reset
-    │  ○ (35) │ ← CENTER: Neutral
-    │  ○ (34) │ ← DOWN: Reroll background
+    │  ○ (0)  │ ← UP: Momentary position
+    │  ◉ (35) │ ← CENTER: Press button + resting position
+    │  ○ (34) │ ← DOWN: Momentary position
     └─────────┘
 ```
+
+**Wake Functionality:**
+- Uses EXT0 wakeup on GPIO35 (LOW trigger)
+- Press center button to wake from deep sleep
+- Click counter tracks presses within 10-second window
 
 ### SD Card (Optional)
 
@@ -255,27 +265,32 @@ The device operates in deep sleep most of the time and wakes:
    - Updates display
    - Returns to deep sleep
 
-2. **When button is pressed**
+2. **When center button is pressed**
    - See button controls below
 
 ### Button Controls
 
-#### Short Press (< 6 seconds)
-- **Function**: Trigger background reroll
+The center press button (GPIO35) wakes the device from deep sleep and triggers actions based on click count:
+
+#### Single Press
+- **Function**: Background reroll (get new variant)
 - **What happens**:
-  1. Wake from sleep
+  1. Wake from sleep (EXT0 on GPIO35)
   2. Connect to WiFi
   3. Call `/v1/frame_bg_reroll` endpoint
   4. Fetch new RAW7 image
   5. Update display
   6. Return to sleep
 
-#### Long Press (> 6 seconds)
+#### Six Rapid Presses (within 10 seconds)
 - **Function**: Factory reset
 - **What happens**:
   1. Clear WiFi credentials
   2. Clear backend URL
-  3. Reboot into setup mode (AP mode)
+  3. Clear RTC memory
+  4. Reboot into setup mode (AP mode)
+
+**Note:** The rotary switch positions (UP/DOWN) are momentary and spring back to center. Only the center press button triggers wake functionality.
 
 ### LED Indicators
 
@@ -298,14 +313,15 @@ Edit `firmware/KindDisplay/config.h` to customize:
 #define BACKEND_URL   "http://your-backend-url:port"
 ```
 
-#### Button Pin
+#### Button Wake Pin
 ```cpp
-#define PIN_BUTTON    0   // GPIO number
+#define PRESS_BUTTON_GPIO    35   // Center press button for EXT0 wake
 ```
 
-#### Long Press Duration
+#### Click Counter Settings
 ```cpp
-#define BUTTON_LONG_PRESS_MS  6000  // Milliseconds
+#define ROTARY_CLICK_FACTORY_RESET  6        // Number of clicks for factory reset
+#define ROTARY_CLICK_WINDOW_MS      10000    // Time window in milliseconds (10 seconds)
 ```
 
 #### Debug Output
