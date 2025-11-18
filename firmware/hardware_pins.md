@@ -16,14 +16,16 @@ both files together if your board revision requires a different wiring map.
 | SCK    | GPIO18     | Shared VSPI clock |
 | MOSI   | GPIO19     | Shared VSPI MOSI |
 
-## SD Card (shares the same VSPI bus)
+## SD Card (as labeled on board silkscreen)
 
 | Signal | ESP32 GPIO | Notes |
 |--------|------------|-------|
-| CS     | GPIO13     | Dedicated SD chip select |
-| MOSI   | GPIO19     | Shared with display |
-| MISO   | GPIO27     | VSPI MISO |
-| SCK    | GPIO18     | Shared VSPI clock |
+| CS     | GPIO5      | Board label: CS (conflicts with EPD_CS!) |
+| MOSI   | GPIO23     | Board label: CMD (conflicts with EPD_DC!) |
+| MISO   | GPIO19     | Board label: DAT (conflicts with EPD_MOSI!) |
+| SCK    | GPIO18     | Board label: CLK (shared VSPI clock) |
+
+**NOTE:** These pins conflict with EPD pins, suggesting SD and EPD cannot be used simultaneously on this board revision.
 
 ## Optional / Expansion Pins
 

@@ -41,13 +41,14 @@
 #define PIN_BATTERY_ADC    36  // Change this to your actual battery sense pin
 #define BATTERY_ENABLED    true  // Set to false to disable battery monitoring
 
-// SD Card pins (sharing VSPI with display)
-// CS pins are separate: Display=GPIO5, SD=GPIO13
+// SD Card pins (as labeled on board silkscreen)
+// WARNING: These pins conflict with EPD pins - devices may not work simultaneously
+// Board labels: CS=5, CMD=23, CLK=18, DAT=19
 #define SD_CARD_ENABLED   true    // Enable SD card caching/fallback
-#define PIN_SD_CS     SD_CS   // CS pin (separate from display CS)
-#define PIN_SD_MOSI   SD_MOSI // CMD on board (VSPI MOSI, shared with display)
-#define PIN_SD_MISO   SD_MISO // DAT on board (VSPI MISO)
-#define PIN_SD_SCK    SD_CLK  // CLK on board (VSPI SCK, shared with display)
+#define PIN_SD_CS     SD_CS   // CS=5 (conflicts with EPD_CS!)
+#define PIN_SD_MOSI   SD_MOSI // CMD=23 (conflicts with EPD_DC!)
+#define PIN_SD_MISO   SD_MISO // DAT=19 (conflicts with EPD_MOSI!)
+#define PIN_SD_SCK    SD_CLK  // CLK=18 (shared with EPD_CLK)
 
 // ============================================================
 // NETWORK CONFIGURATION
