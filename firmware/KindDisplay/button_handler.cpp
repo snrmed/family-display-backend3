@@ -68,32 +68,27 @@ const char* ButtonHandler::getModeString(SwitchMode mode) {
 }
 
 void ButtonHandler::enableWakeup() {
-    // DISABLED: All GPIO wake sources disabled due to boot loop issues
-    // Both GPIO0 and GPIO34 cause immediate re-wake after deep sleep
-    // Relying on timer wake only until press-button GPIO is identified
+    // Using GPIO35 (center press) with EXT0 wakeup
+    // EXT0 supports edge triggering - wakes on LOW (button press)
+    // This avoids boot loops caused by EXT1's level-triggered behavior
 
-    // TODO: Investigate rotary "press down" button for wake source
+    #define PRESS_BUTTON_GPIO 35  // Center press button
 
-    DEBUG_PRINTLN("Switch: GPIO wake DISABLED - timer wake only (boot loop prevention)");
+    // Configure EXT0 to wake on LOW level (button press pulls to GND)
+    // Using LOW instead of falling edge because pull-up keeps it HIGH normally
+    esp_sleep_enable_ext0_wakeup((gpio_num_t)PRESS_BUTTON_GPIO, 0);  // 0 = LOW, 1 = HIGH
 
-    // No wake sources enabled - device will only wake on timer
+    DEBUG_PRINTF("Switch: Wake enabled on GPIO%d (center press button, LOW trigger)\n", PRESS_BUTTON_GPIO);
 }
 
 bool ButtonHandler::wasWakeSource() {
     esp_sleep_wakeup_cause_t wakeup_reason = esp_sleep_get_wakeup_cause();
-    return (wakeup_reason == ESP_SLEEP_WAKEUP_EXT1);
+    return (wakeup_reason == ESP_SLEEP_WAKEUP_EXT0);  // Changed from EXT1 to EXT0
 }
 
 uint8_t ButtonHandler::getWakePin() {
-    if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT1) {
-        uint64_t wakeup_pin_mask = esp_sleep_get_ext1_wakeup_status();
-
-        if (wakeup_pin_mask & (1ULL << 0)) {
-            return 0;  // GPIO0 (UP position)
-        }
-        if (wakeup_pin_mask & (1ULL << PIN_SWITCH_34)) {
-            return PIN_SWITCH_34;  // GPIO34 (DOWN position)
-        }
+    if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT0) {
+        return 35;  // EXT0 only supports one GPIO, we're using GPIO35 (center press)
     }
     return 255;  // Invalid/unknown
 }
