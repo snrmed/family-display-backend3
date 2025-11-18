@@ -1,4 +1,5 @@
 #include "raw7_decoder.h"
+#include "memory_utils.h"
 
 RAW7Decoder::RAW7Decoder() {
 }
@@ -20,7 +21,7 @@ uint8_t* RAW7Decoder::fetchImage(const char* backendUrl, const char* deviceName,
     DEBUG_PRINTF("RAW7: Need to allocate: %d bytes\n", RAW7_SIZE);
 
     // Allocate buffer for RAW7 image
-    uint8_t* buffer = (uint8_t*)malloc(RAW7_SIZE);
+    uint8_t* buffer = allocateRaw7Buffer("RAW7 download");
     if (!buffer) {
         DEBUG_PRINTLN("RAW7: ERROR - Memory allocation failed");
         DEBUG_PRINTF("RAW7: Free heap: %d bytes (insufficient for %d bytes)\n",

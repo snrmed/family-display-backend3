@@ -43,7 +43,7 @@
 
 // SD Card pins (sharing VSPI with display)
 // CS pins are separate: Display=GPIO5, SD=GPIO13
-#define SD_CARD_ENABLED   false   // SD card disabled - using text-only mode
+#define SD_CARD_ENABLED   true    // Enable SD card caching/fallback
 #define PIN_SD_CS     SD_CS   // CS pin (separate from display CS)
 #define PIN_SD_MOSI   SD_MOSI // CMD on board (VSPI MOSI, shared with display)
 #define PIN_SD_MISO   SD_MISO // DAT on board (VSPI MISO)

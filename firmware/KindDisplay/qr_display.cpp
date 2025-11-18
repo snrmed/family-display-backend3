@@ -1,11 +1,12 @@
 #include "qr_display.h"
 #include <qrcode.h>  // Using ricmoo/qrcode library
+#include "memory_utils.h"
 
 void QRDisplay::showSetupScreen(SpectraDisplay& display) {
     DEBUG_PRINTLN("QR: Rendering setup screen");
 
     // Allocate buffer for display (800x480)
-    uint8_t* buffer = new uint8_t[DISPLAY_WIDTH * DISPLAY_HEIGHT];
+    uint8_t* buffer = allocateBuffer(DISPLAY_WIDTH * DISPLAY_HEIGHT, "QR pixel buffer");
     if (!buffer) {
         DEBUG_PRINTLN("QR: Memory allocation failed");
         return;
@@ -83,10 +84,10 @@ void QRDisplay::showSetupScreen(SpectraDisplay& display) {
 
     // === RENDER TO DISPLAY ===
     // Pack buffer to RAW7 format (2 pixels per byte)
-    uint8_t* raw7Buffer = new uint8_t[RAW7_SIZE];
+    uint8_t* raw7Buffer = allocateRaw7Buffer("QR RAW7");
     if (!raw7Buffer) {
         DEBUG_PRINTLN("QR: RAW7 buffer allocation failed");
-        delete[] buffer;
+        free(buffer);
         return;
     }
 
@@ -100,8 +101,8 @@ void QRDisplay::showSetupScreen(SpectraDisplay& display) {
     display.displayRAW7(raw7Buffer, RAW7_SIZE);
 
     // Clean up
-    delete[] buffer;
-    delete[] raw7Buffer;
+    free(buffer);
+    free(raw7Buffer);
 
     DEBUG_PRINTLN("QR: Setup screen displayed");
 }

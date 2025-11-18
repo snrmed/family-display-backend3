@@ -31,11 +31,8 @@ bool SpectraDisplay::begin() {
     digitalWrite(PIN_EPD_CS, HIGH);
     digitalWrite(PIN_EPD_DC, HIGH);
 
-    // Initialize SPI if not already done (SD card initializes it if enabled)
-    // This handles the case where SD_CARD_ENABLED = false
-    #if !SD_CARD_ENABLED
+    // Initialize SPI bus (safe to call even if SD card already configured it)
     SPI.begin(PIN_EPD_SCK, PIN_SD_MISO, PIN_EPD_MOSI, -1);
-    #endif
     SPI.beginTransaction(SPISettings(4000000, MSBFIRST, SPI_MODE0));
 
     // Hardware reset
@@ -176,27 +173,23 @@ bool SpectraDisplay::displayRAW7(const uint8_t* buffer, size_t bufferSize) {
     // Prepare to send image data
     sendCommand(EPD_CMD_DATA_START_TRANSMISSION);
 
-    // Unpack RAW7 format (2 pixels per byte) to EPD format
+    // Unpack RAW7 format (2 pixels per byte) to EPD format on the fly
     // RAW7: high nibble = first pixel, low nibble = second pixel
-    uint8_t* expandedBuffer = new uint8_t[DISPLAY_WIDTH * DISPLAY_HEIGHT];
-    if (!expandedBuffer) {
-        DEBUG_PRINTLN("SpectraDisplay: ERROR - Memory allocation failed");
-        return false;
-    }
+    const size_t rawChunk = 2048;  // 4KB expanded chunk
+    uint8_t expandedBuffer[rawChunk * 2];
 
     DEBUG_PRINTLN("SpectraDisplay: Unpacking RAW7 data");
-    for (size_t i = 0; i < bufferSize; i++) {
-        uint8_t packed = buffer[i];
-        expandedBuffer[i * 2] = (packed >> 4) & 0x0F;      // High nibble
-        expandedBuffer[i * 2 + 1] = packed & 0x0F;         // Low nibble
+    for (size_t offset = 0; offset < bufferSize; offset += rawChunk) {
+        size_t chunkSize = min(rawChunk, bufferSize - offset);
+        for (size_t i = 0; i < chunkSize; i++) {
+            uint8_t packed = buffer[offset + i];
+            expandedBuffer[i * 2] = (packed >> 4) & 0x0F;      // High nibble
+            expandedBuffer[i * 2 + 1] = packed & 0x0F;         // Low nibble
+        }
+        sendData(expandedBuffer, chunkSize * 2);
     }
 
-    // Send expanded pixel data to display
-    DEBUG_PRINTLN("SpectraDisplay: Transmitting to EPD");
-    sendData(expandedBuffer, DISPLAY_WIDTH * DISPLAY_HEIGHT);
-
-    // Clean up
-    delete[] expandedBuffer;
+    DEBUG_PRINTLN("SpectraDisplay: Transmitting to EPD complete");
 
     // Refresh display
     refresh();
