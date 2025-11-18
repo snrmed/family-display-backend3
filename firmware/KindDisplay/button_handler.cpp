@@ -68,18 +68,18 @@ const char* ButtonHandler::getModeString(SwitchMode mode) {
 }
 
 void ButtonHandler::enableWakeup() {
-    // Optional: Enable switch pins as wake sources
-    // This is not strictly necessary since we primarily use timer wake
-    // But can be useful if you want switch changes to wake the device
+    // Enable rotary switch wake from deep sleep
+    // Rotary positions: UP=GPIO0, CENTER=resting, DOWN=GPIO34
+    // Note: GPIO0 is boot mode pin - safe for wake as long as it's momentary
 
     const uint64_t ext_wakeup_pin_mask =
-        (1ULL << PIN_SWITCH_34) |
-        (1ULL << PIN_SWITCH_35);
+        (1ULL << 0) |              // GPIO0 for UP rotation
+        (1ULL << PIN_SWITCH_34);   // GPIO34 for DOWN rotation
 
     esp_sleep_enable_ext1_wakeup(ext_wakeup_pin_mask, ESP_EXT1_WAKEUP_ANY_HIGH);
 
-    DEBUG_PRINTF("Switch: Wake enabled on GPIO%d and GPIO%d\n",
-                 PIN_SWITCH_34, PIN_SWITCH_35);
+    DEBUG_PRINTF("Switch: Wake enabled on GPIO0 (UP) and GPIO%d (DOWN)\n",
+                 PIN_SWITCH_34);
 }
 
 bool ButtonHandler::wasWakeSource() {
@@ -91,12 +91,12 @@ uint8_t ButtonHandler::getWakePin() {
     if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT1) {
         uint64_t wakeup_pin_mask = esp_sleep_get_ext1_wakeup_status();
 
-        if (wakeup_pin_mask & (1ULL << PIN_SWITCH_34)) {
-            return PIN_SWITCH_34;
+        if (wakeup_pin_mask & (1ULL << 0)) {
+            return 0;  // GPIO0 (UP position)
         }
-        if (wakeup_pin_mask & (1ULL << PIN_SWITCH_35)) {
-            return PIN_SWITCH_35;
+        if (wakeup_pin_mask & (1ULL << PIN_SWITCH_34)) {
+            return PIN_SWITCH_34;  // GPIO34 (DOWN position)
         }
     }
-    return 0;
+    return 255;  // Invalid/unknown
 }

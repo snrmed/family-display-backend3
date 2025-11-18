@@ -95,9 +95,29 @@ void setup() {
     // Initialize switch handler
     button.begin();
 
-    // NEW: Read current switch mode
-    currentMode = button.readMode();
-    DEBUG_PRINTF("Switch Mode: %s\n", button.getModeString(currentMode));
+    // Determine mode based on wake source
+    // Rotary switch springs back to CENTER (35) after rotation
+    // UP (0) → GPIO0, CENTER (35) → resting, DOWN (34) → GPIO34
+    if (ButtonHandler::wasWakeSource()) {
+        uint8_t wakePin = ButtonHandler::getWakePin();
+        DEBUG_PRINTF("Switch: Woken by rotary switch - GPIO%d\n", wakePin);
+
+        // Map wake pin to mode
+        if (wakePin == 0) {
+            currentMode = MODE_SPECIAL;
+            DEBUG_PRINTLN("Switch: Rotated UP (GPIO0) → SPECIAL mode (background reroll)");
+        } else if (wakePin == PIN_SWITCH_34) {
+            currentMode = MODE_NORMAL;
+            DEBUG_PRINTLN("Switch: Rotated DOWN (GPIO34) → NORMAL mode (refresh)");
+        } else {
+            currentMode = MODE_NORMAL;
+            DEBUG_PRINTLN("Switch: Unknown wake pin → NORMAL mode (default)");
+        }
+    } else {
+        // Timer wake or other - default to normal mode
+        currentMode = MODE_NORMAL;
+        DEBUG_PRINTLN("Switch: Timer wake → NORMAL mode (default)");
+    }
 
     // Initialize display
     if (!display.begin()) {
@@ -313,11 +333,10 @@ void enterDeepSleep() {
     // NEW: Turn off LED before sleep (Part 1)
     statusLED.off();
 
-    // Disable button wake - causes boot loop with level-triggered wakeup
-    // The switch uses level detection (ANY_HIGH) which triggers immediately
-    // when the switch is in NORMAL (GPIO34=HIGH) or SPECIAL (GPIO35=HIGH) position
-    // Relying on timer wake instead (primary wake method)
-    // button.enableWakeup();  // DISABLED - causes boot loop
+    // Enable rotary switch wake from deep sleep
+    // Momentary rotary switch triggers briefly on rotation
+    // EXT1 wake on ANY_HIGH will detect rotation to position 34 or 35
+    button.enableWakeup();
 
     // Calculate and enter deep sleep
     rtcMgr.sleepUntilWake();
