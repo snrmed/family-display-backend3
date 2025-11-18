@@ -1545,11 +1545,17 @@ async def api_raw7(device: str = "familydisplay"):
         # Step 3: Convert PNG to RAW7
         raw7_bytes = png_bytes_to_raw7(png_bytes, RENDER_WIDTH, RENDER_HEIGHT)
 
-        # Step 4: Save to GCS (if enabled)
+        # Step 4: Save both PNG and RAW7 to GCS (if enabled)
         if storage_enabled:
-            render_key = f"devices/{device}/renders/latest.raw7"
-            gcs_write_bytes(render_key, raw7_bytes, content_type="application/octet-stream")
-            logger.info(f"💾 Saved RAW7 render: {render_key} ({len(raw7_bytes)} bytes)")
+            # Save PNG for viewing on other devices (browser, mobile app, etc.)
+            png_key = f"devices/{device}/renders/latest.png"
+            gcs_write_bytes(png_key, png_bytes, content_type="image/png")
+            logger.info(f"💾 Saved PNG render: {png_key} ({len(png_bytes)} bytes)")
+
+            # Save RAW7 for e-paper display
+            raw7_key = f"devices/{device}/renders/latest.raw7"
+            gcs_write_bytes(raw7_key, raw7_bytes, content_type="application/octet-stream")
+            logger.info(f"💾 Saved RAW7 render: {raw7_key} ({len(raw7_bytes)} bytes)")
 
         # Step 5: Return RAW7 bytes
         logger.info(f"✅ RAW7 render complete: {len(raw7_bytes)} bytes ({RENDER_WIDTH}x{RENDER_HEIGHT})")
