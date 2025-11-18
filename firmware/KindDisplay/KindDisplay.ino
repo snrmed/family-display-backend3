@@ -400,8 +400,11 @@ void enterDeepSleep() {
     // NEW: Turn off LED before sleep (Part 1)
     statusLED.off();
 
-    // Enable button wake (optional for switch monitoring)
-    button.enableWakeup();
+    // Disable button wake - causes boot loop with level-triggered wakeup
+    // The switch uses level detection (ANY_HIGH) which triggers immediately
+    // when the switch is in NORMAL (GPIO34=HIGH) or SPECIAL (GPIO35=HIGH) position
+    // Relying on timer wake instead (primary wake method)
+    // button.enableWakeup();  // DISABLED - causes boot loop
 
     // Calculate and enter deep sleep
     rtcMgr.sleepUntilWake();
