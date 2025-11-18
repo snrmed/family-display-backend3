@@ -79,7 +79,6 @@ bool FlashCache::downloadRaw7ToCache(RAW7Decoder& decoder,
     }
 
     DEBUG_PRINTLN("Flash: Streaming RAW7 download directly to cache");
-    DEBUG_PRINTF("Flash: Note - using hardcoded device from RAW7_ENDPOINT, ignoring '%s'\n", deviceName);
 
     // Use temporary file for safe cache update
     const char* tempFile = "/last.raw7.tmp";
@@ -101,8 +100,8 @@ bool FlashCache::downloadRaw7ToCache(RAW7Decoder& decoder,
     ctx.file = &cacheFile;
     ctx.totalWritten = 0;
 
-    // FIX: Pass only base URL - streamImage() appends RAW7_ENDPOINT internally
-    bool success = decoder.streamImage(backendUrl, downloadChunkCallback, &ctx);
+    bool success =
+        decoder.streamImage(backendUrl, deviceName, downloadChunkCallback, &ctx);
 
     cacheFile.close();
 

@@ -61,7 +61,7 @@
 
 // Backend API configuration
 #define BACKEND_URL   "https://family-display-backend-867804884116.australia-southeast1.run.app"
-#define RAW7_ENDPOINT "/v1/raw7?device=familydisplay"
+#define RAW7_ENDPOINT "/v1/raw7?device="
 #define REROLL_ENDPOINT "/v1/frame_bg_reroll"
 
 // HTTP timeout
