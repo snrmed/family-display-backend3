@@ -64,7 +64,6 @@ void enterDeepSleep();
 void showErrorScreen(const char* message);
 void checkBatteryAndSleep();      // NEW: Battery check before operations
 void handleFactoryReset();        // NEW: Factory reset handler
-void scanGPIOForButton();         // DEBUG: Scan for press button GPIO
 
 // ============================================================
 // Setup - Runs once on boot
@@ -129,11 +128,6 @@ void setup() {
 
     // NEW: Check battery before any heavy operations
     checkBatteryAndSleep();
-
-    // DEBUG: Scan for press button GPIO (10 second window)
-    DEBUG_PRINTLN("\n=== GPIO BUTTON SCANNER ===");
-    DEBUG_PRINTLN("Press the rotary button NOW (you have 10 seconds)...");
-    scanGPIOForButton();
 
     // NEW: Check WiFi failure count for auto-recovery (Part 5)
     uint8_t wifiFailures = rtcMgr.getWiFiFailureCount();
@@ -424,77 +418,4 @@ void handleFactoryReset() {
     DEBUG_PRINTLN("Factory reset complete. Restarting into setup mode...");
     delay(2000);
     ESP.restart();
-}
-
-// ============================================================
-// DEBUG: GPIO Scanner for Press Button Detection
-// ============================================================
-void scanGPIOForButton() {
-    // List of GPIOs to scan (input-capable GPIOs on ESP32)
-    // Excluding: 6-11 (flash), 1,3 (UART), already used pins
-    const int testGPIOs[] = {
-        12, 13, 14, 15, 25, 26, 27, 32, 33, 39
-        // 0, 34, 35 already known for rotary positions
-        // 2 = LED, 4 = EPD_BUSY, 5 = EPD_CS, 16 = EPD_RST, 18 = SCK, 19 = MOSI, 23 = EPD_DC, 36 = Battery
-    };
-    const int numGPIOs = sizeof(testGPIOs) / sizeof(testGPIOs[0]);
-
-    // Initialize GPIOs as inputs with pull-ups
-    for (int i = 0; i < numGPIOs; i++) {
-        pinMode(testGPIOs[i], INPUT_PULLUP);
-    }
-
-    DEBUG_PRINTLN("GPIO Scanner initialized. Monitoring GPIOs:");
-    DEBUG_PRINT("Scanning: ");
-    for (int i = 0; i < numGPIOs; i++) {
-        DEBUG_PRINTF("%d ", testGPIOs[i]);
-    }
-    DEBUG_PRINTLN();
-
-    // Read initial states
-    bool lastStates[numGPIOs];
-    for (int i = 0; i < numGPIOs; i++) {
-        lastStates[i] = digitalRead(testGPIOs[i]);
-    }
-
-    DEBUG_PRINTLN("Initial GPIO states:");
-    for (int i = 0; i < numGPIOs; i++) {
-        DEBUG_PRINTF("  GPIO%d = %s\n", testGPIOs[i], lastStates[i] ? "HIGH" : "LOW");
-    }
-
-    // Monitor for 10 seconds
-    DEBUG_PRINTLN("\nPress the button NOW! Monitoring for 10 seconds...");
-    unsigned long startTime = millis();
-    bool buttonDetected = false;
-
-    while (millis() - startTime < 10000) {
-        // Check all GPIOs for state changes
-        for (int i = 0; i < numGPIOs; i++) {
-            bool currentState = digitalRead(testGPIOs[i]);
-
-            if (currentState != lastStates[i]) {
-                // State changed!
-                DEBUG_PRINTF("\n*** GPIO%d CHANGED: %s → %s ***\n",
-                           testGPIOs[i],
-                           lastStates[i] ? "HIGH" : "LOW",
-                           currentState ? "HIGH" : "LOW");
-
-                if (!currentState) {  // Button press typically pulls LOW
-                    DEBUG_PRINTF("*** LIKELY BUTTON: GPIO%d (went LOW on press) ***\n", testGPIOs[i]);
-                    buttonDetected = true;
-                }
-
-                lastStates[i] = currentState;
-            }
-        }
-
-        delay(10);  // Small delay to avoid overwhelming serial
-    }
-
-    if (!buttonDetected) {
-        DEBUG_PRINTLN("\nNo button press detected. Try again or check different GPIOs.");
-    }
-
-    DEBUG_PRINTLN("=== GPIO SCAN COMPLETE ===\n");
-    delay(1000);
 }
