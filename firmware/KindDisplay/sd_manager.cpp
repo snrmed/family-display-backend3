@@ -6,12 +6,14 @@ SDManager::SDManager() : _initialized(false), _csPin(PIN_SD_CS) {
 bool SDManager::begin() {
     DEBUG_PRINTLN("SD: Initializing SD card");
 
-    // SPI already initialized by display - don't re-initialize
-    // Just set up the CS pin for SD card
+    // Initialize SPI bus with all pins (SD needs MISO, display doesn't but shares bus)
+    SPI.begin(PIN_SD_SCK, PIN_SD_MISO, PIN_SD_MOSI, -1);  // SS=-1, we control CS manually
+
+    // Set up CS pin for SD card
     pinMode(_csPin, OUTPUT);
     digitalWrite(_csPin, HIGH);  // CS idle high
 
-    // Initialize SD card library (SPI already configured)
+    // Initialize SD card library
     if (!SD.begin(_csPin, SPI, 4000000)) {  // 4MHz for compatibility
         DEBUG_PRINTLN("SD: Card mount failed or not present");
         _initialized = false;
