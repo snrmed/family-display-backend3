@@ -230,8 +230,12 @@ void updateDisplay(bool triggerReroll) {
     // NEW: Record successful WiFi connection (Part 5)
     rtcMgr.recordWiFiSuccess();
 
-    // Initialize RTC and sync time
-    rtcMgr.begin("pool.ntp.org", 0, 0);  // UTC, adjust gmtOffset as needed
+    // Get timezone offset from WiFi settings
+    long timezoneOffset = wifiMgr.getTimezoneOffset();
+    DEBUG_PRINTF("Timezone: UTC%+ld hours (%ld seconds)\n", timezoneOffset / 3600, timezoneOffset);
+
+    // Initialize RTC and sync time with user's timezone
+    rtcMgr.begin("pool.ntp.org", timezoneOffset, 0);
 
     // NEW: Check refresh throttling AFTER WiFi/NTP sync (Part 7)
     // This ensures we have accurate time for throttling checks

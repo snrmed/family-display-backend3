@@ -171,11 +171,12 @@ void WiFiManager::handleSave() {
     String password = _server->arg("password");
     String backendUrl = _server->arg("backend");
     String deviceName = _server->arg("devicename");
+    String timezone = _server->arg("timezone");
     String email = _server->arg("email");
     String adminToken = _server->arg("token");
 
     // Validate inputs
-    if (ssid.length() == 0) {
+    if (ssid.length() == 0 || timezone.length() == 0) {
         _server->send(400, "text/html", generateSavePage(false));
         return;
     }
@@ -190,12 +191,16 @@ void WiFiManager::handleSave() {
         deviceName = "familydisplay";
     }
 
-    // Save to NVS (including device name, email, and admin token)
+    // Parse timezone offset (in seconds)
+    long timezoneOffset = timezone.toInt();
+
+    // Save to NVS (including device name, email, admin token, and timezone)
     _prefs.begin(NVS_NAMESPACE, false);
     _prefs.putString(NVS_WIFI_SSID, ssid);
     _prefs.putString(NVS_WIFI_PASS, password);
     _prefs.putString(NVS_BACKEND, backendUrl);
     _prefs.putString("device_name", deviceName);
+    _prefs.putLong("timezone_offset", timezoneOffset);
 
     // Save email if provided
     if (email.length() > 0) {
@@ -211,7 +216,8 @@ void WiFiManager::handleSave() {
 
     _prefs.end();
 
-    DEBUG_PRINTF("WiFi: Saved - SSID: %s, Device: %s\n", ssid.c_str(), deviceName.c_str());
+    DEBUG_PRINTF("WiFi: Saved - SSID: %s, Device: %s, Timezone: UTC%+ld\n",
+                 ssid.c_str(), deviceName.c_str(), timezoneOffset / 3600);
 
     _server->send(200, "text/html", generateSavePage(true));
 
@@ -276,6 +282,13 @@ String WiFiManager::getAdminToken() {
     String token = _prefs.getString("admin_token", "");
     _prefs.end();
     return token;
+}
+
+long WiFiManager::getTimezoneOffset() {
+    _prefs.begin(NVS_NAMESPACE, true);
+    long offset = _prefs.getLong("timezone_offset", 0);  // Default to UTC if not set
+    _prefs.end();
+    return offset;
 }
 
 String WiFiManager::generateConfigPage(const String& networks) {
@@ -420,6 +433,43 @@ String WiFiManager::generateConfigPage(const String& networks) {
             <input type="text" id="devicename" name="devicename"
                    placeholder="e.g., Living Room, Kitchen, Bedroom"
                    maxlength="32">
+
+            <label for="timezone">Your Timezone</label>
+            <select id="timezone" name="timezone" required>
+                <option value="">-- Select City --</option>
+                <optgroup label="Australia">
+                    <option value="39600">Sydney / Melbourne (AEDT UTC+11)</option>
+                    <option value="36000">Brisbane / Queensland (AEST UTC+10)</option>
+                    <option value="37800">Adelaide (ACDT UTC+10:30)</option>
+                    <option value="28800">Perth (AWST UTC+8)</option>
+                    <option value="34200">Darwin (ACST UTC+9:30)</option>
+                    <option value="36000">Hobart (AEDT UTC+10)</option>
+                </optgroup>
+                <optgroup label="New Zealand">
+                    <option value="46800">Auckland / Wellington (NZDT UTC+13)</option>
+                    <option value="45900">Chatham Islands (UTC+12:45)</option>
+                </optgroup>
+                <optgroup label="Asia">
+                    <option value="28800">Singapore / Hong Kong (UTC+8)</option>
+                    <option value="32400">Tokyo / Seoul (UTC+9)</option>
+                    <option value="19800">India (UTC+5:30)</option>
+                    <option value="25200">Bangkok / Jakarta (UTC+7)</option>
+                </optgroup>
+                <optgroup label="Europe">
+                    <option value="3600">London (GMT UTC+1)</option>
+                    <option value="7200">Paris / Berlin (CET UTC+2)</option>
+                    <option value="10800">Moscow (UTC+3)</option>
+                </optgroup>
+                <optgroup label="Americas">
+                    <option value="-18000">New York (EST UTC-5)</option>
+                    <option value="-21600">Chicago (CST UTC-6)</option>
+                    <option value="-25200">Los Angeles (PST UTC-7)</option>
+                    <option value="-28800">Alaska (UTC-8)</option>
+                </optgroup>
+                <optgroup label="Other">
+                    <option value="0">UTC (No offset)</option>
+                </optgroup>
+            </select>
 
             <label for="ssid">WiFi Network</label>
             <select id="ssid" name="ssid" required>
