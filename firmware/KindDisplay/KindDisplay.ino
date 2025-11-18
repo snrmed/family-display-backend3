@@ -96,20 +96,22 @@ void setup() {
     button.begin();
 
     // Determine mode based on wake source
-    // Rotary switch springs back to position 0, so we check which GPIO triggered wake
+    // Rotary switch springs back to CENTER (35) after rotation
+    // UP (0) → GPIO0, CENTER (35) → resting, DOWN (34) → GPIO34
     if (ButtonHandler::wasWakeSource()) {
         uint8_t wakePin = ButtonHandler::getWakePin();
         DEBUG_PRINTF("Switch: Woken by rotary switch - GPIO%d\n", wakePin);
 
         // Map wake pin to mode
-        if (wakePin == PIN_SWITCH_34) {
-            currentMode = MODE_NORMAL;
-            DEBUG_PRINTLN("Switch: Rotated DOWN → NORMAL mode");
-        } else if (wakePin == PIN_SWITCH_35) {
+        if (wakePin == 0) {
             currentMode = MODE_SPECIAL;
-            DEBUG_PRINTLN("Switch: Rotated CENTER → SPECIAL mode");
+            DEBUG_PRINTLN("Switch: Rotated UP (GPIO0) → SPECIAL mode (background reroll)");
+        } else if (wakePin == PIN_SWITCH_34) {
+            currentMode = MODE_NORMAL;
+            DEBUG_PRINTLN("Switch: Rotated DOWN (GPIO34) → NORMAL mode (refresh)");
         } else {
-            currentMode = MODE_UNKNOWN;
+            currentMode = MODE_NORMAL;
+            DEBUG_PRINTLN("Switch: Unknown wake pin → NORMAL mode (default)");
         }
     } else {
         // Timer wake or other - default to normal mode
