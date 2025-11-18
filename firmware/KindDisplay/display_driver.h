@@ -47,11 +47,13 @@ public:
     // Hardware reset
     void reset();
 
+    // Low-level EPD data send (public for streaming callbacks)
+    void sendData(const uint8_t* data, size_t len);
+
 private:
     // Low-level EPD commands
     void sendCommand(uint8_t command);
     void sendData(uint8_t data);
-    void sendData(const uint8_t* data, size_t len);
 
     // Wait for display to be ready
     bool waitUntilIdle(uint32_t timeout_ms = 30000);
