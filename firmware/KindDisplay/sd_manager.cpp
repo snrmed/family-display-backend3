@@ -1,4 +1,5 @@
 #include "sd_manager.h"
+#include "memory_utils.h"
 
 SDManager::SDManager() : _initialized(false), _csPin(PIN_SD_CS) {
 }
@@ -51,6 +52,7 @@ bool SDManager::saveRAW7(const uint8_t* buffer, size_t size) {
 
     DEBUG_PRINTLN("SD: Saving RAW7 image to cache");
 
+    SD.remove(SD_CACHE_FILE);
     File file = SD.open(SD_CACHE_FILE, FILE_WRITE);
     if (!file) {
         DEBUG_PRINTLN("SD: Failed to open file for writing");
@@ -100,7 +102,7 @@ uint8_t* SDManager::loadRAW7(size_t& size) {
     }
 
     // Allocate buffer
-    uint8_t* buffer = (uint8_t*)malloc(fileSize);
+    uint8_t* buffer = allocateRaw7Buffer("SD cache load");
     if (!buffer) {
         DEBUG_PRINTLN("SD: Memory allocation failed");
         file.close();
@@ -161,7 +163,7 @@ uint8_t* SDManager::loadRAW7FromFile(const char* filepath, size_t& size) {
     }
 
     // Allocate buffer
-    uint8_t* buffer = (uint8_t*)malloc(fileSize);
+    uint8_t* buffer = allocateRaw7Buffer("SD file load");
     if (!buffer) {
         DEBUG_PRINTLN("SD: Memory allocation failed");
         file.close();

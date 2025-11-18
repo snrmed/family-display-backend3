@@ -87,6 +87,14 @@ void setup() {
     // NEW: Initialize battery monitor
     battery.begin();
 
+#if SD_CARD_ENABLED
+    if (sdCard.begin()) {
+        DEBUG_PRINTLN("SD: Card ready - caching enabled");
+    } else {
+        DEBUG_PRINTLN("SD: Card unavailable - continuing without cache");
+    }
+#endif
+
     // Determine wake reason
     esp_sleep_wakeup_cause_t wakeReason = RTCManager::getWakeupCause();
     DEBUG_PRINT("Wake Reason: ");
@@ -288,6 +296,22 @@ void updateDisplay(bool triggerReroll) {
     // Fetch RAW7 image
     size_t imageSize = 0;
     uint8_t* imageBuffer = imageDecoder.fetchImage(backendUrl.c_str(), deviceName.c_str(), imageSize);
+#if SD_CARD_ENABLED
+    bool usedCachedImage = false;
+#endif
+
+#if SD_CARD_ENABLED
+    if ((!imageBuffer || imageSize != RAW7_SIZE) && sdCard.isAvailable()) {
+        DEBUG_PRINTLN("RAW7: Fetch failed - attempting to load cached image from SD");
+        size_t cachedSize = 0;
+        imageBuffer = sdCard.loadRAW7(cachedSize);
+        if (imageBuffer && cachedSize == RAW7_SIZE) {
+            imageSize = cachedSize;
+            usedCachedImage = true;
+            DEBUG_PRINTLN("RAW7: Cached image loaded successfully");
+        }
+    }
+#endif
 
     if (!imageBuffer || imageSize != RAW7_SIZE) {
         DEBUG_PRINTLN("Image fetch failed");
@@ -302,6 +326,14 @@ void updateDisplay(bool triggerReroll) {
 
     // NEW: Apply low battery overlay if needed (Part 8)
     battery.overlayLowBatteryWarning(imageBuffer, imageSize);
+
+#if SD_CARD_ENABLED
+    if (sdCard.isAvailable() && !usedCachedImage) {
+        if (!sdCard.saveRAW7(imageBuffer, imageSize)) {
+            DEBUG_PRINTLN("SD: Failed to cache RAW7 image");
+        }
+    }
+#endif
 
     // Display image
     display.displayRAW7(imageBuffer, imageSize);
