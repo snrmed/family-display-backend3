@@ -42,13 +42,13 @@
 #define BATTERY_ENABLED    true  // Set to false to disable battery monitoring
 
 // SD Card pins (as labeled on board silkscreen)
-// WARNING: These pins conflict with EPD pins - devices may not work simultaneously
 // Board labels: CS=5, CMD=23, CLK=18, DAT=19
+// No conflicts with EPD - uses completely separate GPIO pins
 #define SD_CARD_ENABLED   true    // Enable SD card caching/fallback
-#define PIN_SD_CS     SD_CS   // CS=5 (conflicts with EPD_CS!)
-#define PIN_SD_MOSI   SD_MOSI // CMD=23 (conflicts with EPD_DC!)
-#define PIN_SD_MISO   SD_MISO // DAT=19 (conflicts with EPD_MOSI!)
-#define PIN_SD_SCK    SD_CLK  // CLK=18 (shared with EPD_CLK)
+#define PIN_SD_CS     SD_CS   // CS = GPIO5
+#define PIN_SD_MOSI   SD_MOSI // CMD = GPIO23
+#define PIN_SD_MISO   SD_MISO // DAT = GPIO19
+#define PIN_SD_SCK    SD_CLK  // CLK = GPIO18
 
 // ============================================================
 // NETWORK CONFIGURATION
