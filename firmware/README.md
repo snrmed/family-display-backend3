@@ -128,15 +128,17 @@ The UP and DOWN positions are momentary only and spring back to center.
 
 ### EPD Adapter to ESP32 Pin Mapping
 
+Pin assignments from original device firmware.
+
 | EPD Adapter Pin | ESP32 GPIO | Function |
 |----------------|------------|----------|
-| BUSY           | GPIO 4     | Busy signal |
-| RST            | GPIO 16    | Reset |
-| CS             | GPIO 5     | Chip Select |
-| DC             | GPIO 23    | Data/Command |
-| SCK            | GPIO 18    | SPI Clock |
-| DIN (MOSI)     | GPIO 19    | SPI Data |
-| 5V             | 5V         | Power |
+| BUSY           | GPIO 25    | Busy signal |
+| RST            | GPIO 26    | Reset |
+| CS             | GPIO 33    | Chip Select |
+| DC             | GPIO 27    | Data/Command |
+| CLK            | GPIO 13    | SPI Clock |
+| DIN (MOSI)     | GPIO 14    | SPI Data |
+| VCC            | 3.3V       | Power |
 | GND            | GND        | Ground |
 
 ### Spring-Return Rotary Switch with Center Press
@@ -166,11 +168,13 @@ The e-ink dev board includes a spring-return rotary switch:
 
 ### SD Card (Optional)
 
-Default VSPI pins for SD card (shared with the display SPI bus):
-- **CS**: GPIO 13
-- **MOSI**: GPIO 19
-- **MISO**: GPIO 27
-- **SCK**: GPIO 18
+Pin assignments as labeled on board silkscreen:
+- **CS**: GPIO 5 (board label: CS)
+- **MOSI**: GPIO 23 (board label: CMD)
+- **MISO**: GPIO 19 (board label: DAT)
+- **CLK**: GPIO 18 (board label: CLK)
+
+**Note:** EPD and SD card use completely separate GPIO pins - no conflicts. Both can operate independently.
 
 > These pins match the canonical definitions in `hardware_pins.md` / `hardware_pins.h` / `config.h`. Adjust them there if your board uses a different mapping.
 

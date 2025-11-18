@@ -7,30 +7,32 @@ both files together if your board revision requires a different wiring map.
 
 ## Display (EPD Adapter → ESP32)
 
-| Signal | ESP32 GPIO | Notes |
-|--------|------------|-------|
-| BUSY   | GPIO4      | Display busy indicator |
-| RST    | GPIO16     | Hardware reset |
-| DC     | GPIO23     | Data/Command select |
-| CS     | GPIO5      | Chip select |
-| SCK    | GPIO18     | Shared VSPI clock |
-| MOSI   | GPIO19     | Shared VSPI MOSI |
-
-## SD Card (shares the same VSPI bus)
+Pin assignments from original device firmware.
 
 | Signal | ESP32 GPIO | Notes |
 |--------|------------|-------|
-| CS     | GPIO13     | Dedicated SD chip select |
-| MOSI   | GPIO19     | Shared with display |
-| MISO   | GPIO27     | VSPI MISO |
-| SCK    | GPIO18     | Shared VSPI clock |
+| BUSY   | GPIO25     | Display busy indicator |
+| RST    | GPIO26     | Hardware reset |
+| DC     | GPIO27     | Data/Command select |
+| CS     | GPIO33     | Chip select |
+| CLK    | GPIO13     | SPI clock |
+| MOSI   | GPIO14     | SPI MOSI (DIN) |
+
+## SD Card (as labeled on board silkscreen)
+
+| Signal | ESP32 GPIO | Notes |
+|--------|------------|-------|
+| CS     | GPIO5      | Board label: CS |
+| MOSI   | GPIO23     | Board label: CMD |
+| MISO   | GPIO19     | Board label: DAT |
+| CLK    | GPIO18     | Board label: CLK |
+
+**NOTE:** EPD and SD use completely separate pins - no conflicts. Both can operate independently.
 
 ## Optional / Expansion Pins
 
 | Label    | ESP32 GPIO | Notes |
 |----------|------------|-------|
 | BUZZER   | GPIO12     | Buzzer / speaker |
-| AUX1     | GPIO25     | Spare GPIO |
-| AUX2     | GPIO26     | Spare GPIO |
-| AUX3     | GPIO33     | Spare GPIO |
-| AUX4     | GPIO14     | Spare GPIO |
+
+**Note:** GPIO25, GPIO26, GPIO33, GPIO14 are used by the EPD and are no longer available as expansion pins.

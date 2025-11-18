@@ -5,22 +5,22 @@
 // same physical connections.
 
 // EPD (Spectra-6) SPI interface
-#define EPD_BUSY    4
-#define EPD_RST     16
-#define EPD_DC      23
-#define EPD_CS      5
-#define EPD_CLK     18
-#define EPD_MOSI    19
+// Pin assignments from original device firmware
+#define EPD_BUSY    25
+#define EPD_RST     26
+#define EPD_DC      27
+#define EPD_CS      33
+#define EPD_CLK     13
+#define EPD_MOSI    14
 
-// SD Card (shares the same VSPI bus as the display)
-#define SD_CS       13
-#define SD_MOSI     19
-#define SD_MISO     27
-#define SD_CLK      18
+// SD Card SPI interface
+// Pin assignments match the board silkscreen labels
+// No conflicts with EPD - completely separate pins
+#define SD_CS       5   // CS pin (as labeled on board)
+#define SD_MOSI     23  // CMD pin (as labeled on board)
+#define SD_MISO     19  // DAT pin (as labeled on board)
+#define SD_CLK      18  // CLK pin (as labeled on board)
 
 // Optional peripherals
 #define BEEP_PIN    12
-#define GPIO25      25
-#define GPIO26      26
-#define GPIO33      33
-#define GPIO14      14
+// Note: GPIO25, GPIO26, GPIO33, GPIO14 are used by EPD (BUSY, RST, CS, MOSI)

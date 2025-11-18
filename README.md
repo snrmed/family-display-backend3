@@ -341,14 +341,19 @@ family-display-backend3/
 
 ### Pin Connections
 
+Pin assignments from original device firmware:
+
 | EPD Pin | ESP32 GPIO | Function |
 |---------|------------|----------|
-| BUSY | GPIO 4 | Busy signal |
-| RST | GPIO 16 | Reset |
-| CS | GPIO 5 | Chip Select |
-| DC | GPIO 17 | Data/Command |
-| SCK | GPIO 18 | SPI Clock |
-| DIN | GPIO 23 | SPI Data |
+| BUSY | GPIO 25 | Busy signal |
+| RST | GPIO 26 | Reset |
+| CS | GPIO 33 | Chip Select |
+| DC | GPIO 27 | Data/Command |
+| CLK | GPIO 13 | SPI Clock |
+| DIN | GPIO 14 | SPI Data |
+
+**SD Card Pins** (as labeled on board silkscreen):
+- CS: GPIO 5, MOSI: GPIO 23, MISO: GPIO 19, CLK: GPIO 18
 
 See [firmware/README.md](firmware/README.md#-hardware-connections) for complete wiring guide.
 
