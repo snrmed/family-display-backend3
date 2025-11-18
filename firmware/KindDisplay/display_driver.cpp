@@ -16,7 +16,7 @@
 #define EPD_CMD_RESOLUTION_SETTING      0x61
 #define EPD_CMD_GET_STATUS              0x71
 
-SpectraDisplay::SpectraDisplay() : _initialized(false) {
+SpectraDisplay::SpectraDisplay() : _initialized(false), _streaming(false), _streamBytesReceived(0) {
 }
 
 bool SpectraDisplay::begin() {
@@ -234,4 +234,101 @@ void SpectraDisplay::clear(uint8_t color) {
     }
 
     refresh();
+}
+
+// ============================================================
+// Streaming RAW7 Display - Memory Efficient
+// ============================================================
+
+bool SpectraDisplay::beginRAW7Stream() {
+    if (!_initialized) {
+        DEBUG_PRINTLN("SpectraDisplay: ERROR - Not initialized");
+        return false;
+    }
+
+    if (_streaming) {
+        DEBUG_PRINTLN("SpectraDisplay: ERROR - Stream already in progress");
+        return false;
+    }
+
+    DEBUG_PRINTLN("SpectraDisplay: Starting streaming RAW7 transmission");
+
+    // Power on the display
+    powerOn();
+
+    // Start data transmission to EPD
+    sendCommand(EPD_CMD_DATA_START_TRANSMISSION);
+
+    _streaming = true;
+    _streamBytesReceived = 0;
+
+    return true;
+}
+
+bool SpectraDisplay::streamRAW7Chunk(const uint8_t* chunk, size_t chunkSize) {
+    if (!_streaming) {
+        DEBUG_PRINTLN("SpectraDisplay: ERROR - Stream not started");
+        return false;
+    }
+
+    if (_streamBytesReceived + chunkSize > RAW7_SIZE) {
+        DEBUG_PRINTF("SpectraDisplay: ERROR - Chunk would exceed RAW7_SIZE (%d + %d > %d)\n",
+                     _streamBytesReceived, chunkSize, RAW7_SIZE);
+        return false;
+    }
+
+    // Unpack RAW7 chunk on the fly (2 pixels per byte)
+    // Use stack buffer to expand chunk - max HTTP chunk is typically 4KB
+    // which expands to 8KB, but we'll use smaller buffer for safety
+    const size_t MAX_EXPAND_BUFFER = 8192;  // 8KB expanded buffer
+    uint8_t expandedBuffer[MAX_EXPAND_BUFFER];
+
+    size_t offset = 0;
+    while (offset < chunkSize) {
+        // Process in batches that fit in our expand buffer
+        size_t batchSize = min(chunkSize - offset, MAX_EXPAND_BUFFER / 2);
+
+        for (size_t i = 0; i < batchSize; i++) {
+            uint8_t packed = chunk[offset + i];
+            expandedBuffer[i * 2] = (packed >> 4) & 0x0F;      // High nibble
+            expandedBuffer[i * 2 + 1] = packed & 0x0F;         // Low nibble
+        }
+
+        sendData(expandedBuffer, batchSize * 2);
+        offset += batchSize;
+    }
+
+    _streamBytesReceived += chunkSize;
+
+    // Progress indicator every 10KB
+    if (_streamBytesReceived % 10000 == 0 || _streamBytesReceived % 10000 < chunkSize) {
+        DEBUG_PRINTF("SpectraDisplay: Streaming progress: %d / %d bytes\n",
+                     _streamBytesReceived, RAW7_SIZE);
+    }
+
+    return true;
+}
+
+bool SpectraDisplay::endRAW7Stream() {
+    if (!_streaming) {
+        DEBUG_PRINTLN("SpectraDisplay: ERROR - Stream not started");
+        return false;
+    }
+
+    if (_streamBytesReceived != RAW7_SIZE) {
+        DEBUG_PRINTF("SpectraDisplay: WARNING - Incomplete stream (%d / %d bytes)\n",
+                     _streamBytesReceived, RAW7_SIZE);
+        // Continue anyway to refresh whatever we have
+    }
+
+    DEBUG_PRINTF("SpectraDisplay: Stream complete - received %d bytes\n", _streamBytesReceived);
+
+    // Refresh display
+    refresh();
+
+    _streaming = false;
+    _streamBytesReceived = 0;
+
+    DEBUG_PRINTLN("SpectraDisplay: Streaming display update complete");
+    return true;
 }

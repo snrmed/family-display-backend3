@@ -1,5 +1,6 @@
 #include "raw7_decoder.h"
 #include "memory_utils.h"
+#include "display_driver.h"
 
 RAW7Decoder::RAW7Decoder() {
 }
@@ -153,4 +154,42 @@ bool RAW7Decoder::triggerBackgroundReroll(const char* backendUrl, const char* de
         DEBUG_PRINTF("RAW7: Background reroll failed: %d\n", httpCode);
         return false;
     }
+}
+
+// Callback helper for streaming to display
+static void streamToDisplayCallback(const uint8_t* chunk, size_t size, void* userData) {
+    SpectraDisplay* display = static_cast<SpectraDisplay*>(userData);
+    display->streamRAW7Chunk(chunk, size);
+}
+
+bool RAW7Decoder::streamImageToDisplay(const char* backendUrl, const char* deviceName, SpectraDisplay& display) {
+    DEBUG_PRINTLN("RAW7: Starting memory-efficient streaming to display");
+    DEBUG_PRINTF("RAW7: Free heap: %d bytes (no large buffer needed!)\n", ESP.getFreeHeap());
+
+    // Begin display streaming
+    if (!display.beginRAW7Stream()) {
+        DEBUG_PRINTLN("RAW7: ERROR - Failed to begin display stream");
+        return false;
+    }
+
+    // Build URL with device name
+    String url = String(backendUrl) + "/v1/raw7?device=" + String(deviceName);
+
+    // Stream HTTP data directly to display via callback
+    bool success = streamImage(url.c_str(), streamToDisplayCallback, &display);
+
+    if (!success) {
+        DEBUG_PRINTLN("RAW7: ERROR - HTTP streaming failed");
+        display.endRAW7Stream();  // Clean up even on failure
+        return false;
+    }
+
+    // Finalize display update
+    if (!display.endRAW7Stream()) {
+        DEBUG_PRINTLN("RAW7: ERROR - Failed to finalize display stream");
+        return false;
+    }
+
+    DEBUG_PRINTLN("RAW7: Streaming to display complete!");
+    return true;
 }

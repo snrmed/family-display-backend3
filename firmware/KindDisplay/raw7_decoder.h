@@ -14,6 +14,9 @@
 // Total size: 800×480 / 2 = 192000 bytes
 // ============================================================
 
+// Forward declaration
+class SpectraDisplay;
+
 class RAW7Decoder {
 public:
     RAW7Decoder();
@@ -31,6 +34,10 @@ public:
     // Callback is called with chunks of data as they arrive
     typedef void (*ChunkCallback)(const uint8_t* chunk, size_t size, void* userData);
     bool streamImage(const char* backendUrl, ChunkCallback callback, void* userData);
+
+    // Stream RAW7 directly to display (memory efficient - no 192KB buffer needed)
+    // Returns true if successful, false on error
+    bool streamImageToDisplay(const char* backendUrl, const char* deviceName, SpectraDisplay& display);
 
 private:
     HTTPClient _http;
