@@ -1513,26 +1513,37 @@ async def api_frame(device: str = "familydisplay"):
 
 # RAW7 Render (for Spectra E6 e-paper displays)
 @app.get("/v1/raw7")
-async def api_raw7(device: str = "familydisplay"):
+async def api_raw7(device: str = "familydisplay", use_cache: bool = True):
     """
     Render frame in RAW7 format for Spectra E6 e-paper displays.
 
     Process:
-    1. Build render data using existing build_render_data()
-    2. Render HTML to PNG using existing render_html_to_png()
-    3. Convert PNG to RAW7 using png_bytes_to_raw7()
-    4. Return RAW7 bytes as application/octet-stream
-    5. Save to GCS at devices/{device}/renders/latest.raw7 (if enabled)
+    1. Try to use cached render_data.json (if recent and use_cache=True)
+    2. Otherwise, build fresh render data using build_render_data()
+    3. Render HTML to PNG using existing render_html_to_png()
+    4. Convert PNG to RAW7 using png_bytes_to_raw7()
+    5. Return RAW7 bytes as application/octet-stream
+    6. Save to GCS at devices/{device}/renders/latest.raw7 (if enabled)
     """
     if not ENABLE_RENDERING:
         raise HTTPException(status_code=503, detail="Rendering disabled")
     try:
-        # Step 1: Build render data
-        data = await build_render_data(device)
+        # Step 1: Try to load cached render data first
+        data = None
+        if use_cache:
+            cache_key = f"devices/{device}/render_data.json"
+            data = gcs_read_json(cache_key)
+            if data:
+                logger.info(f"✅ Using cached render_data.json for {device}")
 
-        # Save render_data.json
-        if storage_enabled:
-            gcs_write_json(f"devices/{device}/render_data.json", data)
+        # If no cache or cache disabled, build fresh data
+        if not data:
+            logger.info(f"🔄 Building fresh render data for {device}")
+            data = await build_render_data(device)
+
+            # Save render_data.json
+            if storage_enabled:
+                gcs_write_json(f"devices/{device}/render_data.json", data)
 
         # Step 2: Render HTML to PNG
         render_path = Path(RENDER_PATH)
