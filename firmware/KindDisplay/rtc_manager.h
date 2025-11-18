@@ -18,8 +18,8 @@
 struct RTCData {
     uint32_t magic;                    // Magic number to verify valid data (0xCAFEBABE)
     uint8_t wifiFailureCount;          // Consecutive WiFi failures
-    uint32_t lastRefreshTimestamp;     // Millis timestamp of last refresh
-    uint32_t refreshHistory[RATE_LIMIT_MAX_REFRESHES];  // Ring buffer of recent refresh times
+    time_t lastRefreshTimestamp;       // Unix timestamp of last refresh
+    time_t refreshHistory[RATE_LIMIT_MAX_REFRESHES];  // Ring buffer of recent refresh times (Unix timestamps)
     uint8_t refreshHistoryIndex;       // Current index in ring buffer
     uint32_t crc32;                    // CRC32 checksum for data integrity
 };

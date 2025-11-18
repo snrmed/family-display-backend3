@@ -151,7 +151,11 @@ void RTCManager::loadRTCData() {
         if (calculatedCRC == rtcData.crc32) {
             DEBUG_PRINTLN("RTC: Valid data loaded from RTC memory");
             DEBUG_PRINTF("RTC: WiFi failures: %d\n", rtcData.wifiFailureCount);
-            DEBUG_PRINTF("RTC: Last refresh: %lu ms ago\n", millis() - rtcData.lastRefreshTimestamp);
+            if (rtcData.lastRefreshTimestamp > 0) {
+                time_t now = time(nullptr);
+                time_t elapsed = now - rtcData.lastRefreshTimestamp;
+                DEBUG_PRINTF("RTC: Last refresh: %ld seconds ago\n", (long)elapsed);
+            }
             return;
         } else {
             DEBUG_PRINTLN("RTC: CRC mismatch - reinitializing RTC data");
@@ -222,13 +226,21 @@ void RTCManager::resetWiFiFailureCount() {
 // ============================================================
 
 bool RTCManager::canRefreshNow() {
-    uint32_t now = millis();
-    uint32_t elapsed = now - rtcData.lastRefreshTimestamp;
+    time_t now = time(nullptr);
 
-    // Check minimum interval
-    if (elapsed < MIN_REFRESH_INTERVAL_MS) {
-        DEBUG_PRINTF("RTC: Refresh throttled - only %lu ms since last refresh (min: %lu ms)\n",
-                     elapsed, (unsigned long)MIN_REFRESH_INTERVAL_MS);
+    // If no previous refresh or time not synced, allow refresh
+    if (rtcData.lastRefreshTimestamp == 0 || now < 1000000000) {
+        DEBUG_PRINTLN("RTC: No previous refresh or time not synced - allowing refresh");
+        return true;
+    }
+
+    time_t elapsed = now - rtcData.lastRefreshTimestamp;
+    uint32_t elapsedMs = elapsed * 1000;
+
+    // Check minimum interval (convert to milliseconds for comparison)
+    if (elapsedMs < MIN_REFRESH_INTERVAL_MS) {
+        DEBUG_PRINTF("RTC: Refresh throttled - only %ld seconds since last refresh (min: %lu seconds)\n",
+                     (long)elapsed, (unsigned long)(MIN_REFRESH_INTERVAL_MS / 1000));
         return false;
     }
 
@@ -242,7 +254,7 @@ bool RTCManager::canRefreshNow() {
 }
 
 void RTCManager::recordRefresh() {
-    uint32_t now = millis();
+    time_t now = time(nullptr);
     rtcData.lastRefreshTimestamp = now;
 
     // Add to refresh history ring buffer
@@ -250,21 +262,33 @@ void RTCManager::recordRefresh() {
     rtcData.refreshHistoryIndex = (rtcData.refreshHistoryIndex + 1) % RATE_LIMIT_MAX_REFRESHES;
 
     saveRTCData();
-    DEBUG_PRINTF("RTC: Refresh recorded at %lu ms\n", now);
+    DEBUG_PRINTF("RTC: Refresh recorded at Unix time %ld\n", (long)now);
 }
 
 uint32_t RTCManager::millisSinceLastRefresh() {
-    return millis() - rtcData.lastRefreshTimestamp;
+    time_t now = time(nullptr);
+    if (rtcData.lastRefreshTimestamp == 0) {
+        return 0;
+    }
+    time_t elapsed = now - rtcData.lastRefreshTimestamp;
+    return elapsed * 1000;  // Convert seconds to milliseconds
 }
 
 bool RTCManager::isRateLimited() {
-    uint32_t now = millis();
+    time_t now = time(nullptr);
     uint8_t recentCount = 0;
 
-    // Count refreshes within the rate limit window
+    // If time not synced, can't check rate limit
+    if (now < 1000000000) {
+        return false;
+    }
+
+    // Count refreshes within the rate limit window (convert ms to seconds)
+    time_t windowSeconds = RATE_LIMIT_WINDOW_MS / 1000;
+
     for (int i = 0; i < RATE_LIMIT_MAX_REFRESHES; i++) {
-        uint32_t refreshTime = rtcData.refreshHistory[i];
-        if (refreshTime > 0 && (now - refreshTime) < RATE_LIMIT_WINDOW_MS) {
+        time_t refreshTime = rtcData.refreshHistory[i];
+        if (refreshTime > 0 && (now - refreshTime) < windowSeconds) {
             recentCount++;
         }
     }
@@ -273,8 +297,8 @@ bool RTCManager::isRateLimited() {
     bool limited = (recentCount >= RATE_LIMIT_MAX_REFRESHES);
 
     if (limited) {
-        DEBUG_PRINTF("RTC: Rate limit check - %d refreshes in last %lu ms\n",
-                     recentCount, (unsigned long)RATE_LIMIT_WINDOW_MS);
+        DEBUG_PRINTF("RTC: Rate limit check - %d refreshes in last %lu seconds\n",
+                     recentCount, (unsigned long)windowSeconds);
     }
 
     return limited;
