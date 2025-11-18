@@ -1,6 +1,7 @@
 #include "sd_manager.h"
 #include "memory_utils.h"
 #include "raw7_decoder.h"
+#include "http_task.h"
 
 SDManager::SDManager() : _initialized(false), _csPin(PIN_SD_CS) {
 }
@@ -259,6 +260,7 @@ bool SDManager::downloadRaw7ToCache(RAW7Decoder& decoder,
     }
 
     DEBUG_PRINTLN("SD: Streaming RAW7 download directly to cache");
+    DEBUG_PRINTLN("SD: Running HTTPS in dedicated task with 64KB stack to avoid overflow");
 
     // Use temporary file for safe cache update
     const char* tempFile = "/last.raw7.tmp";
@@ -268,43 +270,53 @@ bool SDManager::downloadRaw7ToCache(RAW7Decoder& decoder,
         SD.remove(tempFile);
     }
 
-    // Open temp file for writing
-    File cacheFile = SD.open(tempFile, FILE_WRITE);
-    if (!cacheFile) {
-        DEBUG_PRINTLN("SD: Failed to open temp file for writing");
+    // Run the HTTPS download in a dedicated task with large stack
+    // This avoids stack overflow during TLS handshake on ESP32 without PSRAM
+    bool downloadSuccess = HttpTask::runWithLargeStack([&]() -> bool {
+        // Open temp file for writing
+        File cacheFile = SD.open(tempFile, FILE_WRITE);
+        if (!cacheFile) {
+            DEBUG_PRINTLN("SD: Failed to open temp file for writing");
+            return false;
+        }
+
+        // Set up download context
+        DownloadContext ctx;
+        ctx.file = &cacheFile;
+        ctx.totalWritten = 0;
+
+        // Execute HTTPS download (TLS handshake happens here)
+        bool success = decoder.streamImage(backendUrl, deviceName, downloadChunkCallback, &ctx);
+
+        cacheFile.close();
+
+        if (success && ctx.totalWritten == RAW7_SIZE) {
+            DEBUG_PRINTF("SD: Successfully downloaded %d bytes to temp file\n", ctx.totalWritten);
+            return true;
+        } else {
+            DEBUG_PRINTF("SD: Download incomplete - wrote %d of %d bytes\n",
+                        ctx.totalWritten, RAW7_SIZE);
+            SD.remove(tempFile);  // Remove incomplete temp file
+            return false;
+        }
+    });
+
+    if (!downloadSuccess) {
+        DEBUG_PRINTLN("SD: Download task failed");
         return false;
     }
 
-    // Set up download context
-    DownloadContext ctx;
-    ctx.file = &cacheFile;
-    ctx.totalWritten = 0;
+    // Atomic replace: remove old cache and rename temp to cache
+    if (SD.exists(SD_CACHE_FILE)) {
+        SD.remove(SD_CACHE_FILE);
+    }
 
-    bool success =
-        decoder.streamImage(backendUrl, deviceName, downloadChunkCallback, &ctx);
-
-    cacheFile.close();
-
-    if (success && ctx.totalWritten == RAW7_SIZE) {
-        DEBUG_PRINTF("SD: Successfully downloaded %d bytes to temp file\n", ctx.totalWritten);
-
-        // Atomic replace: remove old cache and rename temp to cache
-        if (SD.exists(SD_CACHE_FILE)) {
-            SD.remove(SD_CACHE_FILE);
-        }
-
-        if (SD.rename(tempFile, SD_CACHE_FILE)) {
-            DEBUG_PRINTLN("SD: Cache updated successfully");
-            return true;
-        } else {
-            DEBUG_PRINTLN("SD: Failed to rename temp file to cache");
-            SD.remove(tempFile);
-            return false;
-        }
+    if (SD.rename(tempFile, SD_CACHE_FILE)) {
+        DEBUG_PRINTLN("SD: Cache updated successfully");
+        return true;
     } else {
-        DEBUG_PRINTF("SD: Download incomplete - wrote %d of %d bytes\n",
-                    ctx.totalWritten, RAW7_SIZE);
-        SD.remove(tempFile);  // Remove incomplete temp file
+        DEBUG_PRINTLN("SD: Failed to rename temp file to cache");
+        SD.remove(tempFile);
         return false;
     }
 }
