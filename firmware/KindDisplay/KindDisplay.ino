@@ -278,7 +278,8 @@ void updateDisplay(bool triggerReroll) {
 
     // NEW: Check refresh throttling AFTER WiFi/NTP sync (Part 7)
     // This ensures we have accurate time for throttling checks
-    if (!rtcMgr.canRefreshNow()) {
+    // IMPORTANT: Skip throttle check for user-initiated background rerolls
+    if (!triggerReroll && !rtcMgr.canRefreshNow()) {
         DEBUG_PRINTLN("Refresh throttled - skipping update and returning to sleep");
         WiFi.disconnect(true);
         return;
