@@ -139,21 +139,55 @@ bool RAW7Decoder::streamImage(const char* backendUrl,
     return (totalRead == RAW7_SIZE);
 }
 
-bool RAW7Decoder::triggerBackgroundReroll(const char* backendUrl, const char* deviceName) {
+bool RAW7Decoder::streamBackgroundReroll(const char* backendUrl,
+                                         const char* deviceName,
+                                         ChunkCallback callback,
+                                         void* userData) {
+    if (!callback) {
+        DEBUG_PRINTLN("RAW7: ERROR - No callback provided");
+        return false;
+    }
+
     String url = String(backendUrl) + "/v1/frame_bg_reroll?device=" + String(deviceName);
-    DEBUG_PRINTF("RAW7: Triggering background reroll at %s\n", url.c_str());
+    DEBUG_PRINTF("RAW7: Streaming background reroll from %s\n", url.c_str());
 
     _http.begin(url);
     _http.setTimeout(HTTP_TIMEOUT);
 
-    int httpCode = _http.GET();
-    _http.end();
+    int httpCode = _http.POST("");  // POST with empty body (device in query param)
 
-    if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_NO_CONTENT) {
-        DEBUG_PRINTLN("RAW7: Background reroll successful");
-        return true;
-    } else {
-        DEBUG_PRINTF("RAW7: Background reroll failed: %d\n", httpCode);
+    if (httpCode != HTTP_CODE_OK) {
+        DEBUG_PRINTF("RAW7: Background reroll HTTP error: %d\n", httpCode);
+        _http.end();
         return false;
     }
+
+    WiFiClient* stream = _http.getStreamPtr();
+    uint8_t buffer[HTTP_BUFFER_SIZE];
+    size_t totalRead = 0;
+
+    while (_http.connected() && totalRead < RAW7_SIZE) {
+        size_t available = stream->available();
+        if (available) {
+            size_t toRead = min(available, sizeof(buffer));
+            toRead = min(toRead, RAW7_SIZE - totalRead);
+
+            int read = stream->readBytes(buffer, toRead);
+            if (read > 0) {
+                callback(buffer, read, userData);
+                totalRead += read;
+
+                if (totalRead % 10000 == 0) {
+                    DEBUG_PRINTF("RAW7: Reroll streamed %d / %d bytes\n", totalRead, RAW7_SIZE);
+                }
+            }
+        } else {
+            delay(1);
+        }
+    }
+
+    _http.end();
+
+    DEBUG_PRINTF("RAW7: Background reroll stream complete - %d bytes\n", totalRead);
+    return (totalRead == RAW7_SIZE);
 }

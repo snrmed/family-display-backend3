@@ -1516,10 +1516,11 @@ async def api_frame(device: str = "familydisplay"):
 async def api_raw7(device: str = "familydisplay"):
     """
     Render frame in RAW7 format for Spectra E6 e-paper displays.
+    Always builds FRESH data (weather, jokes, etc.) from external APIs.
 
     Process:
-    1. Build render data using existing build_render_data()
-    2. Render HTML to PNG using existing render_html_to_png()
+    1. Build fresh render data using build_render_data()
+    2. Render HTML to PNG using render_html_to_png()
     3. Convert PNG to RAW7 using png_bytes_to_raw7()
     4. Return RAW7 bytes as application/octet-stream
     5. Save to GCS at devices/{device}/renders/latest.raw7 (if enabled)
@@ -1527,7 +1528,8 @@ async def api_raw7(device: str = "familydisplay"):
     if not ENABLE_RENDERING:
         raise HTTPException(status_code=503, detail="Rendering disabled")
     try:
-        # Step 1: Build render data
+        # Step 1: Build fresh render data (always fetch latest weather, jokes, etc.)
+        logger.info(f"🔄 Building fresh render data for {device}")
         data = await build_render_data(device)
 
         # Save render_data.json
@@ -1948,8 +1950,8 @@ async def frame_bg_reroll(
 ):
     """
     Uses cached render_data.json for the device,
-    swaps only the background, renders a new PNG.
-    No external API calls.
+    swaps only the background, renders and returns RAW7.
+    No external API calls - uses cached weather/jokes/etc.
     """
     key = f"devices/{device}/render_data.json"
     render_data = gcs_read_json(key)
@@ -1974,13 +1976,20 @@ async def frame_bg_reroll(
     if not render_path.exists():
         render_path = BASE_DIR / "web" / "layouts" / "base.html"
 
+    # Render to PNG
     png_bytes = await render_html_to_png(str(render_path), render_data)
 
+    # Convert PNG to RAW7 for e-paper display
+    raw7_bytes = png_bytes_to_raw7(png_bytes, RENDER_WIDTH, RENDER_HEIGHT)
+
+    # Save both PNG and RAW7
     if storage_enabled:
         gcs_write_bytes(f"devices/{device}/renders/latest.png", png_bytes)
+        gcs_write_bytes(f"devices/{device}/renders/latest.raw7", raw7_bytes, content_type="application/octet-stream")
         gcs_write_json(key, render_data)
 
-    return Response(content=png_bytes, media_type="image/png")
+    logger.info(f"✅ Background reroll complete: {len(raw7_bytes)} bytes RAW7")
+    return Response(content=raw7_bytes, media_type="application/octet-stream")
 
 @app.get("/v1/frame_bg_reroll_browser")
 async def frame_bg_reroll_browser(

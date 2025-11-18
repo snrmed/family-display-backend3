@@ -28,6 +28,12 @@ public:
                             const char* backendUrl,
                             const char* deviceName);
 
+    // Download RAW7 via background reroll (uses cached data, new background only)
+    // Uses RAW7Decoder's streamBackgroundReroll() to avoid external API calls
+    bool downloadRaw7ViaReroll(class RAW7Decoder& decoder,
+                               const char* backendUrl,
+                               const char* deviceName);
+
     // Stream RAW7 data from cache file in chunks
     // Callback is called with chunks of data as they are read
     typedef void (*StreamCallback)(const uint8_t* chunk, size_t size, void* userData);

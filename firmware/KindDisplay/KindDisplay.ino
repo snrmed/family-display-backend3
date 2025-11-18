@@ -278,7 +278,8 @@ void updateDisplay(bool triggerReroll) {
 
     // NEW: Check refresh throttling AFTER WiFi/NTP sync (Part 7)
     // This ensures we have accurate time for throttling checks
-    if (!rtcMgr.canRefreshNow()) {
+    // IMPORTANT: Skip throttle check for user-initiated background rerolls
+    if (!triggerReroll && !rtcMgr.canRefreshNow()) {
         DEBUG_PRINTLN("Refresh throttled - skipping update and returning to sleep");
         WiFi.disconnect(true);
         return;
@@ -289,18 +290,6 @@ void updateDisplay(bool triggerReroll) {
     String deviceName = wifiMgr.getDeviceName();
     DEBUG_PRINTF("Backend URL: %s\n", backendUrl.c_str());
     DEBUG_PRINTF("Device Name: %s\n", deviceName.c_str());
-
-    // NEW: If in SPECIAL mode, trigger background reroll first (Part 2)
-    if (triggerReroll) {
-        DEBUG_PRINTLN("Triggering background reroll...");
-        if (imageDecoder.triggerBackgroundReroll(backendUrl.c_str(), deviceName.c_str())) {
-            DEBUG_PRINTLN("Background reroll successful");
-            statusLED.show(LED_TRIPLE_BLINK);  // NEW: Triple blink feedback
-            delay(2000);  // Give backend time to regenerate
-        } else {
-            DEBUG_PRINTLN("Background reroll failed - continuing with fetch");
-        }
-    }
 
     // ============================================================
     // STREAMING APPROACH - No large RAM buffers needed
@@ -314,9 +303,28 @@ void updateDisplay(bool triggerReroll) {
         DEBUG_PRINTLN("Using flash streaming approach (no large RAM buffer needed)");
 
         // Step 1: Stream download directly to flash cache
-        if (flashCache.downloadRaw7ToCache(imageDecoder, backendUrl.c_str(), deviceName.c_str())) {
-            DEBUG_PRINTLN("Streaming download to flash successful");
-            downloadSuccess = true;
+        // Use reroll endpoint if triggered (uses cached data, new background)
+        // Otherwise use normal endpoint (fetches fresh data)
+        if (triggerReroll) {
+            DEBUG_PRINTLN("Downloading RAW7 via background reroll (cached data, new background)");
+            if (flashCache.downloadRaw7ViaReroll(imageDecoder, backendUrl.c_str(), deviceName.c_str())) {
+                DEBUG_PRINTLN("Background reroll download successful");
+                statusLED.show(LED_TRIPLE_BLINK);  // Triple blink feedback
+                downloadSuccess = true;
+            } else {
+                DEBUG_PRINTLN("Background reroll download failed");
+            }
+        } else {
+            if (flashCache.downloadRaw7ToCache(imageDecoder, backendUrl.c_str(), deviceName.c_str())) {
+                DEBUG_PRINTLN("Streaming download to flash successful");
+                downloadSuccess = true;
+            } else {
+                DEBUG_PRINTLN("Streaming download to flash failed");
+            }
+        }
+
+        // Step 2: Stream display from flash cache (if download succeeded)
+        if (downloadSuccess) {
 
             // Step 2: Stream display from flash cache
             // TODO: Apply battery overlay if needed (requires streaming overlay implementation)
