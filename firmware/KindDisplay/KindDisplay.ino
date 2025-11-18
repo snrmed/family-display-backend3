@@ -92,18 +92,30 @@ void setup() {
     DEBUG_PRINT("Wake Reason: ");
     DEBUG_PRINTLN(RTCManager::getWakeupReasonString());
 
-    // If woken by rotary switch, show which pin
-    if (ButtonHandler::wasWakeSource()) {
-        uint8_t wakePin = ButtonHandler::getWakePin();
-        DEBUG_PRINTF("Switch: Woken by GPIO%d (rotary position)\n", wakePin);
-    }
-
     // Initialize switch handler
     button.begin();
 
-    // NEW: Read current switch mode
-    currentMode = button.readMode();
-    DEBUG_PRINTF("Switch Mode: %s\n", button.getModeString(currentMode));
+    // Determine mode based on wake source
+    // Rotary switch springs back to position 0, so we check which GPIO triggered wake
+    if (ButtonHandler::wasWakeSource()) {
+        uint8_t wakePin = ButtonHandler::getWakePin();
+        DEBUG_PRINTF("Switch: Woken by rotary switch - GPIO%d\n", wakePin);
+
+        // Map wake pin to mode
+        if (wakePin == PIN_SWITCH_34) {
+            currentMode = MODE_NORMAL;
+            DEBUG_PRINTLN("Switch: Rotated DOWN → NORMAL mode");
+        } else if (wakePin == PIN_SWITCH_35) {
+            currentMode = MODE_SPECIAL;
+            DEBUG_PRINTLN("Switch: Rotated CENTER → SPECIAL mode");
+        } else {
+            currentMode = MODE_UNKNOWN;
+        }
+    } else {
+        // Timer wake or other - default to normal mode
+        currentMode = MODE_NORMAL;
+        DEBUG_PRINTLN("Switch: Timer wake → NORMAL mode (default)");
+    }
 
     // Initialize display
     if (!display.begin()) {
