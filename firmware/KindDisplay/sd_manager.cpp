@@ -259,19 +259,20 @@ bool SDManager::downloadRaw7ToCache(RAW7Decoder& decoder,
     }
 
     DEBUG_PRINTLN("SD: Streaming RAW7 download directly to cache");
+    DEBUG_PRINTF("SD: Note - using hardcoded device from RAW7_ENDPOINT, ignoring '%s'\n", deviceName);
 
-    // Build URL with device name
-    String url = String(backendUrl) + "/v1/raw7?device=" + String(deviceName);
+    // Use temporary file for safe cache update
+    const char* tempFile = "/last.raw7.tmp";
 
-    // Remove old cache file if it exists
-    if (SD.exists(SD_CACHE_FILE)) {
-        SD.remove(SD_CACHE_FILE);
+    // Remove temp file if it exists from previous failed attempt
+    if (SD.exists(tempFile)) {
+        SD.remove(tempFile);
     }
 
-    // Open file for writing
-    File cacheFile = SD.open(SD_CACHE_FILE, FILE_WRITE);
+    // Open temp file for writing
+    File cacheFile = SD.open(tempFile, FILE_WRITE);
     if (!cacheFile) {
-        DEBUG_PRINTLN("SD: Failed to open cache file for writing");
+        DEBUG_PRINTLN("SD: Failed to open temp file for writing");
         return false;
     }
 
@@ -280,18 +281,31 @@ bool SDManager::downloadRaw7ToCache(RAW7Decoder& decoder,
     ctx.file = &cacheFile;
     ctx.totalWritten = 0;
 
-    // Stream download directly to file
-    bool success = decoder.streamImage(url.c_str(), downloadChunkCallback, &ctx);
+    // FIX: Pass only base URL - streamImage() appends RAW7_ENDPOINT internally
+    bool success = decoder.streamImage(backendUrl, downloadChunkCallback, &ctx);
 
     cacheFile.close();
 
     if (success && ctx.totalWritten == RAW7_SIZE) {
-        DEBUG_PRINTF("SD: Successfully cached %d bytes\n", ctx.totalWritten);
-        return true;
+        DEBUG_PRINTF("SD: Successfully downloaded %d bytes to temp file\n", ctx.totalWritten);
+
+        // Atomic replace: remove old cache and rename temp to cache
+        if (SD.exists(SD_CACHE_FILE)) {
+            SD.remove(SD_CACHE_FILE);
+        }
+
+        if (SD.rename(tempFile, SD_CACHE_FILE)) {
+            DEBUG_PRINTLN("SD: Cache updated successfully");
+            return true;
+        } else {
+            DEBUG_PRINTLN("SD: Failed to rename temp file to cache");
+            SD.remove(tempFile);
+            return false;
+        }
     } else {
-        DEBUG_PRINTF("SD: Cache write incomplete - wrote %d of %d bytes\n",
+        DEBUG_PRINTF("SD: Download incomplete - wrote %d of %d bytes\n",
                     ctx.totalWritten, RAW7_SIZE);
-        SD.remove(SD_CACHE_FILE);  // Remove incomplete file
+        SD.remove(tempFile);  // Remove incomplete temp file
         return false;
     }
 }

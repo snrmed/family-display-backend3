@@ -79,19 +79,20 @@ bool FlashCache::downloadRaw7ToCache(RAW7Decoder& decoder,
     }
 
     DEBUG_PRINTLN("Flash: Streaming RAW7 download directly to cache");
+    DEBUG_PRINTF("Flash: Note - using hardcoded device from RAW7_ENDPOINT, ignoring '%s'\n", deviceName);
 
-    // Build URL with device name
-    String url = String(backendUrl) + "/v1/raw7?device=" + String(deviceName);
+    // Use temporary file for safe cache update
+    const char* tempFile = "/last.raw7.tmp";
 
-    // Remove old cache file if it exists
-    if (SPIFFS.exists(FLASH_CACHE_FILE)) {
-        SPIFFS.remove(FLASH_CACHE_FILE);
+    // Remove temp file if it exists from previous failed attempt
+    if (SPIFFS.exists(tempFile)) {
+        SPIFFS.remove(tempFile);
     }
 
-    // Open file for writing
-    File cacheFile = SPIFFS.open(FLASH_CACHE_FILE, FILE_WRITE);
+    // Open temp file for writing
+    File cacheFile = SPIFFS.open(tempFile, FILE_WRITE);
     if (!cacheFile) {
-        DEBUG_PRINTLN("Flash: Failed to open cache file for writing");
+        DEBUG_PRINTLN("Flash: Failed to open temp file for writing");
         return false;
     }
 
@@ -100,18 +101,31 @@ bool FlashCache::downloadRaw7ToCache(RAW7Decoder& decoder,
     ctx.file = &cacheFile;
     ctx.totalWritten = 0;
 
-    // Stream download directly to file
-    bool success = decoder.streamImage(url.c_str(), downloadChunkCallback, &ctx);
+    // FIX: Pass only base URL - streamImage() appends RAW7_ENDPOINT internally
+    bool success = decoder.streamImage(backendUrl, downloadChunkCallback, &ctx);
 
     cacheFile.close();
 
     if (success && ctx.totalWritten == RAW7_SIZE) {
-        DEBUG_PRINTF("Flash: Successfully cached %d bytes\n", ctx.totalWritten);
-        return true;
+        DEBUG_PRINTF("Flash: Successfully downloaded %d bytes to temp file\n", ctx.totalWritten);
+
+        // Atomic replace: remove old cache and rename temp to cache
+        if (SPIFFS.exists(FLASH_CACHE_FILE)) {
+            SPIFFS.remove(FLASH_CACHE_FILE);
+        }
+
+        if (SPIFFS.rename(tempFile, FLASH_CACHE_FILE)) {
+            DEBUG_PRINTLN("Flash: Cache updated successfully");
+            return true;
+        } else {
+            DEBUG_PRINTLN("Flash: Failed to rename temp file to cache");
+            SPIFFS.remove(tempFile);
+            return false;
+        }
     } else {
-        DEBUG_PRINTF("Flash: Cache write incomplete - wrote %d of %d bytes\n",
+        DEBUG_PRINTF("Flash: Download incomplete - wrote %d of %d bytes\n",
                     ctx.totalWritten, RAW7_SIZE);
-        SPIFFS.remove(FLASH_CACHE_FILE);  // Remove incomplete file
+        SPIFFS.remove(tempFile);  // Remove incomplete temp file
         return false;
     }
 }
