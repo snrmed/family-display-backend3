@@ -1,4 +1,5 @@
 #include "display_driver.h"
+#include "sd_manager.h"
 
 // ============================================================
 // EPD Command Definitions (common for ACeP displays)
@@ -208,6 +209,144 @@ void SpectraDisplay::refresh() {
     waitUntilIdle(120000);  // 2 minute timeout
 
     DEBUG_PRINTLN("SpectraDisplay: Refresh complete");
+}
+
+// Helper structure for streaming display
+struct StreamDisplayContext {
+    SpectraDisplay* display;
+    size_t totalProcessed;
+    bool success;
+};
+
+// Callback for streaming RAW7 data to display
+static void displayStreamCallback(const uint8_t* chunk, size_t size, void* userData) {
+    StreamDisplayContext* ctx = (StreamDisplayContext*)userData;
+    if (!ctx || !ctx->display || !ctx->success) {
+        return;
+    }
+
+    // Unpack RAW7 format (2 pixels per byte) to EPD format
+    // Process in manageable chunks to avoid large stack allocations
+    const size_t rawChunk = 2048;  // Process 2KB at a time
+    uint8_t expandedBuffer[rawChunk * 2];
+
+    size_t offset = 0;
+    while (offset < size) {
+        size_t chunkSize = min(rawChunk, size - offset);
+
+        // Unpack this chunk
+        for (size_t i = 0; i < chunkSize; i++) {
+            uint8_t packed = chunk[offset + i];
+            expandedBuffer[i * 2] = (packed >> 4) & 0x0F;      // High nibble
+            expandedBuffer[i * 2 + 1] = packed & 0x0F;         // Low nibble
+        }
+
+        // Send unpacked data to EPD
+        ctx->display->sendData(expandedBuffer, chunkSize * 2);
+
+        offset += chunkSize;
+        ctx->totalProcessed += chunkSize;
+
+        if (ctx->totalProcessed % 20000 == 0) {
+            DEBUG_PRINTF("Display: Processed %d / %d bytes\n",
+                        ctx->totalProcessed, RAW7_SIZE);
+        }
+    }
+}
+
+bool SpectraDisplay::displayRAW7FromSDCache(SDManager& sdCard) {
+    if (!_initialized) {
+        DEBUG_PRINTLN("SpectraDisplay: ERROR - Not initialized");
+        return false;
+    }
+
+    if (!sdCard.isAvailable()) {
+        DEBUG_PRINTLN("SpectraDisplay: ERROR - SD card not available");
+        return false;
+    }
+
+    if (!sdCard.hasCachedImage()) {
+        DEBUG_PRINTLN("SpectraDisplay: ERROR - No cached image on SD");
+        return false;
+    }
+
+    DEBUG_PRINTLN("SpectraDisplay: Starting streaming image transmission from SD cache");
+
+    // Power on the display
+    powerOn();
+
+    // Prepare to send image data
+    sendCommand(EPD_CMD_DATA_START_TRANSMISSION);
+
+    // Set up streaming context
+    StreamDisplayContext ctx;
+    ctx.display = this;
+    ctx.totalProcessed = 0;
+    ctx.success = true;
+
+    DEBUG_PRINTLN("SpectraDisplay: Unpacking RAW7 data from SD stream");
+
+    // Stream from SD card, using our callback to unpack and send to EPD
+    bool streamSuccess = sdCard.streamRaw7FromCache(displayStreamCallback, &ctx);
+
+    if (!streamSuccess || ctx.totalProcessed != RAW7_SIZE) {
+        DEBUG_PRINTF("SpectraDisplay: ERROR - Stream incomplete (%d bytes)\n", ctx.totalProcessed);
+        powerOff();
+        return false;
+    }
+
+    DEBUG_PRINTLN("SpectraDisplay: Transmitting to EPD complete");
+
+    // Refresh display
+    refresh();
+
+    DEBUG_PRINTLN("SpectraDisplay: Display update complete");
+    return true;
+}
+
+bool SpectraDisplay::displayRAW7FromSDFile(SDManager& sdCard, const char* filepath) {
+    if (!_initialized) {
+        DEBUG_PRINTLN("SpectraDisplay: ERROR - Not initialized");
+        return false;
+    }
+
+    if (!sdCard.isAvailable()) {
+        DEBUG_PRINTLN("SpectraDisplay: ERROR - SD card not available");
+        return false;
+    }
+
+    DEBUG_PRINTF("SpectraDisplay: Starting streaming image transmission from %s\n", filepath);
+
+    // Power on the display
+    powerOn();
+
+    // Prepare to send image data
+    sendCommand(EPD_CMD_DATA_START_TRANSMISSION);
+
+    // Set up streaming context
+    StreamDisplayContext ctx;
+    ctx.display = this;
+    ctx.totalProcessed = 0;
+    ctx.success = true;
+
+    DEBUG_PRINTLN("SpectraDisplay: Unpacking RAW7 data from SD stream");
+
+    // Stream from SD file, using our callback to unpack and send to EPD
+    bool streamSuccess = sdCard.streamRaw7FromFile(filepath, displayStreamCallback, &ctx);
+
+    if (!streamSuccess || ctx.totalProcessed != RAW7_SIZE) {
+        DEBUG_PRINTF("SpectraDisplay: ERROR - Stream incomplete (%d bytes)\n", ctx.totalProcessed);
+        powerOff();
+        return false;
+    }
+
+    DEBUG_PRINTLN("SpectraDisplay: Transmitting to EPD complete");
+
+    // Refresh display
+    refresh();
+
+    DEBUG_PRINTLN("SpectraDisplay: Display update complete");
+    return true;
 }
 
 void SpectraDisplay::clear(uint8_t color) {

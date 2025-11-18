@@ -293,54 +293,84 @@ void updateDisplay(bool triggerReroll) {
         }
     }
 
-    // Fetch RAW7 image
-    size_t imageSize = 0;
-    uint8_t* imageBuffer = imageDecoder.fetchImage(backendUrl.c_str(), deviceName.c_str(), imageSize);
-#if SD_CARD_ENABLED
-    bool usedCachedImage = false;
-#endif
+    // ============================================================
+    // STREAMING APPROACH - No large RAM buffers needed
+    // ============================================================
+    bool downloadSuccess = false;
+    bool displaySuccess = false;
 
 #if SD_CARD_ENABLED
-    if ((!imageBuffer || imageSize != RAW7_SIZE) && sdCard.isAvailable()) {
-        DEBUG_PRINTLN("RAW7: Fetch failed - attempting to load cached image from SD");
-        size_t cachedSize = 0;
-        imageBuffer = sdCard.loadRAW7(cachedSize);
-        if (imageBuffer && cachedSize == RAW7_SIZE) {
-            imageSize = cachedSize;
-            usedCachedImage = true;
-            DEBUG_PRINTLN("RAW7: Cached image loaded successfully");
+    // Preferred path: Stream download to SD, then stream display from SD
+    if (sdCard.isAvailable()) {
+        DEBUG_PRINTLN("Using streaming approach (no large RAM buffer needed)");
+
+        // Step 1: Stream download directly to SD card cache
+        if (sdCard.downloadRaw7ToCache(imageDecoder, backendUrl.c_str(), deviceName.c_str())) {
+            DEBUG_PRINTLN("Streaming download to SD successful");
+            downloadSuccess = true;
+
+            // Step 2: Stream display from SD cache
+            // TODO: Apply battery overlay if needed (requires streaming overlay implementation)
+            if (display.displayRAW7FromSDCache(sdCard)) {
+                DEBUG_PRINTLN("Streaming display from SD successful");
+                display.powerOff();
+                displaySuccess = true;
+            } else {
+                DEBUG_PRINTLN("Failed to display from SD cache");
+            }
+        } else {
+            DEBUG_PRINTLN("Streaming download to SD failed");
         }
+    } else {
+        DEBUG_PRINTLN("SD card not available - streaming approach not possible");
     }
 #endif
 
-    if (!imageBuffer || imageSize != RAW7_SIZE) {
-        DEBUG_PRINTLN("Image fetch failed");
+    // Fallback: Try old buffer-based approach (will fail on no-PSRAM hardware)
+    if (!displaySuccess) {
+        DEBUG_PRINTLN("Attempting fallback to buffer-based approach");
+        size_t imageSize = 0;
+        uint8_t* imageBuffer = imageDecoder.fetchImage(backendUrl.c_str(), deviceName.c_str(), imageSize);
 
-        showErrorScreen("Image Fetch Failed");
+        if (!imageBuffer || imageSize != RAW7_SIZE) {
+            DEBUG_PRINTLN("Image fetch failed (likely out of memory on no-PSRAM hardware)");
+            showErrorScreen("Out of Memory");
+            WiFi.disconnect(true);
+            delay(3000);
+            return;
+        }
+
+        DEBUG_PRINTLN("Buffer-based download successful");
+
+        // Apply low battery overlay if needed
+        battery.overlayLowBatteryWarning(imageBuffer, imageSize);
+
+#if SD_CARD_ENABLED
+        // Save to SD for future use
+        if (sdCard.isAvailable()) {
+            if (!sdCard.saveRAW7(imageBuffer, imageSize)) {
+                DEBUG_PRINTLN("SD: Failed to cache RAW7 image");
+            }
+        }
+#endif
+
+        // Display image
+        if (display.displayRAW7(imageBuffer, imageSize)) {
+            displaySuccess = true;
+        }
+
+        // Clean up
+        free(imageBuffer);
+        display.powerOff();
+    }
+
+    if (!displaySuccess) {
+        DEBUG_PRINTLN("All display methods failed");
+        showErrorScreen("Display Failed");
         WiFi.disconnect(true);
         delay(3000);
         return;
     }
-
-    DEBUG_PRINTLN("Image fetched successfully");
-
-    // NEW: Apply low battery overlay if needed (Part 8)
-    battery.overlayLowBatteryWarning(imageBuffer, imageSize);
-
-#if SD_CARD_ENABLED
-    if (sdCard.isAvailable() && !usedCachedImage) {
-        if (!sdCard.saveRAW7(imageBuffer, imageSize)) {
-            DEBUG_PRINTLN("SD: Failed to cache RAW7 image");
-        }
-    }
-#endif
-
-    // Display image
-    display.displayRAW7(imageBuffer, imageSize);
-
-    // Clean up
-    free(imageBuffer);
-    display.powerOff();
 
     // NEW: Show solid LED for 3 seconds after successful display (Part 1)
     statusLED.show(LED_SOLID_3S);

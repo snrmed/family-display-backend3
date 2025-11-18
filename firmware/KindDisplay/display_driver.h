@@ -24,6 +24,12 @@ public:
     // Buffer must be 192000 bytes (800×480 pixels, 2 pixels per byte)
     bool displayRAW7(const uint8_t* buffer, size_t bufferSize);
 
+    // Display RAW7 image from SD cache (memory efficient - no large buffer)
+    bool displayRAW7FromSDCache(class SDManager& sdCard);
+
+    // Display RAW7 image from SD file (memory efficient - no large buffer)
+    bool displayRAW7FromSDFile(class SDManager& sdCard, const char* filepath);
+
     // Clear display to a single color
     void clear(uint8_t color = EPD_WHITE);
 
