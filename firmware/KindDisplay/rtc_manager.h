@@ -21,6 +21,8 @@ struct RTCData {
     time_t lastRefreshTimestamp;       // Unix timestamp of last refresh
     time_t refreshHistory[RATE_LIMIT_MAX_REFRESHES];  // Ring buffer of recent refresh times (Unix timestamps)
     uint8_t refreshHistoryIndex;       // Current index in ring buffer
+    uint8_t rotaryClickCount;          // Rotary switch click counter (for factory reset detection)
+    uint32_t lastRotaryClickMillis;    // Millis timestamp of last rotary click
     uint32_t crc32;                    // CRC32 checksum for data integrity
 };
 
@@ -90,6 +92,13 @@ public:
 
     // Check if rate limit is exceeded (too many refreshes recently)
     bool isRateLimited();
+
+    // ========== NEW: Rotary Click Tracking (for factory reset) ==========
+    // Check and record rotary click, returns true if factory reset should be triggered (6 clicks)
+    bool checkRotaryClicks();
+
+    // Reset rotary click counter
+    void resetRotaryClickCount();
 
 private:
     int _wakeHour;
