@@ -233,6 +233,10 @@ void handleSpecialMode() {
 void updateDisplay(bool triggerReroll) {
     DEBUG_PRINTLN("\n--- Updating Display ---");
 
+    // Memory diagnostics
+    DEBUG_PRINTF("Memory: Free heap: %d bytes, Largest block: %d bytes\n",
+                 ESP.getFreeHeap(), ESP.getMaxAllocHeap());
+
     // Connect to WiFi with LED fast blink feedback
     if (!wifiMgr.connect(&statusLED)) {  // NEW: Pass LED for feedback
         DEBUG_PRINTLN("WiFi connection failed");

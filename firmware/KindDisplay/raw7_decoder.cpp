@@ -14,12 +14,21 @@ uint8_t* RAW7Decoder::fetchImage(const char* backendUrl, const char* deviceName,
     String url = String(backendUrl) + "/v1/raw7?device=" + String(deviceName);
     DEBUG_PRINTF("RAW7: Fetching from %s\n", url.c_str());
 
+    // Check available heap before allocation
+    DEBUG_PRINTF("RAW7: Free heap before allocation: %d bytes\n", ESP.getFreeHeap());
+    DEBUG_PRINTF("RAW7: Largest free block: %d bytes\n", ESP.getMaxAllocHeap());
+    DEBUG_PRINTF("RAW7: Need to allocate: %d bytes\n", RAW7_SIZE);
+
     // Allocate buffer for RAW7 image
     uint8_t* buffer = (uint8_t*)malloc(RAW7_SIZE);
     if (!buffer) {
         DEBUG_PRINTLN("RAW7: ERROR - Memory allocation failed");
+        DEBUG_PRINTF("RAW7: Free heap: %d bytes (insufficient for %d bytes)\n",
+                     ESP.getFreeHeap(), RAW7_SIZE);
         return nullptr;
     }
+
+    DEBUG_PRINTF("RAW7: Buffer allocated successfully at 0x%08X\n", (uint32_t)buffer);
 
     // Start HTTP connection
     _http.begin(url);
