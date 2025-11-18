@@ -162,7 +162,7 @@ Default VSPI pins for SD card (shared with the display SPI bus):
 - **MISO**: GPIO 27
 - **SCK**: GPIO 18
 
-> These pins match the canonical definitions in `hardware_pins.md` / `config.h`. Adjust them there if your board uses a different mapping.
+> These pins match the canonical definitions in `hardware_pins.md` / `hardware_pins.h` / `config.h`. Adjust them there if your board uses a different mapping.
 
 ## 🚀 Getting Started
 

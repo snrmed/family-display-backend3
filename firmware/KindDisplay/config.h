@@ -1,9 +1,9 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-// Share the same pin definitions as firmware/hardware_pins.md so the wiring
+// Share the same pin definitions as firmware/hardware_pins.h so the wiring
 // guide and the compiled firmware never drift apart.
-#include "../hardware_pins.md"
+#include "../hardware_pins.h"
 
 // ============================================================
 // HARDWARE CONFIGURATION - ESP32 + Spectra-6 E-Ink
