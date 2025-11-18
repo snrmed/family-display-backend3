@@ -97,23 +97,23 @@ void setup() {
 
     // Determine mode based on wake source
     // Rotary switch springs back to CENTER (35) after rotation
-    // UP (0) → GPIO0 (DISABLED - causes boot loop), CENTER (35) → resting, DOWN (34) → GPIO34
+    // UP (0) → GPIO0 (has 10k pull-down resistor), CENTER (35) → resting, DOWN (34) → GPIO34
     if (ButtonHandler::wasWakeSource()) {
         uint8_t wakePin = ButtonHandler::getWakePin();
         DEBUG_PRINTF("Switch: Woken by rotary switch - GPIO%d\n", wakePin);
 
-        // Only GPIO34 (DOWN) is enabled for wake
-        if (wakePin == PIN_SWITCH_34) {
+        // GPIO0 (UP) has external pull-down resistor - safe for wake
+        if (wakePin == 0) {
             // Check for factory reset (6 clicks within 10 seconds)
             if (rtcMgr.checkRotaryClicks()) {
-                DEBUG_PRINTLN("Switch: Rotated DOWN (GPIO34) → FACTORY RESET (6 clicks detected)");
+                DEBUG_PRINTLN("Switch: Rotated UP (GPIO0) → FACTORY RESET (6 clicks detected)");
                 handleFactoryReset();
                 return;  // Never returns
             }
 
             // Single click: trigger background reroll
             currentMode = MODE_SPECIAL;
-            DEBUG_PRINTLN("Switch: Rotated DOWN (GPIO34) → SPECIAL mode (background reroll)");
+            DEBUG_PRINTLN("Switch: Rotated UP (GPIO0) → SPECIAL mode (background reroll)");
         } else {
             currentMode = MODE_NORMAL;
             DEBUG_PRINTLN("Switch: Unknown wake pin → NORMAL mode (default)");
