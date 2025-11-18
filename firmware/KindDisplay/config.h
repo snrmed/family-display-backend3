@@ -1,6 +1,10 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+// Share the same pin definitions as firmware/hardware_pins.h so the wiring
+// guide and the compiled firmware never drift apart.
+#include "../hardware_pins.h"
+
 // ============================================================
 // HARDWARE CONFIGURATION - ESP32 + Spectra-6 E-Ink
 // ============================================================
@@ -11,12 +15,12 @@
 #define DISPLAY_COLORS 7
 
 // SPI Pin mapping (ESP32 to EPD adapter)
-#define PIN_EPD_BUSY  4
-#define PIN_EPD_RST   16
-#define PIN_EPD_CS    5
-#define PIN_EPD_DC    23
-#define PIN_EPD_SCK   18
-#define PIN_EPD_MOSI  19
+#define PIN_EPD_BUSY  EPD_BUSY
+#define PIN_EPD_RST   EPD_RST
+#define PIN_EPD_CS    EPD_CS
+#define PIN_EPD_DC    EPD_DC
+#define PIN_EPD_SCK   EPD_CLK
+#define PIN_EPD_MOSI  EPD_MOSI
 
 // ============================================================
 // NEW: Mode Switch pins (3-position slide switch)
@@ -40,10 +44,10 @@
 // SD Card pins (sharing VSPI with display)
 // CS pins are separate: Display=GPIO5, SD=GPIO13
 #define SD_CARD_ENABLED   false   // SD card disabled - using text-only mode
-#define PIN_SD_CS     13  // CS pin (separate from display CS)
-#define PIN_SD_MOSI   19  // CMD on board (VSPI MOSI, shared with display)
-#define PIN_SD_MISO   27  // DAT on board (VSPI MISO)
-#define PIN_SD_SCK    18  // CLK on board (VSPI SCK, shared with display)
+#define PIN_SD_CS     SD_CS   // CS pin (separate from display CS)
+#define PIN_SD_MOSI   SD_MOSI // CMD on board (VSPI MOSI, shared with display)
+#define PIN_SD_MISO   SD_MISO // DAT on board (VSPI MISO)
+#define PIN_SD_SCK    SD_CLK  // CLK on board (VSPI SCK, shared with display)
 
 // ============================================================
 // NETWORK CONFIGURATION

@@ -133,9 +133,9 @@ The UP and DOWN positions are momentary only and spring back to center.
 | BUSY           | GPIO 4     | Busy signal |
 | RST            | GPIO 16    | Reset |
 | CS             | GPIO 5     | Chip Select |
-| DC             | GPIO 17    | Data/Command |
+| DC             | GPIO 23    | Data/Command |
 | SCK            | GPIO 18    | SPI Clock |
-| DIN (MOSI)     | GPIO 23    | SPI Data |
+| DIN (MOSI)     | GPIO 19    | SPI Data |
 | 5V             | 5V         | Power |
 | GND            | GND        | Ground |
 
@@ -166,15 +166,13 @@ The e-ink dev board includes a spring-return rotary switch:
 
 ### SD Card (Optional)
 
-Default VSPI pins for SD card:
+Default VSPI pins for SD card (shared with the display SPI bus):
 - **CS**: GPIO 13
-- **MOSI**: GPIO 15
-- **MISO**: GPIO 19 (Standard VSPI MISO pin)
-- **SCK**: GPIO 14
+- **MOSI**: GPIO 19
+- **MISO**: GPIO 27
+- **SCK**: GPIO 18
 
-> **Note**: Previous versions incorrectly used GPIO 2 for MISO, which conflicted with the status LED. This has been fixed to use the standard VSPI MISO pin (GPIO 19).
->
-> These can be adjusted in `config.h` if your board uses different pins.
+> These pins match the canonical definitions in `hardware_pins.md` / `hardware_pins.h` / `config.h`. Adjust them there if your board uses a different mapping.
 
 ## 🚀 Getting Started
 
