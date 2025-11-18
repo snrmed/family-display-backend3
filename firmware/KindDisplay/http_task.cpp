@@ -1,4 +1,5 @@
 #include "http_task.h"
+#include "config.h"
 
 void HttpTask::taskFunction(void* parameter) {
     TaskContext* ctx = (TaskContext*)parameter;
