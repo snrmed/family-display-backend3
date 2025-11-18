@@ -31,10 +31,11 @@ bool SpectraDisplay::begin() {
     digitalWrite(PIN_EPD_CS, HIGH);
     digitalWrite(PIN_EPD_DC, HIGH);
 
-    // Initialize SPI with all pins (including MISO for SD card compatibility)
-    // EPD is write-only, but we share SPI bus with SD card which needs MISO
-    // We control CS manually, so SS = -1
+    // Initialize SPI if not already done (SD card initializes it if enabled)
+    // This handles the case where SD_CARD_ENABLED = false
+    #if !SD_CARD_ENABLED
     SPI.begin(PIN_EPD_SCK, PIN_SD_MISO, PIN_EPD_MOSI, -1);
+    #endif
     SPI.beginTransaction(SPISettings(4000000, MSBFIRST, SPI_MODE0));
 
     // Hardware reset

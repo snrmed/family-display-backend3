@@ -99,16 +99,8 @@ void setup() {
     currentMode = button.readMode();
     DEBUG_PRINTF("Switch Mode: %s\n", button.getModeString(currentMode));
 
-    // Initialize display
-    if (!display.begin()) {
-        DEBUG_PRINTLN("FATAL: Display initialization failed");
-        statusLED.show(LED_FIVE_QUICK_BLINKS);  // Error indication
-        showErrorScreen("Display Init Failed");
-        delay(5000);
-        ESP.restart();
-    }
-
-    // Initialize SD card (optional)
+    // Initialize SD card FIRST (before display)
+    // SD card needs full SPI bus with MISO, so it initializes SPI
     #if SD_CARD_ENABLED
     if (sdCard.begin()) {
         DEBUG_PRINTLN("SD card available");
@@ -118,6 +110,15 @@ void setup() {
     #else
     DEBUG_PRINTLN("SD card disabled in config");
     #endif
+
+    // Initialize display (uses SPI already initialized by SD card)
+    if (!display.begin()) {
+        DEBUG_PRINTLN("FATAL: Display initialization failed");
+        statusLED.show(LED_FIVE_QUICK_BLINKS);  // Error indication
+        showErrorScreen("Display Init Failed");
+        delay(5000);
+        ESP.restart();
+    }
 
     // NEW: Check battery before any heavy operations
     checkBatteryAndSleep();
