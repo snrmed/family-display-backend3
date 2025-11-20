@@ -1,20 +1,21 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-// Share the same pin definitions as firmware/hardware_pins.h so the wiring
-// guide and the compiled firmware never drift apart.
-#include "../hardware_pins.h"
+// Multi-device hardware configuration system
+// Automatically selects correct pin mappings based on device type
+// Supports: ESP32 Dev Board, reTerminal E1002, XIAO ePaper EE04
+#include "hardware_config.h"
 
 // ============================================================
-// HARDWARE CONFIGURATION - ESP32 + Spectra-6 E-Ink
+// HARDWARE CONFIGURATION - Multi-Device Support
 // ============================================================
 
-// Display specifications
-#define DISPLAY_WIDTH  800
-#define DISPLAY_HEIGHT 480
-#define DISPLAY_COLORS 7
+// Display specifications (same for all devices using Spectra-6)
+#define DISPLAY_WIDTH  EPD_WIDTH
+#define DISPLAY_HEIGHT EPD_HEIGHT
+#define DISPLAY_COLORS EPD_COLOR_MODE
 
-// SPI Pin mapping (ESP32 to EPD adapter)
+// SPI Pin mapping - auto-configured based on device type
 #define PIN_EPD_BUSY  EPD_BUSY
 #define PIN_EPD_RST   EPD_RST
 #define PIN_EPD_CS    EPD_CS
@@ -23,32 +24,47 @@
 #define PIN_EPD_MOSI  EPD_MOSI
 
 // ============================================================
-// NEW: Mode Switch pins (3-position slide switch)
+// Button/Switch pins - auto-configured based on device type
 // ============================================================
-// Switch position detection:
-// - NORMAL MODE (center): GPIO34 = HIGH, GPIO35 = LOW
-// - SPECIAL MODE (up):    GPIO34 = LOW,  GPIO35 = HIGH
-#define PIN_SWITCH_34      34  // Switch position detector A
-#define PIN_SWITCH_35      35  // Switch position detector B
+#if defined(DEVICE_ORIGINAL_ESP32)
+// Original ESP32 dev board has rotary switch
+#define PIN_SWITCH_34      34  // Rotary position detector A
+#define PIN_SWITCH_35      35  // Rotary position detector B
+#define PIN_BUTTON_CENTER  BUTTON_CENTER
+#else
+// New devices (reTerminal, XIAO) use regular buttons
+#define PIN_BUTTON_CENTER  BUTTON_CENTER
+#endif
 
 // Status LED (used for firmware feedback)
 #define PIN_STATUS_LED     2   // GPIO2 - Built-in LED on most ESP32 boards
 
-// Battery monitoring (ADC input via voltage divider)
-// IMPORTANT: Set this to your actual battery sense pin!
-// Common options: GPIO36 (VP), GPIO39 (VN), GPIO34, GPIO35
-// If not using battery, this feature will be skipped
-#define PIN_BATTERY_ADC    36  // Change this to your actual battery sense pin
-#define BATTERY_ENABLED    true  // Set to false to disable battery monitoring
+// Battery monitoring - auto-configured based on device type
+#if BATTERY_ADC_PIN >= 0
+#define BATTERY_ENABLED    true
+#define PIN_BATTERY_ADC    BATTERY_ADC_PIN
+#define PIN_BATTERY_ENABLE BATTERY_ENABLE_PIN
+#else
+#define BATTERY_ENABLED    false
+#define PIN_BATTERY_ADC    36  // Fallback (not used)
+#define PIN_BATTERY_ENABLE -1
+#endif
 
-// SD Card pins (as labeled on board silkscreen)
-// Board labels: CS=5, CMD=23, CLK=18, DAT=19
-// No conflicts with EPD - uses completely separate GPIO pins
-#define SD_CARD_ENABLED   true    // Enable SD card caching/fallback
-#define PIN_SD_CS     SD_CS   // CS = GPIO5
-#define PIN_SD_MOSI   SD_MOSI // CMD = GPIO23
-#define PIN_SD_MISO   SD_MISO // DAT = GPIO19
-#define PIN_SD_SCK    SD_CLK  // CLK = GPIO18
+// SD Card pins - auto-configured based on device type
+// Note: Some devices share SPI bus with display
+#if SD_CS >= 0
+#define SD_CARD_ENABLED   true
+#define PIN_SD_CS     SD_CS
+#define PIN_SD_MOSI   SD_MOSI
+#define PIN_SD_MISO   SD_MISO
+#define PIN_SD_SCK    SD_CLK
+#else
+#define SD_CARD_ENABLED   false
+#define PIN_SD_CS     5   // Fallback (not used)
+#define PIN_SD_MOSI   23
+#define PIN_SD_MISO   19
+#define PIN_SD_SCK    18
+#endif
 
 // ============================================================
 // NETWORK CONFIGURATION
