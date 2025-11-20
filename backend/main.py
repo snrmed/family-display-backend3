@@ -1511,6 +1511,98 @@ async def api_frame(device: str = "familydisplay"):
         logger.error(f"Failed to render frame: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+def generate_buzzer_schedule(data: dict) -> str:
+    """
+    Generate buzzer schedule from todo elements in layout data.
+
+    Returns X-Buzzer-Schedule header format: "HH:MM:beeps:on_ms:off_ms,..."
+    Example: "07:55:3:100:200,13:55:3:100:200,19:55:3:100:200"
+
+    Args:
+        data: Render data containing layout with todo elements
+
+    Returns:
+        Comma-separated buzzer schedule string, or empty string if no buzzer events
+    """
+    from datetime import datetime, timedelta
+    import re
+
+    try:
+        # Get current day of week
+        now = datetime.now()
+        current_day = now.strftime('%a').lower()[:3]  # 'mon', 'tue', 'wed', etc.
+
+        # Extract todo elements from layout
+        layout = data.get('layout', {})
+        elements = layout.get('elements', [])
+
+        buzzer_events = []
+
+        for elem in elements:
+            if elem.get('kind') != 'todo':
+                continue
+
+            items = elem.get('items', [])
+
+            for item in items:
+                # Skip if buzzer not enabled
+                if not item.get('buzzer', False):
+                    continue
+
+                # Check if item applies to today
+                days = item.get('days', [])
+                if 'all' not in days and current_day not in days:
+                    continue
+
+                # Parse time
+                time_str = item.get('time', '').strip().lower()
+                if not time_str:
+                    continue
+
+                # Parse 12-hour format with am/pm or 24-hour format
+                match = re.match(r'(\d{1,2}):(\d{2})\s*(am|pm)?', time_str)
+                if not match:
+                    logger.warning(f"Invalid time format: {time_str}")
+                    continue
+
+                hour = int(match.group(1))
+                minute = int(match.group(2))
+                period = match.group(3)
+
+                # Convert to 24-hour format
+                if period == 'pm' and hour != 12:
+                    hour += 12
+                elif period == 'am' and hour == 12:
+                    hour = 0
+
+                # Create datetime for task time
+                task_time = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+
+                # Calculate reminder time (5 minutes before)
+                reminder_time = task_time - timedelta(minutes=5)
+
+                # Default beep pattern: 3 beeps, 100ms on, 200ms off
+                beep_count = 3
+                beep_on_ms = 100
+                beep_off_ms = 200
+
+                # Format: "HH:MM:beeps:on_ms:off_ms"
+                event_str = f"{reminder_time.hour:02d}:{reminder_time.minute:02d}:{beep_count}:{beep_on_ms}:{beep_off_ms}"
+                buzzer_events.append(event_str)
+
+                logger.info(f"Buzzer event: {item.get('task')} at {time_str} -> reminder at {event_str}")
+
+        # Join all events with comma
+        schedule = ','.join(buzzer_events)
+        logger.info(f"Generated buzzer schedule: {schedule if schedule else '(empty)'}")
+        return schedule
+
+    except Exception as e:
+        logger.error(f"Failed to generate buzzer schedule: {e}")
+        logger.error(traceback.format_exc())
+        return ""
+
+
 # RAW7 Render (for Spectra E6 e-paper displays)
 @app.get("/v1/raw7")
 async def api_raw7(device: str = "familydisplay"):
@@ -1557,9 +1649,21 @@ async def api_raw7(device: str = "familydisplay"):
             gcs_write_bytes(raw7_key, raw7_bytes, content_type="application/octet-stream")
             logger.info(f"💾 Saved RAW7 render: {raw7_key} ({len(raw7_bytes)} bytes)")
 
-        # Step 5: Return RAW7 bytes
+        # Step 5: Generate buzzer schedule (if device has buzzer)
+        buzzer_schedule = generate_buzzer_schedule(data)
+
+        # Step 6: Return RAW7 bytes with buzzer schedule header
         logger.info(f"✅ RAW7 render complete: {len(raw7_bytes)} bytes ({RENDER_WIDTH}x{RENDER_HEIGHT})")
-        return Response(content=raw7_bytes, media_type="application/octet-stream")
+        headers = {}
+        if buzzer_schedule:
+            headers["X-Buzzer-Schedule"] = buzzer_schedule
+            logger.info(f"📢 Added buzzer schedule header: {buzzer_schedule}")
+
+        return Response(
+            content=raw7_bytes,
+            media_type="application/octet-stream",
+            headers=headers
+        )
 
     except Exception as e:
         logger.error(f"Failed to render RAW7 frame: {e}")
