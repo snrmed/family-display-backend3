@@ -1,435 +1,215 @@
-# KIND Display - ESP32 Firmware
+# Kin:D Family Display - Firmware
 
-Complete firmware for the Kin:D / Family Display 7-color e-ink device.
+Complete firmware for 7-color e-ink family displays. Supports multiple hardware platforms with shared codebase.
 
 ---
 
-## 🚀 Quick Start Guide (For Beginners)
+## Supported Devices
 
-**Never programmed an ESP32 before? Start here!**
+This firmware supports **4 different hardware platforms**:
 
-### What You'll Need
-- ✅ Your ESP32 e-ink development board
-- ✅ USB-C cable
-- ✅ Computer (Windows, Mac, or Linux)
-- ✅ WiFi network
-- ✅ 15 minutes
+### 1. Seeed reTerminal E1002 (Recommended)
 
-### Step 1: Install PlatformIO
+**All-in-one professional solution**
 
-**Option A: VS Code (Easiest)**
-1. Download and install [VS Code](https://code.visualstudio.com/)
-2. Open VS Code
-3. Click Extensions icon (left sidebar)
-4. Search for "PlatformIO IDE"
-5. Click Install and wait 2-3 minutes
-6. Restart VS Code
+- **MCU**: ESP32-S3R8 (Dual-core 240MHz, 8MB PSRAM, 32MB Flash)
+- **Display**: E Ink Spectra 6 (800×480, 7.3") - **Included**
+- **Battery**: 2000mAh built-in (3+ months runtime)
+- **Sensors**: SHT40 temperature & humidity (I2C), Microphone (I2S), Buzzer
+- **Enclosure**: Professional metal case with mounting holes
+- **Best for**: Production deployments, sensor integration, medication reminders
 
-**Option B: Command Line**
+[📘 View reTerminal E1002 Documentation →](reterminal-e1002/README.md)
+
+### 2. Seeed XIAO ePaper Display Board EE04
+
+**Ultra-compact DIY solution**
+
+- **MCU**: ESP32-S3 Plus (8MB PSRAM, 32MB Flash)
+- **Display**: Supports 7.3" Spectra 6 (800×480) - **Separate purchase**
+- **Battery**: User-provided via JST connector
+- **Features**: Font chip (GT32L32S0140), 3 user buttons
+- **Form factor**: Ultra-compact XIAO size
+- **Best for**: DIY projects, custom enclosures, space-constrained builds
+
+[📘 View XIAO EE04 Documentation →](xiao-ee04/README.md)
+
+### 3. Waveshare e-Paper ESP32 Driver Board REV3
+
+**Universal driver board**
+
+- **MCU**: ESP32 Classic (no PSRAM typically)
+- **Display**: Universal - works with various Waveshare panels
+- **Battery**: User-provided
+- **Features**: 24-pin FFC connector for flexibility
+- **Best for**: Existing Waveshare display owners, DIY builds
+
+[📘 View Waveshare ESP32 REV3 Documentation →](waveshare-esp32-rev3/README.md)
+
+### 4. Original ESP32 Development Board
+
+**Legacy support**
+
+- **MCU**: ESP32 Classic
+- **Display**: Spectra 6 (800×480)
+- **Features**: SD card, RTC with CR2032, LiPo charger
+- **Best for**: Existing builds, backwards compatibility
+
+[📘 View Original ESP32 Documentation →](KindDisplay/README.md)
+
+---
+
+## Quick Comparison
+
+| Feature | reTerminal E1002 | XIAO EE04 | Waveshare REV3 | Original ESP32 |
+|---------|------------------|-----------|----------------|----------------|
+| **MCU** | ESP32-S3 (8MB PSRAM) | ESP32-S3 Plus (8MB PSRAM) | ESP32 Classic | ESP32 Classic |
+| **Display Included** | ✅ Yes | ❌ Separate | ❌ Separate | ❌ Separate |
+| **Battery Included** | ✅ 2000mAh | ❌ User-provided | ❌ User-provided | ❌ User-provided |
+| **Temp/Humidity** | ✅ SHT40 | ❌ | ❌ | ❌ |
+| **Microphone** | ✅ I2S | ❌ | ❌ | ❌ |
+| **Buzzer Reminders** | ✅ GPIO45 | ❌ | ❌ | ❌ |
+| **Font Chip** | ❌ | ✅ GT32L32S0140 | ❌ | ❌ |
+| **Enclosure** | ✅ Metal case | ❌ DIY | ❌ DIY | ❌ DIY |
+| **Form Factor** | All-in-one 7.3" | Compact board | Driver board | Dev board |
+| **PSRAM** | ✅ 8MB | ✅ 8MB | ❌ Limited | ❌ Limited |
+| **SD Card** | ❌ Not needed | ❌ Not needed | ⚠️ Optional | ✅ Supported |
+| **Price Range** | $$$ | $$ | $ | $ |
+
+---
+
+## 🚀 Quick Start
+
+### Step 1: Choose Your Device
+
+Select your hardware from the table above and navigate to its specific README:
+
+- **reTerminal E1002**: [reterminal-e1002/README.md](reterminal-e1002/README.md)
+- **XIAO EE04**: [xiao-ee04/README.md](xiao-ee04/README.md)
+- **Waveshare ESP32 REV3**: [waveshare-esp32-rev3/README.md](waveshare-esp32-rev3/README.md)
+- **Original ESP32**: [KindDisplay/README.md](KindDisplay/README.md)
+
+### Step 2: Install PlatformIO
+
 ```bash
-pip install platformio
+# Install PlatformIO Core
+curl -fsSL https://raw.githubusercontent.com/platformio/platformio-core-installer/master/get-platformio.py -o get-platformio.py
+python3 get-platformio.py
+
+# Or use VS Code extension
+# https://platformio.org/install/ide?install=vscode
 ```
 
-### Step 2: Get the Code
+### Step 3: Build & Upload
 
-Clone this repository or download the `firmware` folder:
+Navigate to your device's folder and build:
+
 ```bash
-git clone https://github.com/snrmed/family-display-backend3.git
-cd family-display-backend3/firmware
-```
-
-### Step 3: Connect Your ESP32
-
-1. Plug ESP32 into your computer with USB-C cable
-2. Wait 10 seconds for drivers to install
-3. The ESP32 should light up
-
-### Step 4: Upload Firmware
-
-**Using VS Code:**
-1. Open the `firmware` folder in VS Code
-2. Look at the bottom blue bar
-3. Click ✓ (checkmark) to build
-4. Wait 1-2 minutes for compilation
-5. Click → (arrow) to upload
-6. Wait 30 seconds
-
-**Using Terminal:**
-```bash
-cd firmware
+# For reTerminal E1002
+cd firmware/reterminal-e1002
 pio run -t upload
-```
+pio device monitor
 
-### Step 5: First Time Setup
+# For XIAO EE04
+cd firmware/xiao-ee04
+pio run -t upload
+pio device monitor
 
-1. **E-ink displays QR code** with setup instructions
-2. **On your phone**: Connect to WiFi `KIND-Setup` (password: `kind1234`)
-3. **Browser opens** to beautiful setup page (or go to `http://192.168.4.1`)
-4. **Enter**:
-   - Display name (e.g., "Living Room")
-   - Your WiFi network
-   - Your WiFi password
-5. **Click** "Connect & Continue"
-6. **Device reboots** and fetches first image (takes 30-60 seconds)
-7. **Done!** Display shows your content
+# For Waveshare ESP32 REV3
+cd firmware/waveshare-esp32-rev3
+pio run -t upload
+pio device monitor
 
-### Hardware Controls (Spring-Return Rotary Switch)
-
-Your board has a spring-return rotary switch with a center press button:
-
-| Position/Action | GPIO | Function |
-|----------------|------|----------|
-| **CENTER PRESS** | GPIO 35 | Wake from sleep + actions (see below) |
-| **UP** (momentary) | GPIO 0 | Returns to center (no function) |
-| **CENTER** (rest) | GPIO 35 | Resting position |
-| **DOWN** (momentary) | GPIO 34 | Returns to center (no function) |
-
-**Wake from deep sleep:** Press center button (GPIO35)
-- **1 press:** Get new background variant (reroll)
-- **6 presses within 10 seconds:** Factory reset
-
-The UP and DOWN positions are momentary only and spring back to center.
-
-### Troubleshooting
-
-**"Upload failed"**
-- Try a different USB cable (some are power-only)
-- Hold BOOT button while uploading
-- Install [USB drivers](https://www.silabs.com/developers/usb-to-uart-bridge-vcp-drivers) (Windows)
-
-**"WiFi connection failed"**
-- Check password (case-sensitive!)
-- Use 2.4GHz WiFi (ESP32 doesn't support 5GHz)
-- Factory reset and try again
-
-**"Display shows red screen"**
-- Red = error occurred
-- Connect serial monitor: `pio device monitor`
-- Check error message
-
-**Need more help?** See detailed sections below.
-
----
-
-## 📋 Hardware Specifications
-
-### Display
-- **Panel**: Spectra-6 (E6) 7-Color E-Ink Display
-- **Resolution**: 800×480 pixels
-- **Ribbon Code**: P730010-MF1-A
-- **Colors**: 7 (White, Black, Red, Yellow, Blue, Green, Orange)
-
-### Microcontroller
-- **Board**: ESP32 E-Ink Development Board (节电版)
-- **Module**: ESP-32S
-- **Features**: WiFi, Bluetooth, SD Card, RTC with CR2032, LiPo charger, USB-C
-
-## 🔌 Hardware Connections
-
-### EPD Adapter to ESP32 Pin Mapping
-
-Pin assignments from original device firmware.
-
-| EPD Adapter Pin | ESP32 GPIO | Function |
-|----------------|------------|----------|
-| BUSY           | GPIO 25    | Busy signal |
-| RST            | GPIO 26    | Reset |
-| CS             | GPIO 33    | Chip Select |
-| DC             | GPIO 27    | Data/Command |
-| CLK            | GPIO 13    | SPI Clock |
-| DIN (MOSI)     | GPIO 14    | SPI Data |
-| VCC            | 3.3V       | Power |
-| GND            | GND        | Ground |
-
-### Spring-Return Rotary Switch with Center Press
-
-The e-ink dev board includes a spring-return rotary switch:
-
-| Position/Action | GPIO | Function |
-|----------------|------|----------|
-| **CENTER PRESS** | GPIO 35 | Wake from sleep + click actions |
-| UP (momentary) | GPIO 0 | Springs back to center (no function) |
-| CENTER (rest) | GPIO 35 | Resting position |
-| DOWN (momentary) | GPIO 34 | Springs back to center (no function) |
-
-**Physical layout on board:**
-```
-    ┌─────────┐
-    │  ○ (0)  │ ← UP: Momentary position
-    │  ◉ (35) │ ← CENTER: Press button + resting position
-    │  ○ (34) │ ← DOWN: Momentary position
-    └─────────┘
-```
-
-**Wake Functionality:**
-- Uses EXT0 wakeup on GPIO35 (LOW trigger)
-- Press center button to wake from deep sleep
-- Click counter tracks presses within 10-second window
-
-### SD Card (Optional)
-
-Pin assignments as labeled on board silkscreen:
-- **CS**: GPIO 5 (board label: CS)
-- **MOSI**: GPIO 23 (board label: CMD)
-- **MISO**: GPIO 19 (board label: DAT)
-- **CLK**: GPIO 18 (board label: CLK)
-
-**Note:** EPD and SD card use completely separate GPIO pins - no conflicts. Both can operate independently.
-
-> These pins match the canonical definitions in `hardware_pins.md` / `hardware_pins.h` / `config.h`. Adjust them there if your board uses a different mapping.
-
-## 🚀 Getting Started
-
-### Prerequisites
-
-1. **PlatformIO** - Install via:
-   - [VS Code Extension](https://platformio.org/install/ide?install=vscode)
-   - Or standalone: `pip install platformio`
-
-2. **USB Cable** - USB-C cable for programming
-
-3. **Backend Server** - Your KIND backend must be running and accessible on your network
-
-### Installation Steps
-
-#### 1. Clone and Configure
-
-```bash
+# For Original ESP32
 cd firmware/KindDisplay
-```
-
-#### 2. Configure Backend URL
-
-Edit `config.h` and set your backend URL:
-
-```cpp
-#define BACKEND_URL   "http://192.168.1.100:8080"  // Change to your backend IP/domain
-```
-
-#### 3. Build and Upload
-
-**Using PlatformIO CLI:**
-```bash
-cd firmware
 pio run -t upload
-```
-
-**Using VS Code:**
-1. Open the `firmware` folder in VS Code
-2. Click the PlatformIO icon in the sidebar
-3. Under "PROJECT TASKS", click "Upload"
-
-#### 4. Monitor Serial Output
-
-```bash
 pio device monitor
 ```
 
-Or in VS Code: Click "Monitor" in PlatformIO tasks.
+### Step 4: WiFi Setup
 
-## 📱 First-Time Setup
+1. Power on device - it starts in AP mode
+2. Connect to WiFi network `KIND-Setup` (password: `kind1234`)
+3. Navigate to `http://192.168.4.1`
+4. Enter your WiFi credentials and backend URL
+5. Device reboots and fetches first image
+
+---
+
+## Common Features
+
+All devices share these core features:
+
+### Display
+- **Panel**: E Ink Spectra 6 (800×480 pixels, 7.3")
+- **Colors**: 7 (White, Black, Red, Yellow, Blue, Green, Orange)
+- **Refresh**: ~30-60 seconds for full color update
+
+### Power Management
+- **Deep Sleep**: <100μA between updates
+- **Daily Wake**: Configurable (default 1:00 AM)
+- **Button Wake**: Manual refresh via button press
+- **Battery Life**: 3+ months on 2000mAh (reTerminal E1002, 1 update/day)
 
 ### WiFi Configuration
+- **Captive Portal**: Easy setup via phone/browser
+- **Factory Reset**: Long press button to reset credentials
+- **OTA Updates**: Firmware updates via network (planned)
 
-On first boot (or after factory reset):
+### Image Delivery
+- **Format**: RAW7 (192KB compressed, 2 pixels per byte)
+- **Caching**: SPIFFS + PSRAM for reliability
+- **Backend**: Connects to Kin:D backend for daily images
 
-1. **Device starts in AP mode**
-   - SSID: `KIND-Setup`
-   - Password: `kind1234`
+---
 
-2. **Connect to the AP**
-   - Use your phone or computer to connect to `KIND-Setup`
+## Architecture Decisions
 
-3. **Open Setup Page**
-   - Navigate to: `http://192.168.4.1`
-   - Or wait for captive portal to appear
+### PSRAM-Only (No SD Card) - ESP32-S3 Devices
 
-4. **Configure WiFi**
-   - Select your WiFi network
-   - Enter password
-   - Enter backend URL (if different from default)
-   - Click "Save & Connect"
+**reTerminal E1002** and **XIAO EE04** use PSRAM instead of SD card:
 
-5. **Device Reboots**
-   - Device will connect to your WiFi
-   - Fetch first image from backend
-   - Display it on the e-ink screen
+**Benefits:**
+- ✅ Faster access than SD card
+- ✅ More reliable (no SD corruption)
+- ✅ Simpler hardware (one less component)
+- ✅ 8MB PSRAM stores active image + working buffers
+- ✅ SPIFFS provides persistent cache
 
-## 🎮 Usage
-
-### Normal Operation
-
-The device operates in deep sleep most of the time and wakes:
-
-1. **Daily at 01:00** (configurable in `config.h`)
-   - Connects to WiFi
-   - Fetches latest image from backend
-   - Updates display
-   - Returns to deep sleep
-
-2. **When center button is pressed**
-   - See button controls below
-
-### Button Controls
-
-The center press button (GPIO35) wakes the device from deep sleep and triggers actions based on click count:
-
-#### Single Press
-- **Function**: Background reroll (get new variant)
-- **What happens**:
-  1. Wake from sleep (EXT0 on GPIO35)
-  2. Connect to WiFi
-  3. Call `/v1/frame_bg_reroll` endpoint
-  4. Fetch new RAW7 image
-  5. Update display
-  6. Return to sleep
-
-#### Six Rapid Presses (within 10 seconds)
-- **Function**: Factory reset
-- **What happens**:
-  1. Clear WiFi credentials
-  2. Clear backend URL
-  3. Clear RTC memory
-  4. Reboot into setup mode (AP mode)
-
-**Note:** The rotary switch positions (UP/DOWN) are momentary and spring back to center. Only the center press button triggers wake functionality.
-
-### LED Indicators
-
-- **Serial output**: Connect via USB to see detailed debug logs at 115200 baud
-
-## ⚙️ Configuration
-
-### Modify Settings
-
-Edit `firmware/KindDisplay/config.h` to customize:
-
-#### Wake Schedule
-```cpp
-#define WAKE_HOUR     1   // Hour (0-23)
-#define WAKE_MINUTE   0   // Minute (0-59)
+**Memory Layout:**
+```
+┌─────────────────────────────────┐
+│ PSRAM (8MB)                     │
+│  - HTTP receive buffer          │
+│  - Image decompression          │
+│  - Temporary working buffers    │
+│  └─ ~7.8MB available            │
+├─────────────────────────────────┤
+│ SPIFFS (6-8MB)                  │
+│  - Last successful image (192KB)│
+│  - Welcome screen (192KB)       │
+│  - WiFi credentials (NVS)       │
+│  └─ ~7.5MB available            │
+└─────────────────────────────────┘
 ```
 
-#### Backend URL
-```cpp
-#define BACKEND_URL   "http://your-backend-url:port"
-```
+### RAW7 Format (Not PNG)
 
-#### Button Wake Pin
-```cpp
-#define PRESS_BUTTON_GPIO    35   // Center press button for EXT0 wake
-```
+All devices use RAW7 for image delivery:
 
-#### Click Counter Settings
-```cpp
-#define ROTARY_CLICK_FACTORY_RESET  6        // Number of clicks for factory reset
-#define ROTARY_CLICK_WINDOW_MS      10000    // Time window in milliseconds (10 seconds)
-```
+**Why RAW7?**
+- ✅ Smaller file size: 192KB vs 300-500KB PNG
+- ✅ Less WiFi power consumption
+- ✅ Backend does color quantization (better quality)
+- ✅ Device just unpacks (faster, less CPU)
+- ✅ Predictable memory usage
 
-#### Debug Output
-```cpp
-#define DEBUG_SERIAL  true   // Set to false to disable debug output
-```
+**RAW7 Encoding:**
+- 2 pixels per byte (4 bits each)
+- High nibble = first pixel, low nibble = second pixel
+- Values 0-6 map to 7 colors
 
-## 🔧 Troubleshooting
-
-### Display Not Working
-
-1. **Check wiring**: Verify all EPD connections match the pin mapping
-2. **Check power**: Ensure 5V and GND are connected
-3. **Serial logs**: Connect to serial monitor to see error messages
-
-### WiFi Connection Fails
-
-1. **Signal strength**: Ensure good WiFi signal
-2. **Credentials**: Verify SSID and password in setup portal
-3. **Factory reset**: Hold button for 6+ seconds to reset WiFi
-
-### Image Not Updating
-
-1. **Backend URL**: Verify backend is accessible from ESP32's network
-2. **Test endpoint**: Try accessing `http://YOUR_BACKEND/v1/raw7?device=familydisplay` in browser
-3. **Serial logs**: Check for HTTP errors in serial output
-
-### SD Card Not Detected
-
-1. **Wiring**: Verify SD card SPI pins match `config.h`
-2. **Card format**: Format SD card as FAT32
-3. **Optional feature**: SD card is optional; device works without it
-
-### Display Shows Red Screen
-
-- **Meaning**: Error occurred
-- **Check**: Connect to serial monitor to see error message
-- **Common causes**:
-  - WiFi connection failed
-  - Backend unreachable
-  - Image fetch failed
-
-## 📊 Power Consumption
-
-- **Deep Sleep**: ~10-50 μA
-- **WiFi Active**: ~80-150 mA
-- **Display Update**: ~100-200 mA
-- **Typical Battery Life**: Several weeks on 2000mAh LiPo (with daily updates)
-
-## 🔄 Firmware Updates
-
-### Over USB
-
-1. Connect ESP32 via USB
-2. Rebuild and upload:
-   ```bash
-   pio run -t upload
-   ```
-
-### OTA (Optional - Not Implemented)
-
-OTA updates can be added in future firmware versions.
-
-## 📁 Project Structure
-
-```
-firmware/
-├── platformio.ini              # PlatformIO configuration
-├── README.md                   # This file
-└── KindDisplay/
-    ├── KindDisplay.ino         # Main firmware
-    ├── config.h                # Configuration settings
-    ├── display_driver.h/cpp    # Spectra-6 E-ink driver
-    ├── wifi_manager.h/cpp      # WiFi setup portal
-    ├── raw7_decoder.h/cpp      # Image fetcher
-    ├── button_handler.h/cpp    # Button controls
-    ├── rtc_manager.h/cpp       # Sleep & wake scheduling
-    └── sd_manager.h/cpp        # SD card caching
-```
-
-## 🎨 How It Works
-
-### Image Pipeline
-
-1. **Backend** generates display content
-2. **Backend** applies Floyd-Steinberg dithering for 7 colors
-3. **Backend** encodes to RAW7 format (2 pixels per byte)
-4. **ESP32** fetches RAW7 via HTTP GET `/v1/raw7?device=familydisplay`
-5. **ESP32** unpacks nibbles to pixel indices (0-6)
-6. **ESP32** sends to Spectra-6 display via SPI
-7. **Display** refreshes (takes ~30-60 seconds for 7-color)
-
-### RAW7 Format
-
-- **Size**: 192,000 bytes (800×480 ÷ 2)
-- **Encoding**: High nibble = first pixel, low nibble = second pixel
-- **Values**: 0-6 (maps to 7 colors)
-
-Example:
-```
-Byte: 0x12
-  High nibble: 0x1 → Black
-  Low nibble:  0x2 → Red
-```
-
-### Color Palette
+**Color Palette:**
 
 | Index | Color  | RGB         |
 |-------|--------|-------------|
@@ -441,40 +221,313 @@ Byte: 0x12
 | 5     | Green  | 0,160,0     |
 | 6     | Orange | 255,128,0   |
 
-## 🐛 Debug Tips
+---
 
-### Enable Verbose Logging
+## Sensor Integration (reTerminal E1002 Only)
 
-In `config.h`:
-```cpp
-#define DEBUG_SERIAL  true
+The reTerminal E1002 includes environmental sensors and a buzzer for advanced features.
+
+### Temperature & Humidity (SHT40)
+
+**Hardware:**
+- I2C sensor on SDA=19, SCL=20
+- Automatic reading on daily wake
+- Sent to backend for display overlay
+
+**Data Flow:**
+```http
+GET /v1/raw7?device=xxx&temp=72.5&humidity=45
 ```
 
-### Monitor Serial Output
+Backend can overlay climate data on family photo display.
 
-```bash
-pio device monitor
+### Buzzer Reminders - Todo Integration
+
+The reTerminal E1002 supports **audio reminders for todo items** created in the designer.
+
+#### How It Works
+
+1. **In Designer**: Toggle buzzer on/off for each todo item (🔔/🔕 icon)
+2. **Backend**: Generates daily buzzer schedule from enabled todos
+3. **Device**: Sets RTC alarms and wakes to beep 5 minutes before task time
+4. **Battery Impact**: Negligible (~4% reduction for 3 daily reminders)
+
+#### Example Todo with Buzzer
+
+```json
+{
+  "emoji": "💊",
+  "time": "8:00am",
+  "task": "Morning medication",
+  "days": ["mon", "tue", "wed", "thu", "fri"],
+  "buzzer": true
+}
 ```
 
-### Common Serial Messages
+#### Backend Response
 
-- `WiFi: Connected! IP: ...` - WiFi connected successfully
-- `RAW7: Downloaded ... bytes` - Image download progress
-- `SpectraDisplay: Refreshing...` - Display update in progress
-- `RTC: Sleep duration: ... seconds` - Time until next wake
+Backend sends schedule via HTTP header:
 
-## 📝 License
+```http
+HTTP/1.1 200 OK
+Content-Type: application/octet-stream
+X-Buzzer-Schedule: 07:55:3:100:200,13:55:3:100:200,19:55:3:100:200
 
-See main project LICENSE file.
+[RAW7 binary data...]
+```
 
-## 🙏 Support
+**Header Format:** `HH:MM:beeps:on_ms:off_ms`
+- `07:55` - Time (24-hour format)
+- `3` - Number of beeps
+- `100` - Beep on duration (milliseconds)
+- `200` - Beep off duration (milliseconds)
 
-For issues or questions:
-1. Check this README
-2. Review serial debug output
-3. Check backend logs
-4. Open an issue in the main project repository
+#### Firmware Behavior
+
+1. Parses buzzer schedule on daily wake
+2. Programs ESP32 RTC alarms for each todo time
+3. Wakes at alarm time, beeps, returns to sleep
+4. No WiFi needed for buzzer wakes (works offline)
+
+#### Perfect For
+
+- 💊 Medication reminders (2-3x daily)
+- 📅 Appointment alerts
+- 🏫 School/work schedules
+- 🍽️ Meal time prompts
+- 🏠 Smart home notifications
+
+#### Battery Impact
+
+**Without buzzer reminders:** ~303 days (10 months) on 2000mAh battery
+
+**With 3 daily buzzer reminders:** ~291 days (9.7 months) on 2000mAh battery
+
+**Difference:** Only 12 days - totally acceptable!
+
+#### Documentation
+
+- [Todo Buzzer Integration Guide](TODO_BUZZER_INTEGRATION.md) - Complete implementation details
+- [JSON Format Specification](../JSON_FORMAT_TODO_BUZZER.md) - Todo JSON format with buzzer
+- [reTerminal E1002 README](reterminal-e1002/README.md) - Device-specific documentation
 
 ---
 
-**Enjoy your KIND Display! 🎨✨**
+## Project Structure
+
+```
+firmware/
+├── README.md                      # This file (unified documentation)
+│
+├── reterminal-e1002/              # Seeed reTerminal E1002 (ESP32-S3, sensors)
+│   ├── platformio.ini
+│   ├── src/ (copies from shared/)
+│   └── README.md
+│
+├── xiao-ee04/                     # Seeed XIAO ePaper EE04 (ESP32-S3 Plus, compact)
+│   ├── platformio.ini
+│   ├── src/ (copies from shared/)
+│   └── README.md
+│
+├── waveshare-esp32-rev3/          # Waveshare ESP32 Driver Board REV3
+│   ├── platformio.ini
+│   ├── src/ (copies from shared/)
+│   └── README.md
+│
+├── KindDisplay/                   # Original ESP32 dev board (legacy)
+│   ├── KindDisplay.ino
+│   ├── config.h
+│   └── *.cpp/h
+│
+├── shared/                        # Shared code for all devices
+│   ├── KindDisplay.ino            # Main firmware
+│   ├── display_driver.cpp/h       # Spectra-6 display controller
+│   ├── wifi_manager.cpp/h         # Captive portal WiFi configuration
+│   ├── raw7_decoder.cpp/h         # Streaming RAW7 image decoder
+│   ├── flash_cache.cpp/h          # SPIFFS-based persistent cache
+│   ├── rtc_manager.cpp/h          # Deep sleep and wake scheduling
+│   ├── battery.cpp/h              # Battery monitoring and management
+│   ├── button_handler.cpp/h       # Button/switch input handling
+│   ├── hardware_config.h          # Multi-device pin mappings
+│   └── ...
+│
+├── ARCHITECTURE_DECISIONS.md      # Design rationale and decisions
+├── TODO_BUZZER_INTEGRATION.md     # Buzzer reminder implementation guide
+├── README_MULTI_DEVICE.md         # Multi-device migration guide (legacy)
+└── SEEED_DEVICES.md               # Seeed device migration notes (legacy)
+```
+
+### Device Selection
+
+Each device folder has its own `platformio.ini` that defines:
+
+```ini
+build_flags =
+    -D DEVICE_RETERMINAL_E1002  # Or DEVICE_XIAO_EE04, DEVICE_WAVESHARE_ESP32_REV3
+```
+
+This automatically selects the correct pin mappings from `hardware_config.h`.
+
+---
+
+## How It Works
+
+### Image Pipeline
+
+1. **Backend** generates display content (weather, photos, todos, etc.)
+2. **Backend** applies Floyd-Steinberg dithering for 7 colors
+3. **Backend** encodes to RAW7 format (2 pixels per byte)
+4. **Device** fetches RAW7 via HTTP GET `/v1/raw7?device=familydisplay`
+5. **Device** unpacks nibbles to pixel indices (0-6)
+6. **Device** sends to Spectra-6 display via SPI
+7. **Display** refreshes (takes ~30-60 seconds for 7-color)
+
+### Daily Operation
+
+1. Device wakes at scheduled time (default 1:00 AM)
+2. Connects to WiFi
+3. Fetches RAW7 image from backend
+4. Updates e-ink display
+5. Returns to deep sleep
+6. (reTerminal E1002 only) Wakes for buzzer reminders
+
+### Button Controls
+
+**Original ESP32 / Waveshare:**
+- **Single press**: Background reroll (get new variant)
+- **6 rapid presses**: Factory reset
+
+**reTerminal E1002:**
+- **Green button**: Wake/refresh
+- **White button**: User-defined action
+
+**XIAO EE04:**
+- **KEY0/KEY1/KEY2**: User-defined actions
+
+---
+
+## Configuration
+
+Each device has its own `config.h` in the `src/` folder. Common settings:
+
+### Wake Schedule
+
+```cpp
+#define WAKE_HOUR     1   // Hour (0-23)
+#define WAKE_MINUTE   0   // Minute (0-59)
+```
+
+### Backend URL
+
+```cpp
+#define BACKEND_URL   "https://your-backend.app"
+```
+
+### Battery Thresholds (if supported)
+
+```cpp
+#define BATTERY_LOW_THRESHOLD 20       // Show warning
+#define BATTERY_CRITICAL_THRESHOLD 10  // Extended sleep
+```
+
+### Debug Output
+
+```cpp
+#define DEBUG_SERIAL  true   // Set to false to disable debug output
+```
+
+---
+
+## Troubleshooting
+
+### Device-Specific Issues
+
+See individual device READMEs:
+- [reTerminal E1002 Troubleshooting](reterminal-e1002/README.md#troubleshooting)
+- [XIAO EE04 Troubleshooting](xiao-ee04/README.md#troubleshooting)
+- [Waveshare ESP32 REV3 Troubleshooting](waveshare-esp32-rev3/README.md#troubleshooting)
+
+### Common Issues
+
+**Build Errors**
+
+Check that you're in the correct device folder:
+```bash
+pwd  # Should show firmware/reterminal-e1002 (or xiao-ee04, waveshare-esp32-rev3)
+```
+
+**Wrong Device Selected**
+
+Verify correct device in platformio.ini:
+```ini
+build_flags =
+    -D DEVICE_RETERMINAL_E1002  # Must match your hardware!
+```
+
+**Display Not Updating**
+
+1. Check backend URL in `config.h`
+2. Verify backend is accessible from device's network
+3. Check serial monitor for HTTP errors
+4. Test endpoint in browser: `http://YOUR_BACKEND/v1/raw7?device=familydisplay`
+
+**WiFi Connection Failed**
+
+1. Check signal strength
+2. Verify credentials (case-sensitive!)
+3. Use 2.4GHz WiFi (ESP32 doesn't support 5GHz)
+4. Factory reset and try again
+
+**Memory Issues (ESP32 Classic only)**
+
+If using Waveshare ESP32 REV3 or Original ESP32:
+- Reduce HTTP buffer size in config.h
+- Disable debug logging
+- Use SD card for caching (original ESP32 only)
+
+---
+
+## Hardware Purchase Links
+
+- [Seeed reTerminal E1002](https://www.seeedstudio.com/reTerminal-E1002-p-6533.html) - All-in-one solution
+- [Seeed XIAO EE04](https://www.seeedstudio.com/XIAO-ePaper-Board-ESP32-S3-EE04-with-7-3-spectratm-6-ePaper-Display-Bundle-Kit.html) - Compact board
+- [Waveshare ESP32 Driver Board](https://www.waveshare.com/e-paper-esp32-driver-board.htm) - Universal driver
+
+---
+
+## Contributing
+
+When contributing device-specific fixes:
+- Make changes in the specific device folder if it's device-specific
+- Make changes in `firmware/shared/` if it affects all devices
+- Test on multiple devices when modifying shared code
+
+---
+
+## Additional Resources
+
+- [ARCHITECTURE_DECISIONS.md](ARCHITECTURE_DECISIONS.md) - Design decisions and rationale
+- [TODO_BUZZER_INTEGRATION.md](TODO_BUZZER_INTEGRATION.md) - Buzzer implementation guide
+- [JSON_FORMAT_TODO_BUZZER.md](../JSON_FORMAT_TODO_BUZZER.md) - Todo JSON specification
+- [SEEED_DEVICES.md](SEEED_DEVICES.md) - Seeed device migration notes
+
+---
+
+## Support
+
+For issues or questions:
+1. Check device-specific README
+2. Review serial debug output at 115200 baud
+3. Check backend logs
+4. Review [ARCHITECTURE_DECISIONS.md](ARCHITECTURE_DECISIONS.md)
+5. Open an issue in the repository
+
+---
+
+## License
+
+Same as main project.
+
+---
+
+**Enjoy your Kin:D Family Display! 🎨✨**
