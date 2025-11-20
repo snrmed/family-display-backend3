@@ -1,0 +1,1 @@
+../../shared/hardware_config.h
