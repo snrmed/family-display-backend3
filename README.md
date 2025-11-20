@@ -147,11 +147,14 @@ Drag-and-drop web interface for creating custom layouts:
 - **Modular Providers** - Pluggable architecture for content sources
 
 ### Firmware Features
+- **Multi-Device Support** - reTerminal E1002, XIAO ePaper EE04, Waveshare ESP32 REV3
 - **WiFi Portal** - Easy setup via phone/computer with QR code
 - **7-Color Support** - Full Spectra-6 palette (white, black, red, yellow, blue, green, orange)
 - **Ultra Low Power** - Deep sleep mode (~10-50 μA) for weeks of battery life
 - **Scheduled Updates** - Automatic daily refresh (configurable)
 - **Manual Controls** - Physical button for background reroll and factory reset
+- **Todo Buzzer Reminders** - Audio reminders for scheduled tasks (reTerminal E1002 only)
+- **Environmental Sensors** - Temperature & humidity display (reTerminal E1002 only)
 - **SD Card Caching** - Optional local storage for images
 - **Robust Networking** - Retry logic and error handling
 
@@ -356,6 +359,66 @@ Pin assignments from original device firmware:
 - CS: GPIO 5, MOSI: GPIO 23, MISO: GPIO 19, CLK: GPIO 18
 
 See [firmware/README.md](firmware/README.md#-hardware-connections) for complete wiring guide.
+
+---
+
+## Advanced Features
+
+### Todo List with Buzzer Reminders
+
+The kin;D display supports interactive todo lists with optional audio reminders on devices with buzzer hardware (reTerminal E1002).
+
+#### How It Works
+
+1. **Designer**: Add todo items with buzzer toggle enabled
+2. **Backend**: Generates buzzer schedule from enabled todos
+3. **Device**: Sets RTC alarms and wakes to beep at reminder times
+4. **Battery Impact**: Negligible (~4% reduction for 3 daily reminders)
+
+#### Example Todo Item with Buzzer
+
+```json
+{
+  "emoji": "💊",
+  "time": "8:00am",
+  "task": "Morning medication",
+  "days": ["mon", "tue", "wed", "thu", "fri"],
+  "buzzer": true
+}
+```
+
+The device will beep 5 minutes before the task time (7:55 AM) on selected days.
+
+#### Backend Integration
+
+Backend sends buzzer schedule via HTTP header:
+
+```http
+X-Buzzer-Schedule: 07:55:3:100:200,13:55:3:100:200,19:55:3:100:200
+Format: HH:MM:beeps:on_ms:off_ms
+```
+
+#### Device Compatibility
+
+| Device | Buzzer Support | Behavior |
+|--------|----------------|----------|
+| reTerminal E1002 | ✅ Full support | Beeps at scheduled times |
+| XIAO EE04 | ❌ No buzzer | Ignores buzzer field |
+| Waveshare ESP32 REV3 | ❌ No buzzer | Ignores buzzer field |
+
+**Documentation:**
+- [JSON Format Specification](JSON_FORMAT_TODO_BUZZER.md) - Complete JSON format with buzzer integration
+- [Todo Buzzer Integration](firmware/TODO_BUZZER_INTEGRATION.md) - Firmware implementation details
+- [Multi-Device Firmware](firmware/README_MULTI_DEVICE.md) - Device-specific firmware guide
+
+### Environmental Sensors (reTerminal E1002 Only)
+
+The reTerminal E1002 includes environmental sensors that can be displayed on screen:
+
+- **Temperature & Humidity** (SHT40 sensor)
+- Sent to backend via query params: `?temp=72.5&humidity=45`
+- Backend can overlay climate data on generated images
+- Historical tracking and graphing (optional)
 
 ---
 

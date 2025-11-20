@@ -1170,37 +1170,43 @@ body{
                  onchange="updateTodoFromPanel()">
           
           <div class="days-selector" style="display:flex; gap:1px;">
-            <button type="button" class="day-btn" data-day="mon" onclick="toggleDay(this); updateTodoFromPanel();" 
+            <button type="button" class="day-btn" data-day="mon" onclick="toggleDay(this); updateTodoFromPanel();"
                     style="width:22px; height:22px; border:1px solid #2d2d2d; border-radius:3px; background:#1a1a1a; color:#e8e8e8; cursor:pointer; font-size:9px; font-weight:600; padding:0;">
               M
             </button>
-            <button type="button" class="day-btn" data-day="tue" onclick="toggleDay(this); updateTodoFromPanel();" 
+            <button type="button" class="day-btn" data-day="tue" onclick="toggleDay(this); updateTodoFromPanel();"
                     style="width:22px; height:22px; border:1px solid #2d2d2d; border-radius:3px; background:#1a1a1a; color:#e8e8e8; cursor:pointer; font-size:9px; font-weight:600; padding:0;">
               T
             </button>
-            <button type="button" class="day-btn" data-day="wed" onclick="toggleDay(this); updateTodoFromPanel();" 
+            <button type="button" class="day-btn" data-day="wed" onclick="toggleDay(this); updateTodoFromPanel();"
                     style="width:22px; height:22px; border:1px solid #2d2d2d; border-radius:3px; background:#1a1a1a; color:#e8e8e8; cursor:pointer; font-size:9px; font-weight:600; padding:0;">
               W
             </button>
-            <button type="button" class="day-btn" data-day="thu" onclick="toggleDay(this); updateTodoFromPanel();" 
+            <button type="button" class="day-btn" data-day="thu" onclick="toggleDay(this); updateTodoFromPanel();"
                     style="width:22px; height:22px; border:1px solid #2d2d2d; border-radius:3px; background:#1a1a1a; color:#e8e8e8; cursor:pointer; font-size:9px; font-weight:600; padding:0;">
               T
             </button>
-            <button type="button" class="day-btn" data-day="fri" onclick="toggleDay(this); updateTodoFromPanel();" 
+            <button type="button" class="day-btn" data-day="fri" onclick="toggleDay(this); updateTodoFromPanel();"
                     style="width:22px; height:22px; border:1px solid #2d2d2d; border-radius:3px; background:#1a1a1a; color:#e8e8e8; cursor:pointer; font-size:9px; font-weight:600; padding:0;">
               F
             </button>
-            <button type="button" class="day-btn" data-day="sat" onclick="toggleDay(this); updateTodoFromPanel();" 
+            <button type="button" class="day-btn" data-day="sat" onclick="toggleDay(this); updateTodoFromPanel();"
                     style="width:22px; height:22px; border:1px solid #2d2d2d; border-radius:3px; background:#1a1a1a; color:#e8e8e8; cursor:pointer; font-size:9px; font-weight:600; padding:0;">
               S
             </button>
-            <button type="button" class="day-btn" data-day="sun" onclick="toggleDay(this); updateTodoFromPanel();" 
+            <button type="button" class="day-btn" data-day="sun" onclick="toggleDay(this); updateTodoFromPanel();"
                     style="width:22px; height:22px; border:1px solid #2d2d2d; border-radius:3px; background:#1a1a1a; color:#e8e8e8; cursor:pointer; font-size:9px; font-weight:600; padding:0;">
               S
             </button>
           </div>
-          
-          <button type="button" class="btn-delete" onclick="removeTodoItemRow(this); updateTodoFromPanel();" 
+
+          <button type="button" class="buzzer-toggle" onclick="toggleBuzzer(this); updateTodoFromPanel();"
+                  title="Enable buzzer reminder (reTerminal E1002 only)"
+                  style="background:none; border:1px solid #2d2d2d; border-radius:4px; cursor:pointer; font-size:16px; padding:3px 6px; opacity:0.6;">
+            🔕
+          </button>
+
+          <button type="button" class="btn-delete" onclick="removeTodoItemRow(this); updateTodoFromPanel();"
                   style="background:none; border:none; cursor:pointer; font-size:18px; opacity:0.6;">🗑️</button>
         </div>
       </template>
@@ -3239,6 +3245,16 @@ function toggleDay(button) {
   }
 }
 
+function toggleBuzzer(button) {
+  const isEnabled = button.dataset.enabled === 'true';
+  button.dataset.enabled = isEnabled ? 'false' : 'true';
+  button.textContent = isEnabled ? '🔕' : '🔔';
+  button.style.opacity = isEnabled ? '0.6' : '1';
+  button.title = isEnabled
+    ? 'Enable buzzer reminder (reTerminal E1002 only)'
+    : 'Disable buzzer reminder';
+}
+
 function getSelectedDays(row) {
   const days = [];
   row.querySelectorAll('.day-btn.active').forEach(btn => {
@@ -3315,30 +3331,40 @@ function assignDaysToAll(days) {
 function getTodoItems() {
   const items = [];
   document.querySelectorAll('.todo-item-row').forEach(row => {
+    const buzzerBtn = row.querySelector('.buzzer-toggle');
     items.push({
       emoji: row.querySelector('.emoji-input').value,
       time: row.querySelector('.time-input').value,
       task: row.querySelector('.task-input').value,
-      days: getSelectedDays(row)
+      days: getSelectedDays(row),
+      buzzer: buzzerBtn ? buzzerBtn.dataset.enabled === 'true' : false
     });
   });
   return items;
 }
 
-function addTodoItemRow(emoji = '⭐', time = '', task = '', days = ['all']) {
+function addTodoItemRow(emoji = '⭐', time = '', task = '', days = ['all'], buzzer = false) {
   const template = document.getElementById('todoItemTemplate');
   const clone = template.content.cloneNode(true);
-  
+
   clone.querySelector('.emoji-input').value = emoji;
   clone.querySelector('.time-input').value = time;
   clone.querySelector('.task-input').value = task;
-  
+
   document.getElementById('todoItemsList').appendChild(clone);
-  
+
   // Set days after appending
   const addedRow = document.querySelector('#todoItemsList .todo-item-row:last-child');
   if (addedRow) {
     setSelectedDays(addedRow, days);
+
+    // Set buzzer state
+    const buzzerBtn = addedRow.querySelector('.buzzer-toggle');
+    if (buzzerBtn) {
+      buzzerBtn.dataset.enabled = buzzer ? 'true' : 'false';
+      buzzerBtn.textContent = buzzer ? '🔔' : '🔕';
+      buzzerBtn.style.opacity = buzzer ? '1' : '0.6';
+    }
   }
 }
 
@@ -3373,7 +3399,7 @@ function loadSelectedPresets() {
     const preset = TODO_PRESETS[presetId];
     if (preset) {
       preset.items.forEach(item => {
-        addTodoItemRow(item.emoji, item.time, item.task, item.days);
+        addTodoItemRow(item.emoji, item.time, item.task, item.days, item.buzzer || false);
       });
     }
   });
@@ -3435,7 +3461,7 @@ function loadTodoIntoPanel(el) {
   try {
     const items = JSON.parse(el.dataset.items || '[]');
     items.forEach(item => {
-      addTodoItemRow(item.emoji, item.time, item.task, item.days || ['all']);
+      addTodoItemRow(item.emoji, item.time, item.task, item.days || ['all'], item.buzzer || false);
     });
   } catch (e) {
     console.error('Error loading todo items:', e);

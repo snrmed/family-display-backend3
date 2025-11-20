@@ -204,17 +204,50 @@ GET /v1/raw7?device=xxx&temp=72.5&humidity=45
 
 Backend can overlay climate data on family photo display.
 
-### Buzzer Notifications
-Backend can trigger buzzer via HTTP response header:
-```http
-X-Buzzer-Pattern: 3,100,200  # 3 beeps, 100ms on, 200ms off
+### Buzzer Notifications & Todo Reminders
+
+The reTerminal E1002 supports buzzer reminders for todo items created in the designer.
+
+#### Todo Buzzer Integration
+
+1. **In Designer**: Toggle buzzer on/off for each todo item (🔔/🔕 icon)
+2. **Backend**: Generates daily buzzer schedule from enabled todos
+3. **Device**: Sets RTC alarms and wakes to beep 5 minutes before task time
+4. **Battery Impact**: Negligible (~4% reduction for 3 daily reminders)
+
+**Example todo with buzzer:**
+```json
+{
+  "emoji": "💊",
+  "time": "8:00am",
+  "task": "Morning medication",
+  "days": ["mon", "tue", "wed", "thu", "fri"],
+  "buzzer": true
+}
 ```
 
-Perfect for:
-- Medication reminders
+**Backend sends schedule via HTTP header:**
+```http
+X-Buzzer-Schedule: 07:55:3:100:200,13:55:3:100:200,19:55:3:100:200
+Format: HH:MM:beeps:on_ms:off_ms
+```
+
+**Firmware behavior:**
+- Parses buzzer schedule on daily wake
+- Programs ESP32 RTC alarms for each todo time
+- Wakes at alarm time, beeps, returns to sleep
+- No WiFi needed for buzzer wakes (works offline)
+
+**Perfect for:**
+- Medication reminders (2-3x daily)
 - Appointment alerts
-- Weather warnings
+- Daily routine prompts
+- School/work schedules
 - Smart home notifications
+
+**See also:**
+- [Todo Buzzer Integration Guide](TODO_BUZZER_INTEGRATION.md) - Complete implementation details
+- [JSON Format Specification](../JSON_FORMAT_TODO_BUZZER.md) - Todo JSON format with buzzer
 
 ## Getting Started
 

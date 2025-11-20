@@ -132,15 +132,49 @@ GET /v1/raw7?device=xxx&temp=72.5&humidity=45
 
 Backend can overlay climate data on generated image.
 
-### Buzzer Notifications
+### Buzzer Notifications & Todo Reminders
 
-Backend can trigger buzzer via HTTP header:
+#### Todo List Integration
 
+Create todo items in the designer with buzzer reminders enabled:
+
+1. **Toggle buzzer** for each todo (🔔/🔕 icon in designer)
+2. **Backend generates schedule** from enabled todos
+3. **Device sets RTC alarms** for each reminder time
+4. **Beeps 5 minutes before** task time
+5. **Works offline** after daily sync (no WiFi needed for beeps)
+
+**Example todo with buzzer:**
+```json
+{
+  "emoji": "💊",
+  "time": "8:00am",
+  "task": "Morning medication",
+  "days": ["all"],
+  "buzzer": true
+}
+```
+
+**Backend sends daily schedule:**
+```http
+X-Buzzer-Schedule: 07:55:3:100:200,13:55:3:100:200,19:55:3:100:200
+Format: HH:MM:beeps:on_ms:off_ms
+```
+
+**Battery impact:** Only ~4% reduction for 3 daily reminders (still 9+ months on battery)
+
+#### Custom Buzzer Patterns
+
+Backend can also trigger one-time buzzer via HTTP header:
 ```http
 X-Buzzer-Pattern: 3,100,200  # 3 beeps, 100ms on, 200ms off
 ```
 
 Firmware plays pattern after displaying image.
+
+**See also:**
+- [Todo Buzzer Integration](../TODO_BUZZER_INTEGRATION.md) - Complete implementation guide
+- [JSON Format Specification](../../JSON_FORMAT_TODO_BUZZER.md) - Todo JSON format
 
 ## Memory Layout (PSRAM-Only)
 
